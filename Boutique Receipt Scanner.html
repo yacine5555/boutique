@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Receipt Scanner</title>
+<style>
+/* ── TOKENS ── */
+:root {
+  --ink:      #0F172A;
+  --ink2:     #334155;
+  --ink3:     #64748B;
+  --ink4:     #94A3B8;
+  --paper:    #F8FAFC;
+  --white:    #FFFFFF;
+  --border:   #E2E8F0;
+  --border2:  #CBD5E1;
+
+  --emerald:  #059669;
+  --emerald-lt:#ECFDF5;
+  --emerald-dk:#047857;
+  --blue:     #2563EB;
+  --blue-lt:  #EFF6FF;
+  --amber:    #D97706;
+  --amber-lt: #FFFBEB;
+  --red:      #DC2626;
+  --red-lt:   #FEF2F2;
+  --violet:   #7C3AED;
+  --violet-lt:#F5F3FF;
+
+  --r:    12px;
+  --r-sm:  8px;
+  --r-lg: 20px;
+  --shadow:    0 1px 3px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.10);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,.14);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  overscroll-behavior: none;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; min-height: 100vh; }
+.screen.active { display: flex; }
+
+/* ══════════════════════════════════════
+   HOME SCREEN
+══════════════════════════════════════ */
+#screen-home {
+  background: linear-gradient(160deg, #0F172A 0%, #1E3A5F 60%, #2563EB 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  gap: 0;
+}
+.home-top {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.home-logo {
+  width: 72px; height: 72px;
+  background: rgba(255,255,255,.12);
+  border: 1.5px solid rgba(255,255,255,.2);
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  margin: 0 auto 20px;
+  backdrop-filter: blur(10px);
+}
+.home-title {
+  font-size: 28px; font-weight: 800; color: #fff;
+  letter-spacing: -.5px; margin-bottom: 8px;
+}
+.home-sub {
+  font-size: 15px; color: rgba(255,255,255,.6); line-height: 1.5;
+}
+.home-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-lg);
+}
+.home-card-title {
+  font-size: 13px; font-weight: 700; color: var(--ink3);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 20px;
+}
+
+/* Upload zone */
+.upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--r);
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--paper);
+  position: relative;
+  margin-bottom: 16px;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--blue);
+  background: var(--blue-lt);
+}
+.upload-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.upload-icon { font-size: 40px; margin-bottom: 10px; }
+.upload-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: var(--ink3); }
+
+.btn-capture {
+  width: 100%;
+  padding: 16px;
+  background: var(--blue);
+  border: none;
+  border-radius: var(--r-sm);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  transition: background .15s, transform .1s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-capture:hover { background: #1D4ED8; }
+.btn-capture:active { transform: scale(.98); }
+
+.divider {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--ink4); font-size: 12px; margin: 14px 0;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* Previous receipts */
+.prev-list { margin-top: 16px; }
+.prev-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 7px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.prev-item:hover { background: var(--blue-lt); }
+.prev-item-icon { font-size: 20px; flex-shrink: 0; }
+.prev-item-info { flex: 1; min-width: 0; }
+.prev-item-store { font-size: 13px; font-weight: 600; color: var(--ink); }
+.prev-item-date { font-size: 11px; color: var(--ink3); }
+.prev-item-total { font-size: 13px; font-weight: 700; color: var(--emerald); flex-shrink: 0; }
+.prev-empty { text-align: center; padding: 20px; color: var(--ink4); font-size: 13px; }
+
+/* ══════════════════════════════════════
+   PROCESSING SCREEN
+══════════════════════════════════════ */
+#screen-processing {
+  background: var(--white);
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+}
+.processing-preview {
+  width: 100%;
+  max-width: 320px;
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+.processing-preview img {
+  width: 100%;
+  display: block;
+  max-height: 300px;
+  object-fit: cover;
+}
+.processing-overlay {
+  position: absolute; inset: 0;
+  background: rgba(15,23,42,.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.scan-line {
+  position: absolute;
+  width: 90%; height: 2px;
+  background: linear-gradient(90deg, transparent, #38BDF8, transparent);
+  animation: scanDown 1.5s ease-in-out infinite;
+  top: 10%;
+}
+@keyframes scanDown {
+  0%   { top: 10%; opacity: 1; }
+  90%  { top: 90%; opacity: 1; }
+  100% { top: 90%; opacity: 0; }
+}
+.processing-title {
+  font-size: 20px; font-weight: 800; color: var(--ink); margin-bottom: 8px;
+}
+.processing-sub { font-size: 14px; color: var(--ink3); margin-bottom: 24px; line-height: 1.5; }
+.processing-steps {
+  display: flex; flex-direction: column; gap: 10px;
+  width: 100%; max-width: 300px; text-align: left;
+}
+.processing-step {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--ink3);
+  padding: 10px 14px;
+  background: var(--paper);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  transition: all .3s;
+}
+.processing-step.done {
+  background: var(--emerald-lt);
+  border-color: #6EE7B7;
+  color: var(--emerald-dk);
+}
+.processing-step.active {
+  background: var(--blue-lt);
+  border-color: #BFDBFE;
+  color: var(--blue);
+}
+.step-icon { font-size: 16px; flex-shrink: 0; }
+
+/* ══════════════════════════════════════
+   REVIEW SCREEN
+══════════════════════════════════════ */
+#screen-review { background: var(--paper); }
+.review-topbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: var(--shadow);
+}
+.btn-back {
+  width: 36px; height: 36px;
+  border-radius: 10px; border: 1.5px solid var(--border2);
+  background: var(--white); color: var(--ink2);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.review-topbar-title {
+  flex: 1;
+  font-size: 16px; font-weight: 800; color: var(--ink); letter-spacing: -.2px;
+}
+.btn-save-all {
+  padding: 9px 18px;
+  background: var(--emerald);
+  border: none; border-radius: var(--r-sm);
+  color: #fff; font-size: 13px; font-weight: 700;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.btn-save-all:hover { background: var(--emerald-dk); }
+
+.review-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* Receipt image thumbnail */
+.receipt-thumb {
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+.receipt-thumb img {
+  width: 100%; display: block; max-height: 180px; object-fit: cover;
+}
+.receipt-thumb-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(15,23,42,.7) 0%, transparent 50%);
+  display: flex; align-items: flex-end; padding: 12px;
+}
+.receipt-store-info { color: #fff; }
+.receipt-store-name { font-size: 16px; font-weight: 800; }
+.receipt-store-date { font-size: 12px; opacity: .8; }
+
+/* Summary bar */
+.summary-bar {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.summary-pill {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 12px 10px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.summary-num { font-size: 22px; font-weight: 900; letter-spacing: -.3px; }
+.summary-num.green { color: var(--emerald); }
+.summary-num.blue { color: var(--blue); }
+.summary-num.amber { color: var(--amber); }
+.summary-lbl { font-size: 10px; color: var(--ink4); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+
+/* Exchange rate bar */
+.rate-bar {
+  background: var(--amber-lt);
+  border: 1px solid #FDE68A;
+  border-radius: var(--r-sm);
+  padding: 11px 14px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+}
+.rate-bar-label { flex: 1; color: var(--amber); font-weight: 600; }
+.rate-inputs { display: flex; gap: 6px; align-items: center; }
+.rate-input {
+  width: 70px; padding: 6px 8px;
+  border: 1.5px solid #FDE68A;
+  border-radius: 6px;
+  font-size: 13px; font-weight: 700;
+  text-align: center; color: var(--ink); background: var(--white);
+  outline: none;
+}
+.rate-input:focus { border-color: var(--amber); }
+.rate-sep { color: var(--amber); font-weight: 700; font-size: 14px; }
+
+/* Section header */
+.section-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.section-title-sm {
+  font-size: 11px; font-weight: 700; color: var(--ink3);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+
+/* Item cards */
+.item-card {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: border-color .15s;
+}
+.item-card.matched { border-color: #6EE7B7; }
+.item-card.unmatched { border-color: #FDE68A; }
+.item-card.excluded { opacity: .5; }
+.item-card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.item-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--ink3);
+  flex-shrink: 0;
+}
+.item-name-input {
+  flex: 1;
+  border: none; outline: none;
+  font-size: 14px; font-weight: 600; color: var(--ink);
+  background: transparent;
+  min-width: 0;
+}
+.item-toggle {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border2);
+  background: var(--white);
+  color: var(--ink3); font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all .15s;
+}
+.item-toggle.on { background: var(--emerald); border-color: var(--emerald); color: #fff; }
+
+.item-card-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+.price-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 8px;
+}
+.price-field-wrap { display: flex; flex-direction: column; gap: 3px; }
+.price-lbl { font-size: 10px; font-weight: 700; color: var(--ink4); text-transform: uppercase; letter-spacing: .06em; }
+.price-field {
+  padding: 9px 11px;
+  border: 1.5px solid var(--border2);
+  border-radius: var(--r-sm);
+  font-size: 15px; font-weight: 700; color: var(--ink);
+  background: var(--paper); outline: none;
+  transition: border-color .15s; width: 100%;
+}
+.price-field:focus { border-color: var(--blue); background: var(--white); }
+.price-field.cfa { color: var(--emerald); background: var(--emerald-lt); border-color: #D1FAE5; }
+.price-arrow { font-size: 16px; color: var(--ink4); text-align: center; }
+
+.item-meta-row { display: flex; gap: 8px; }
+.item-meta-field {
+  flex: 1; padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 12px; color: var(--ink2);
+  background: var(--paper); outline: none;
+  transition: border-color .15s;
+}
+.item-meta-field:focus { border-color: var(--blue); background: var(--white); }
+
+.match-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 10px; font-weight: 700;
+  flex-shrink: 0;
+}
+.match-badge.matched { background: var(--emerald-lt); color: var(--emerald-dk); }
+.match-badge.unmatched { background: var(--amber-lt); color: var(--amber); }
+
+/* Add item button */
+.btn-add-item {
+  width: 100%;
+  padding: 13px;
+  background: transparent;
+  border: 2px dashed var(--border2);
+  border-radius: var(--r);
+  color: var(--ink3);
+  font-size: 14px; font-weight: 600;
+  transition: all .15s;
+}
+.btn-add-item:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-lt); }
+
+/* Save button at bottom */
+.save-footer {
+  position: sticky; bottom: 0;
+  background: var(--white);
+  border-top: 1px solid var(--border);
+  padding: 16px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.06);
+}
+.btn-save-receipt {
+  width: 100%;
+  padding: 16px;
+  background: var(--emerald);
+  border: none; border-radius: var(--r-sm);
+  color: #fff; font-size: 16px; font-weight: 800;
+  letter-spacing: .01em;
+  transition: background .15s, transform .1s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-save-receipt:hover { background: var(--emerald-dk); }
+.btn-save-receipt:active { transform: scale(.98); }
+
+/* ══════════════════════════════════════
+   SUCCESS SCREEN
+══════════════════════════════════════ */
+#screen-success {
+  background: var(--emerald);
+  align-items: center; justify-content: center;
+  padding: 40px 24px; text-align: center;
+}
+.success-icon { font-size: 64px; margin-bottom: 20px; animation: popIn .4s ease; }
+@keyframes popIn { from{transform:scale(0);opacity:0} 60%{transform:scale(1.15)} to{transform:scale(1);opacity:1} }
+.success-title { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -.5px; margin-bottom: 8px; }
+.success-sub { font-size: 15px; color: rgba(255,255,255,.8); margin-bottom: 32px; line-height: 1.5; }
+.success-card {
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: var(--r);
+  padding: 20px;
+  width: 100%; max-width: 340px;
+  margin-bottom: 28px;
+  backdrop-filter: blur(10px);
+}
+.success-stat { display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,.15); font-size: 14px; }
+.success-stat:last-child { border-bottom: none; }
+.success-stat-lbl { color: rgba(255,255,255,.7); }
+.success-stat-val { color: #fff; font-weight: 700; }
+.btn-scan-another {
+  padding: 16px 32px;
+  background: #fff; border: none; border-radius: var(--r-sm);
+  color: var(--emerald-dk); font-size: 16px; font-weight: 800;
+  transition: opacity .15s;
+}
+.btn-scan-another:hover { opacity: .9; }
+.btn-view-history {
+  margin-top: 12px;
+  padding: 12px 24px;
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,.4);
+  border-radius: var(--r-sm);
+  color: rgba(255,255,255,.9); font-size: 14px; font-weight: 600;
+  transition: all .15s;
+}
+.btn-view-history:hover { background: rgba(255,255,255,.1); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); border-radius: var(--r-sm);
+  padding: 11px 18px; font-size: 13px; color: #fff;
+  box-shadow: var(--shadow-lg); display: none; z-index: 200;
+  white-space: nowrap; font-weight: 500;
+}
+.toast.show { display: block; animation: slideUp .2s ease; }
+@keyframes slideUp { from{transform:translateX(-50%) translateY(8px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
+
+/* Error box */
+.error-box {
+  background: var(--red-lt); border: 1.5px solid #FCA5A5;
+  border-radius: var(--r-sm); padding: 12px 14px;
+  font-size: 13px; color: var(--red); display: none;
+}
+.error-box.visible { display: block; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     HOME
+══════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+  <div class="home-top">
+    <div class="home-logo">🧾</div>
+    <div class="home-title">Receipt Scanner</div>
+    <div class="home-sub">Photograph any receipt and we'll extract the items, calculate CFA prices, and log your shipment automatically.</div>
+  </div>
+
+  <div class="home-card">
+    <div class="home-card-title">Scan a Receipt</div>
+
+    <!-- Camera capture (mobile) -->
+    <button class="btn-capture" onclick="document.getElementById('camera-input').click()">
+      <span>📷</span> Take Photo of Receipt
+    </button>
+    <input type="file" id="camera-input" accept="image/*" capture="environment"
+      style="display:none" onchange="handlePhoto(this)"/>
+
+    <div class="divider">or upload from gallery</div>
+
+    <!-- File upload -->
+    <div class="upload-zone" id="upload-zone"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event)">
+      <input type="file" accept="image/*" onchange="handlePhoto(this)"/>
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">Upload receipt image</div>
+      <div class="upload-sub">JPG, PNG, HEIC — any photo of a receipt</div>
+    </div>
+
+    <div class="error-box" id="home-error"></div>
+
+    <!-- Previous receipts -->
+    <div class="prev-list">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="home-card-title" style="margin-bottom:0">Recent Receipts</div>
+        <button style="font-size:11px;color:var(--ink3);background:none;border:none;cursor:pointer"
+          onclick="clearHistory()">Clear</button>
+      </div>
+      <div id="prev-list-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     PROCESSING
+══════════════════════════════════ -->
+<div id="screen-processing" class="screen">
+  <div class="processing-preview" id="processing-preview">
+    <img id="processing-img" src="" alt="Receipt"/>
+    <div class="processing-overlay">
+      <div class="scan-line"></div>
+    </div>
+  </div>
+
+  <div class="processing-title">Reading Receipt…</div>
+  <div class="processing-sub" id="processing-sub">Claude AI is analyzing your receipt and extracting all line items</div>
+
+  <div class="processing-steps">
+    <div class="processing-step active" id="step-1">
+      <span class="step-icon">🔍</span> Reading image
+    </div>
+    <div class="processing-step" id="step-2">
+      <span class="step-icon">📋</span> Extracting items & prices
+    </div>
+    <div class="processing-step" id="step-3">
+      <span class="step-icon">🔗</span> Matching to product catalog
+    </div>
+    <div class="processing-step" id="step-4">
+      <span class="step-icon">💰</span> Calculating CFA prices
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     REVIEW
+══════════════════════════════════ -->
+<div id="screen-review" class="screen">
+  <div class="review-topbar">
+    <button class="btn-back" onclick="showScreen('home')">←</button>
+    <div class="review-topbar-title" id="review-store-title">Receipt Review</div>
+    <button class="btn-save-all" onclick="saveReceipt()">Save All ✓</button>
+  </div>
+
+  <div class="review-body" id="review-body">
+    <!-- Dynamically populated -->
+  </div>
+
+  <div class="save-footer">
+    <button class="btn-save-receipt" onclick="saveReceipt()">
+      <span>✅</span> <span id="btn-save-text">Save Receipt & Log Arrival</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SUCCESS
+══════════════════════════════════ -->
+<div id="screen-success" class="screen">
+  <div class="success-icon">✅</div>
+  <div class="success-title">Receipt Logged!</div>
+  <div class="success-sub" id="success-sub">Items saved to your arrival log.</div>
+  <div class="success-card" id="success-card"></div>
+  <button class="btn-scan-another" onclick="showScreen('home')">Scan Another Receipt</button>
+  <button class="btn-view-history" onclick="showScreen('home');renderHistory()">View History</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  CONFIG — replace with real key
+// ══════════════════════════════════════════
+const GEMINI_API_KEY = "AQ.Ab8RN6JS2nVLzTJkaJKr00XEjSDvyC4P7YHxEjHYmp5lNBps6Q";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const EXCHANGE_RATE = 600;  // USD to CFA
+const MARKUP = 2;           // ×2 for selling price
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let currentPhoto = null;  // base64 image data
+let currentPhotoMime = "image/jpeg";
+let currentItems = [];    // extracted from receipt
+let receipts = [];        // saved receipts history
+let currentRate = EXCHANGE_RATE;
+let currentMarkup = MARKUP;
+
+// Load saved receipts
+function loadData() {
+  try {
+    receipts = JSON.parse(localStorage.getItem("rc_receipts") || "[]");
+  } catch(e) {}
+}
+function saveData() {
+  try {
+    localStorage.setItem("rc_receipts", JSON.stringify(receipts));
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════
+function showScreen(s) {
+  document.querySelectorAll(".screen").forEach(x => x.classList.remove("active"));
+  document.getElementById("screen-"+s).classList.add("active");
+  if(s === "home") renderHistory();
+}
+
+// ══════════════════════════════════════════
+//  PHOTO HANDLING
+// ══════════════════════════════════════════
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById("upload-zone").classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if(file) processFile(file);
+}
+
+function handlePhoto(input) {
+  const file = input.files[0];
+  if(!file) return;
+  processFile(file);
+  input.value = "";
+}
+
+function processFile(file) {
+  if(!file.type.startsWith("image/")) {
+    showError("home-error", "Please select an image file.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    currentPhotoMime = file.type || "image/jpeg";
+    currentPhoto = dataUrl.split(",")[1]; // base64 only
+    // Show preview
+    document.getElementById("processing-img").src = dataUrl;
+    showScreen("processing");
+    analyzeReceipt(currentPhoto, currentPhotoMime);
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════════════════
+//  AI RECEIPT ANALYSIS
+// ══════════════════════════════════════════
+async function analyzeReceipt(base64, mime) {
+  setStep(1, "active");
+
+  const prompt = `You are analyzing a retail receipt image. Extract ALL line items from this receipt.
+
+Return ONLY a valid JSON object with this exact structure, no markdown, no explanation:
+{
+  "store": "store name (Walmart, Sam's Club, Costco, Ross, Burlington, Marshalls, etc.)",
+  "date": "date on receipt or empty string",
+  "subtotal": 0.00,
+  "tax": 0.00,
+  "total": 0.00,
+  "items": [
+    {
+      "name": "full product name as printed",
+      "qty": 1,
+      "unit_price": 0.00,
+      "total_price": 0.00,
+      "category": "guess the category: Household & Cleaning, Food & Beverages, Hair Care, Cosmetics, Personal Hygiene, Supplements, or Other"
+    }
+  ]
+}
+
+Rules:
+- Include ALL items on the receipt, even if the name is abbreviated
+- If quantity is not shown, assume 1
+- unit_price = total_price / qty
+- If you cannot read the receipt clearly, still return what you can see
+- Do not include tax lines, subtotals, or discounts as items
+- Return ONLY the JSON, nothing else`;
+
+  try {
+    setStep(1, "done"); setStep(2, "active");
+
+    const response = await fetch(GEMINI_URL + "?key=" + GEMINI_API_KEY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inline_data: {
+                mime_type: mime,
+                data: base64
+              }
+            },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2000,
+        }
+      })
+    });
+
+    if(!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "API error " + response.status);
+    }
+
+    setStep(2, "done"); setStep(3, "active");
+
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text.trim();
+
+    // Parse JSON
+    let receipt;
+    try {
+      receipt = JSON.parse(text);
+    } catch(e) {
+      // Try to extract JSON from text
+      const match = text.match(/\{[\s\S]*\}/);
+      if(match) receipt = JSON.parse(match[0]);
+      else throw new Error("Could not parse receipt data");
+    }
+
+    setStep(3, "done"); setStep(4, "active");
+
+    // Calculate CFA prices
+    receipt.items = receipt.items.map(item => ({
+      ...item,
+      cfa_cost: Math.round(item.unit_price * currentRate),
+      cfa_selling: Math.round(item.unit_price * currentRate * currentMarkup),
+      matched: false,
+      included: true
+    }));
+
+    setStep(4, "done");
+    currentItems = receipt.items;
+
+    // Small delay so user sees all steps done
+    await new Promise(r => setTimeout(r, 600));
+    renderReview(receipt);
+    showScreen("review");
+
+  } catch(err) {
+    showScreen("home");
+    showError("home-error", "❌ Could not read receipt: " + err.message + ". Make sure the receipt photo is clear and well-lit.");
+  }
+}
+
+function setStep(n, state) {
+  const el = document.getElementById("step-"+n);
+  if(!el) return;
+  el.className = "processing-step " + state;
+}
+
+// ══════════════════════════════════════════
+//  REVIEW SCREEN
+// ══════════════════════════════════════════
+function renderReview(receipt) {
+  document.getElementById("review-store-title").textContent =
+    (receipt.store || "Receipt") + " — Review";
+  document.getElementById("btn-save-text").textContent =
+    "Save " + receipt.items.length + " Items & Log Arrival";
+
+  const body = document.getElementById("review-body");
+  const includedItems = receipt.items.filter(i => i.included);
+  const totalUSD = includedItems.reduce((s,i) => s + (i.unit_price * i.qty), 0);
+  const totalCFA = includedItems.reduce((s,i) => s + (i.cfa_selling * i.qty), 0);
+
+  body.innerHTML = `
+    <!-- Receipt image -->
+    <div class="receipt-thumb">
+      <img src="data:${currentPhotoMime};base64,${currentPhoto}" alt="Receipt"/>
+      <div class="receipt-thumb-overlay">
+        <div class="receipt-store-info">
+          <div class="receipt-store-name">${receipt.store || "Receipt"}</div>
+          <div class="receipt-store-date">${receipt.date || new Date().toLocaleDateString()}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-bar">
+      <div class="summary-pill">
+        <div class="summary-num blue" id="summary-items">${receipt.items.length}</div>
+        <div class="summary-lbl">Items</div>
+      </div>
+      <div class="summary-pill">
+        <div class="summary-num green" id="summary-usd">$${totalUSD.toFixed(2)}</div>
+        <div class="summary-lbl">Total USD</div>
+      </div>
+      <div class="summary-pill">
+        <div class="summary-num amber" id="summary-cfa">${Math.round(totalCFA).toLocaleString()}</div>
+        <div class="summary-lbl">Est. CFA Rev.</div>
+      </div>
+    </div>
+
+    <!-- Exchange rate bar -->
+    <div class="rate-bar">
+      <div class="rate-bar-label">💱 USD × <span id="rate-display">${currentRate}</span> × <span id="markup-display">${currentMarkup}</span> = CFA selling</div>
+      <div class="rate-inputs">
+        <input class="rate-input" id="rate-input" type="number" value="${currentRate}"
+          onchange="updateRates()" style="width:60px"/>
+        <span class="rate-sep">×</span>
+        <input class="rate-input" id="markup-input" type="number" value="${currentMarkup}"
+          onchange="updateRates()" style="width:45px"/>
+      </div>
+    </div>
+
+    <!-- Items -->
+    <div>
+      <div class="section-hdr">
+        <div class="section-title-sm">Line Items — tap to edit</div>
+        <div style="font-size:11px;color:var(--ink3)" id="included-count">${receipt.items.length} included</div>
+      </div>
+      <div id="items-container" style="display:flex;flex-direction:column;gap:8px">
+        ${receipt.items.map((item, i) => renderItemCard(item, i)).join("")}
+      </div>
+    </div>
+
+    <!-- Add item manually -->
+    <button class="btn-add-item" onclick="addManualItem()">+ Add Item Manually</button>
+
+    <div style="height:80px"></div>
+  `;
+
+  // Store receipt data for saving
+  window._currentReceipt = receipt;
+}
+
+function renderItemCard(item, i) {
+  return `
+    <div class="item-card ${item.included ? (item.matched ? "matched" : "") : "excluded"}" id="item-card-${i}">
+      <div class="item-card-header">
+        <div class="item-num">${i+1}</div>
+        <input class="item-name-input" id="item-name-${i}" type="text" value="${item.name}"
+          oninput="updateItem(${i}, 'name', this.value)" placeholder="Product name"/>
+        <button class="item-toggle ${item.included ? "on" : ""}" id="item-toggle-${i}"
+          onclick="toggleItem(${i})" title="${item.included ? "Click to exclude" : "Click to include"}">
+          ${item.included ? "✓" : "—"}
+        </button>
+      </div>
+      <div class="item-card-body">
+        <div class="price-row">
+          <div class="price-field-wrap">
+            <div class="price-lbl">Cost (USD)</div>
+            <input class="price-field" id="item-usd-${i}" type="number" step="0.01"
+              value="${item.unit_price.toFixed(2)}"
+              oninput="updateItem(${i}, 'unit_price', parseFloat(this.value)||0)"/>
+          </div>
+          <div class="price-arrow">→</div>
+          <div class="price-field-wrap">
+            <div class="price-lbl">Selling (CFA)</div>
+            <input class="price-field cfa" id="item-cfa-${i}" type="number"
+              value="${item.cfa_selling}"
+              oninput="updateItem(${i}, 'cfa_selling', parseInt(this.value)||0)"/>
+          </div>
+        </div>
+        <div class="item-meta-row">
+          <input class="item-meta-field" type="number" min="1" value="${item.qty}"
+            oninput="updateItem(${i}, 'qty', parseInt(this.value)||1)" placeholder="Qty"/>
+          <input class="item-meta-field" type="text" value="${item.category||""}"
+            oninput="updateItem(${i}, 'category', this.value)" placeholder="Category"/>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleItem(i) {
+  currentItems[i].included = !currentItems[i].included;
+  const card = document.getElementById("item-card-"+i);
+  const btn = document.getElementById("item-toggle-"+i);
+  card.className = "item-card " + (currentItems[i].included ? "" : "excluded");
+  btn.className = "item-toggle " + (currentItems[i].included ? "on" : "");
+  btn.textContent = currentItems[i].included ? "✓" : "—";
+  updateSummary();
+}
+
+function updateItem(i, field, value) {
+  currentItems[i][field] = value;
+  if(field === "unit_price") {
+    // Recalculate CFA
+    const cfa = Math.round(value * currentRate * currentMarkup);
+    currentItems[i].cfa_selling = cfa;
+    const cfaEl = document.getElementById("item-cfa-"+i);
+    if(cfaEl) cfaEl.value = cfa;
+  }
+  updateSummary();
+}
+
+function updateRates() {
+  currentRate = parseFloat(document.getElementById("rate-input").value) || 600;
+  currentMarkup = parseFloat(document.getElementById("markup-input").value) || 2;
+  document.getElementById("rate-display").textContent = currentRate;
+  document.getElementById("markup-display").textContent = currentMarkup;
+  // Recalculate all CFA prices
+  currentItems.forEach((item, i) => {
+    const cfa = Math.round(item.unit_price * currentRate * currentMarkup);
+    item.cfa_selling = cfa;
+    const el = document.getElementById("item-cfa-"+i);
+    if(el) el.value = cfa;
+  });
+  updateSummary();
+}
+
+function updateSummary() {
+  const included = currentItems.filter(i => i.included);
+  const totalUSD = included.reduce((s,i) => s + (i.unit_price * i.qty), 0);
+  const totalCFA = included.reduce((s,i) => s + (i.cfa_selling * i.qty), 0);
+  const usdEl = document.getElementById("summary-usd");
+  const cfaEl = document.getElementById("summary-cfa");
+  const cntEl = document.getElementById("summary-items");
+  const incEl = document.getElementById("included-count");
+  if(usdEl) usdEl.textContent = "$" + totalUSD.toFixed(2);
+  if(cfaEl) cfaEl.textContent = Math.round(totalCFA).toLocaleString();
+  if(cntEl) cntEl.textContent = included.length;
+  if(incEl) incEl.textContent = included.length + " included";
+}
+
+function addManualItem() {
+  const newItem = {
+    name: "New Item",
+    qty: 1,
+    unit_price: 0,
+    total_price: 0,
+    cfa_cost: 0,
+    cfa_selling: 0,
+    category: "",
+    matched: false,
+    included: true
+  };
+  const i = currentItems.length;
+  currentItems.push(newItem);
+  const container = document.getElementById("items-container");
+  const div = document.createElement("div");
+  div.innerHTML = renderItemCard(newItem, i);
+  container.appendChild(div.firstElementChild);
+  updateSummary();
+}
+
+// ══════════════════════════════════════════
+//  SAVE RECEIPT
+// ══════════════════════════════════════════
+function saveReceipt() {
+  const included = currentItems.filter(i => i.included);
+  if(included.length === 0) { showToast("No items included."); return; }
+
+  const receipt = window._currentReceipt;
+  const now = new Date();
+  const entry = {
+    id: "RCP-" + Date.now(),
+    store: receipt?.store || "Unknown Store",
+    date: receipt?.date || now.toLocaleDateString(),
+    savedAt: now.toISOString(),
+    items: included,
+    totalUSD: included.reduce((s,i) => s + (i.unit_price * i.qty), 0),
+    totalCFA: included.reduce((s,i) => s + (i.cfa_selling * i.qty), 0),
+    photo: currentPhoto,
+    photoMime: currentPhotoMime,
+    rate: currentRate,
+    markup: currentMarkup,
+  };
+
+  receipts.unshift(entry);
+  saveData();
+
+  // Show success
+  document.getElementById("success-sub").textContent =
+    `${included.length} items from ${entry.store} saved successfully.`;
+  document.getElementById("success-card").innerHTML = `
+    <div class="success-stat"><span class="success-stat-lbl">Store</span><span class="success-stat-val">${entry.store}</span></div>
+    <div class="success-stat"><span class="success-stat-lbl">Items logged</span><span class="success-stat-val">${included.length}</span></div>
+    <div class="success-stat"><span class="success-stat-lbl">Total paid (USD)</span><span class="success-stat-val">$${entry.totalUSD.toFixed(2)}</span></div>
+    <div class="success-stat"><span class="success-stat-lbl">Est. revenue (CFA)</span><span class="success-stat-val">${Math.round(entry.totalCFA).toLocaleString()} CFA</span></div>
+    <div class="success-stat"><span class="success-stat-lbl">Saved at</span><span class="success-stat-val">${now.toLocaleTimeString()}</span></div>
+  `;
+  showScreen("success");
+  showToast("✅ Receipt saved!");
+}
+
+// ══════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════
+function renderHistory() {
+  const body = document.getElementById("prev-list-body");
+  if(!receipts.length) {
+    body.innerHTML = '<div class="prev-empty">No receipts scanned yet.<br>Take a photo to get started.</div>';
+    return;
+  }
+  body.innerHTML = receipts.slice(0,5).map(r => `
+    <div class="prev-item" onclick="viewReceipt('${r.id}')">
+      <div class="prev-item-icon">🧾</div>
+      <div class="prev-item-info">
+        <div class="prev-item-store">${r.store}</div>
+        <div class="prev-item-date">${r.date} · ${r.items.length} items</div>
+      </div>
+      <div class="prev-item-total">$${r.totalUSD.toFixed(2)}</div>
+    </div>`).join("");
+}
+
+function viewReceipt(id) {
+  const r = receipts.find(x => x.id === id);
+  if(!r) return;
+  currentPhoto = r.photo;
+  currentPhotoMime = r.photoMime || "image/jpeg";
+  currentItems = r.items;
+  currentRate = r.rate || 600;
+  currentMarkup = r.markup || 2;
+  renderReview(r);
+  showScreen("review");
+}
+
+function clearHistory() {
+  if(!receipts.length) return;
+  if(!confirm("Clear all receipt history?")) return;
+  receipts = []; saveData(); renderHistory();
+  showToast("History cleared.");
+}
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.add("visible");
+  setTimeout(() => el.classList.remove("visible"), 5000);
+}
+
+let _t;
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(_t); _t = setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadData();
+renderHistory();
+</script>
+</body>
+</html>
