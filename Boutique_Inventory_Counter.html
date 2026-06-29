@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>Comptage Inventaire — Boutique</title>
+<style>
+:root{
+  --ink:#1c1410;
+  --paper:#faf6ef;
+  --paper2:#f1ead9;
+  --line:#ddd2bf;
+  --muted:#8a7d6c;
+  --stamp:#a1311f;
+  --stamp-ink:#7a2417;
+  --found:#2f6e62;
+  --found-bg:#e4efe9;
+  --warn:#b9791c;
+  --warn-bg:#f7ecd8;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+.serif{font-family:ui-serif,Georgia,"Times New Roman",serif;}
+
+/* ===== Top bar ===== */
+.topbar{background:var(--ink);color:var(--paper);padding:14px 18px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  position:sticky;top:0;z-index:20;}
+.topbar h1{font-family:ui-serif,Georgia,serif;font-size:19px;font-weight:700;margin:0;
+  letter-spacing:0.2px;}
+.topbar .session-name{font-size:12.5px;color:#d8cdb8;margin-top:2px;}
+.btn-icon{background:none;border:1px solid #4a4038;color:var(--paper);
+  border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;}
+.btn-icon:hover{background:#2a2118;}
+
+/* ===== Setup screen ===== */
+.screen{display:none;}
+.screen.active{display:block;}
+.setup-wrap{max-width:480px;margin:0 auto;padding:48px 20px;}
+.setup-wrap h2{font-family:ui-serif,Georgia,serif;font-size:26px;margin:0 0 6px;}
+.setup-wrap p.sub{color:var(--muted);font-size:14px;margin:0 0 28px;line-height:1.5;}
+.field-label{font-size:12.5px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block;}
+.field-input{width:100%;padding:13px 14px;border:1.5px solid var(--line);
+  border-radius:9px;font-size:16px;background:#fff;color:var(--ink);margin-bottom:18px;}
+.field-input:focus{outline:none;border-color:var(--stamp);}
+.btn-primary{width:100%;background:var(--stamp);color:#fff;border:none;
+  padding:15px;border-radius:9px;font-size:16px;font-weight:700;cursor:pointer;
+  letter-spacing:0.2px;}
+.btn-primary:hover{background:var(--stamp-ink);}
+.btn-secondary{width:100%;background:none;border:1.5px solid var(--line);color:var(--ink);
+  padding:13px;border-radius:9px;font-size:14.5px;cursor:pointer;margin-top:10px;}
+.sync-box{background:var(--paper2);border:1px solid var(--line);border-radius:9px;
+  padding:14px 16px;margin-bottom:22px;}
+.sync-box .lbl{font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;}
+.sync-status{font-size:13px;margin-top:8px;display:flex;align-items:center;gap:6px;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.dot.gray{background:#b8ab93;} .dot.green{background:var(--found);} .dot.red{background:var(--stamp);}
+.recent-sessions{margin-top:6px;}
+.recent-sessions .item{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+.recent-sessions .item:hover{background:var(--paper2);}
+.recent-sessions .item .name{font-weight:600;font-size:14.5px;}
+.recent-sessions .item .meta{font-size:12px;color:var(--muted);}
+
+.status-card{background:#fff;border:2px solid var(--line);border-radius:13px;
+  padding:18px;margin-bottom:14px;display:flex;align-items:center;gap:14px;
+  transition:background 0.25s, border-color 0.25s;min-height:64px;}
+.status-card.ok{border-color:var(--found);background:var(--found-bg);}
+.status-card.over{border-color:var(--stamp);background:#fbe8e3;}
+.status-card.under{border-color:var(--warn);background:var(--warn-bg);}
+.status-card.unknown{border-color:var(--warn);background:var(--warn-bg);}
+.status-card.neutral{border-color:var(--line);background:#fff;}
+.status-icon{font-size:34px;line-height:1;flex-shrink:0;}
+.status-name{font-size:19px;font-weight:700;line-height:1.25;}
+.status-detail{font-size:14.5px;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace;}
+.status-card.ok .status-detail{color:var(--found);}
+.status-card.over .status-detail{color:var(--stamp);}
+.status-card.under .status-detail, .status-card.unknown .status-detail{color:var(--warn);}
+
+/* Bigger touch targets for iPad use */
+.row .qty-controls button{width:38px;height:38px;font-size:19px;}
+.row .del{font-size:19px;padding:8px;}
+.btn-tiny{padding:9px 14px;font-size:13.5px;}
+.scan-bar input{padding:18px 14px;font-size:20px;}
+.scan-bar .scan-go{padding:16px 20px;font-size:15px;}
+.row{padding:14px 10px;}
+.row .name{font-size:16px;}
+.row .name .bc{font-size:12.5px;}
+.row .qty-num{font-size:19px;min-width:34px;}
+
+@media (min-width: 700px){
+  .count-wrap{padding:24px;}
+}
+
+/* ===== Count screen ===== */
+.count-wrap{max-width:720px;margin:0 auto;padding:16px;}
+.tally-header{display:flex;gap:10px;margin-bottom:14px;}
+.tally-card{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;text-align:center;}
+.tally-card .num{font-family:ui-monospace,monospace;font-size:28px;font-weight:700;}
+.tally-card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:0.4px;margin-top:2px;}
+
+.scan-bar{background:#fff;border:2px solid var(--ink);border-radius:11px;
+  padding:4px;margin-bottom:16px;display:flex;align-items:center;}
+.scan-bar input{flex:1;border:none;outline:none;padding:14px 14px;font-size:18px;
+  font-family:ui-monospace,monospace;background:transparent;color:var(--ink);}
+.scan-bar input::placeholder{color:#b8ab93;font-family:-apple-system,sans-serif;font-size:15px;}
+.scan-bar .scan-go{background:var(--stamp);color:#fff;border:none;border-radius:8px;
+  padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer;margin-right:2px;}
+
+.flash{padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:14px;
+  display:none;align-items:center;gap:8px;}
+.flash.show{display:flex;}
+.flash.found{background:var(--found-bg);color:var(--found);}
+.flash.unknown{background:var(--warn-bg);color:var(--warn);}
+
+.list-toolbar{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:8px;}
+.list-toolbar h3{font-family:ui-serif,Georgia,serif;font-size:15px;margin:0;color:var(--muted);
+  font-weight:600;}
+.list-toolbar .actions{display:flex;gap:8px;}
+.btn-tiny{background:none;border:1px solid var(--line);color:var(--ink);
+  padding:6px 10px;border-radius:7px;font-size:12.5px;cursor:pointer;}
+.btn-tiny:hover{background:var(--paper2);}
+.btn-send{background:var(--found);color:#fff;border-color:var(--found);font-weight:700;}
+.btn-send:hover{background:#255850;}
+.btn-send:disabled{opacity:0.5;cursor:not-allowed;}
+
+.row{display:flex;align-items:center;gap:10px;padding:12px 10px;
+  border-bottom:1px solid var(--line);background:#fff;border-radius:6px;margin-bottom:2px;
+  transition:background 0.4s;}
+.row.pulse{background:var(--found-bg);}
+.row.unknown-row{background:#fff;}
+.row .name{flex:1;font-size:14.5px;}
+.row .name .bc{display:block;font-family:ui-monospace,monospace;font-size:11.5px;
+  color:var(--muted);margin-top:2px;}
+.row-badge{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:20px;
+  font-size:11px;font-weight:700;vertical-align:middle;}
+.badge-ok{background:var(--found-bg);color:var(--found);}
+.badge-under{background:var(--warn-bg);color:var(--warn);}
+.badge-over{background:#fbe8e3;color:var(--stamp);}
+.badge-unknown{background:var(--warn-bg);color:var(--warn);}
+.row .qty-controls{display:flex;align-items:center;gap:6px;}
+.row .qty-controls button{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);
+  background:#fff;font-size:15px;cursor:pointer;line-height:1;}
+.row .qty-num{font-family:ui-monospace,monospace;font-size:17px;font-weight:700;
+  min-width:30px;text-align:center;}
+.row .del{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:4px;}
+
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted);}
+.empty-state .big{font-size:38px;margin-bottom:8px;}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:9px;
+  font-size:14px;opacity:0;transition:opacity 0.25s;pointer-events:none;z-index:50;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP SCREEN ============ -->
+<div class="screen active" id="screen-setup">
+  <div class="topbar">
+    <div><h1>Comptage Inventaire</h1></div>
+  </div>
+  <div class="setup-wrap">
+    <h2>Nouvelle session de comptage</h2>
+    <p class="sub">Cet outil sert uniquement à COMPTER pendant l'inventaire physique — il ne modifie jamais votre liste de produits. À la fin, vous téléchargez les résultats.</p>
+
+    <div class="sync-box">
+      <div class="lbl">Lien de synchronisation des produits (même que le générateur/scanner)</div>
+      <input class="field-input" id="sync-url" style="margin-bottom:8px" placeholder="https://script.google.com/macros/s/XXXX/exec"/>
+      <div class="lbl">Clé d'écriture (même que le générateur — pour envoyer les comptes au Sheet)</div>
+      <input class="field-input" id="write-key" style="margin-bottom:8px" placeholder="Clé secrète (WRITE_KEY)"/>
+      <button class="btn-secondary" onclick="saveSyncUrl()">Enregistrer & Synchroniser</button>
+      <div class="sync-status"><div class="dot gray" id="sync-dot"></div><span id="sync-status-text">Non configuré</span></div>
+    </div>
+
+    <label class="field-label">Nom de la session (ex: Entrepôt — 28 Juin)</label>
+    <input class="field-input" id="session-name" placeholder="Entrepôt - Comptage"/>
+
+    <label class="field-label">Emplacement (pour pouvoir envoyer les comptes au Sheet)</label>
+    <select class="field-input" id="session-location">
+      <option value="">Aucun — juste exporter en CSV</option>
+      <option value="Store 1">Store 1</option>
+      <option value="Store 2">Store 2</option>
+      <option value="Warehouse">Entrepôt</option>
+    </select>
+
+    <button class="btn-primary" onclick="startSession()">Commencer le comptage</button>
+
+    <div id="recent-wrap" style="display:none">
+      <div class="field-label" style="margin-top:28px">Reprendre une session</div>
+      <div class="recent-sessions" id="recent-sessions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ COUNT SCREEN ============ -->
+<div class="screen" id="screen-count">
+  <div class="topbar">
+    <div>
+      <h1>Comptage Inventaire</h1>
+      <div class="session-name" id="active-session-label"></div>
+    </div>
+    <button class="btn-icon" onclick="goToSetup()">⏏ Changer de session</button>
+  </div>
+
+  <div class="count-wrap">
+    <div class="tally-header">
+      <div class="tally-card"><div class="num mono" id="stat-total">0</div><div class="lbl">Articles comptés</div></div>
+      <div class="tally-card"><div class="num mono" id="stat-unique">0</div><div class="lbl">Produits différents</div></div>
+      <div class="tally-card"><div class="num mono" id="stat-unknown">0</div><div class="lbl">Codes inconnus</div></div>
+    </div>
+
+    <div class="scan-bar">
+      <input id="scan-input" autofocus placeholder="Scanner ou taper un code-barres, puis Entrée" inputmode="numeric"/>
+      <button class="scan-go" onclick="handleScan()">Ajouter</button>
+    </div>
+
+    <div class="status-card" id="status-card">
+      <div class="status-icon" id="status-icon">📋</div>
+      <div class="status-body">
+        <div class="status-name" id="status-name">Scannez un article pour commencer</div>
+        <div class="status-detail" id="status-detail"></div>
+      </div>
+    </div>
+
+    <div class="flash" id="flash"></div>
+
+    <div class="list-toolbar">
+      <h3 id="list-title">Articles comptés</h3>
+      <div class="actions">
+        <button class="btn-tiny btn-send" id="btn-send" onclick="sendCountsToSheet()">☁ Envoyer au Sheet</button>
+        <button class="btn-tiny" onclick="exportCSV()">⬇ Exporter CSV</button>
+        <button class="btn-tiny" onclick="clearSession()">🗑 Vider la session</button>
+      </div>
+    </div>
+
+    <div id="rows-wrap"></div>
+    <div class="empty-state" id="empty-state">
+      <div class="big">📋</div>
+      Aucun article scanné encore.<br>Commencez à scanner pour remplir la liste.
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let PRODUCT_DB = {};          // barcode -> {name, category}
+let STRIPPED_INDEX = {};      // zero-stripped barcode -> real PRODUCT_DB key (handles DB-side stripped zeros)
+let syncUrl = localStorage.getItem('inv_count_sync_url') || '';
+let writeKey = localStorage.getItem('inv_count_write_key') || '';
+let currentSession = null;    // {name, location, items: {barcode: {name, count, unknown}}, createdAt}
+
+function loadProductCache(){
+  try { PRODUCT_DB = JSON.parse(localStorage.getItem('inv_count_product_cache') || '{}'); }
+  catch(e){ PRODUCT_DB = {}; }
+  buildStrippedIndex();
+}
+function saveProductCache(){
+  localStorage.setItem('inv_count_product_cache', JSON.stringify(PRODUCT_DB));
+}
+
+function buildStrippedIndex(){
+  STRIPPED_INDEX = {};
+  Object.keys(PRODUCT_DB).forEach(bc => {
+    const stripped = bc.replace(/^0+/, '');
+    if(stripped && stripped !== bc && !STRIPPED_INDEX[stripped]){
+      STRIPPED_INDEX[stripped] = bc; // points back to the real PRODUCT_DB key
+    }
+  });
+}
+
+function normName(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+
+// ══════════════════════════════════════════
+//  SYNC (read-only — never writes back)
+// ══════════════════════════════════════════
+function updateSyncStatusUI(msg){
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-status-text');
+  if(!dot) return;
+  if(msg){ txt.textContent = msg; return; }
+  if(syncUrl){ dot.className = 'dot green'; txt.textContent = 'Configuré — ' + Object.keys(PRODUCT_DB).length + ' produits en mémoire'; }
+  else { dot.className = 'dot gray'; txt.textContent = 'Non configuré'; }
+}
+
+async function saveSyncUrl(){
+  const url = document.getElementById('sync-url').value.trim();
+  const key = document.getElementById('write-key').value.trim();
+  syncUrl = url;
+  writeKey = key;
+  localStorage.setItem('inv_count_sync_url', url);
+  localStorage.setItem('inv_count_write_key', key);
+  if(!url){ updateSyncStatusUI(); return; }
+  const dot = document.getElementById('sync-dot');
+  dot.className = 'dot gray';
+  document.getElementById('sync-status-text').textContent = 'Synchronisation…';
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    PRODUCT_DB = {};
+    (data.products || []).forEach(p => {
+      if(p.barcode && p.name){
+        const expectedQty = (p.subCategory && /^\d+$/.test(String(p.subCategory).trim()))
+          ? parseInt(p.subCategory, 10) : null;
+        PRODUCT_DB[String(p.barcode)] = { name: p.name, category: p.category || '', expectedQty };
+      }
+    });
+    saveProductCache(); buildStrippedIndex();
+    dot.className = 'dot green';
+    document.getElementById('sync-status-text').textContent = Object.keys(PRODUCT_DB).length + ' produits synchronisés ✓';
+    showToast('✅ ' + Object.keys(PRODUCT_DB).length + ' produits chargés.');
+  } catch(err){
+    dot.className = 'dot red';
+    document.getElementById('sync-status-text').textContent = 'Échec : ' + err.message;
+  }
+}
+
+// ══════════════════════════════════════════
+//  AUDIO SIGNAL (works on iPad Safari once unlocked by a tap)
+// ══════════════════════════════════════════
+let audioCtx = null;
+function unlockAudio(){
+  if(!audioCtx){
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e){ /* audio unavailable, fail silently */ }
+  }
+}
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: true });
+
+function beep(pattern){
+  if(!audioCtx) return;
+  // pattern: array of [frequency, durationMs]
+  let t = audioCtx.currentTime;
+  pattern.forEach(([freq, dur]) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur/1000);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur/1000);
+    t += dur/1000 + 0.02;
+  });
+}
+const SOUND_OK = () => beep([[880,90]]);                 // single pleasant chirp
+const SOUND_MISMATCH = () => beep([[440,110],[440,110]]); // two low blips
+const SOUND_UNKNOWN = () => beep([[300,180]]);            // single low buzz
+
+// ══════════════════════════════════════════
+//  SESSIONS (local only — nothing ever syncs back)
+// ══════════════════════════════════════════
+function allSessions(){
+  try { return JSON.parse(localStorage.getItem('inv_count_sessions') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveSessions(all){
+  localStorage.setItem('inv_count_sessions', JSON.stringify(all));
+}
+function persistCurrentSession(){
+  if(!currentSession) return;
+  const all = allSessions();
+  all[currentSession.name] = currentSession;
+  saveSessions(all);
+}
+
+function startSession(){
+  const name = document.getElementById('session-name').value.trim();
+  const location = document.getElementById('session-location').value;
+  if(!name){ showToast('Donnez un nom à la session.'); return; }
+  const all = allSessions();
+  currentSession = all[name] || { name, location, items: {}, createdAt: new Date().toISOString() };
+  if(!currentSession.location) currentSession.location = location; // keep existing if resuming
+  all[name] = currentSession;
+  saveSessions(all);
+  showCountScreen();
+}
+
+function resumeSession(name){
+  const all = allSessions();
+  if(!all[name]) return;
+  currentSession = all[name];
+  showCountScreen();
+}
+
+function goToSetup(){
+  document.getElementById('screen-count').classList.remove('active');
+  document.getElementById('screen-setup').classList.add('active');
+  renderRecentSessions();
+}
+
+function showCountScreen(){
+  document.getElementById('screen-setup').classList.remove('active');
+  document.getElementById('screen-count').classList.add('active');
+  document.getElementById('active-session-label').textContent =
+    currentSession.name + (currentSession.location ? '  •  → ' + currentSession.location : '  •  pas d\'envoi configuré');
+  renderRows();
+  updateTally();
+  setTimeout(() => document.getElementById('scan-input').focus(), 50);
+}
+
+function renderRecentSessions(){
+  const all = allSessions();
+  const names = Object.keys(all);
+  const wrap = document.getElementById('recent-wrap');
+  const list = document.getElementById('recent-sessions');
+  if(!names.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = names.sort((a,b) => new Date(all[b].createdAt) - new Date(all[a].createdAt)).map(n => {
+    const s = all[n];
+    const count = Object.values(s.items).reduce((a,i) => a+i.count, 0);
+    const date = new Date(s.createdAt).toLocaleDateString();
+    return `<div class="item" onclick="resumeSession('${n.replace(/'/g,"\\'")}')">
+      <div><div class="name">${n}</div><div class="meta">${date} — ${count} article(s)</div></div>
+      <div>→</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  SCANNING
+// ══════════════════════════════════════════
+function handleScan(){
+  const input = document.getElementById('scan-input');
+  const raw = input.value.trim();
+  if(!raw) return;
+  input.value = '';
+
+  // Resolve the canonical key: try exact match, then common zero-padding
+  // lengths (raw scan shorter than expected), then the stripped-zero index
+  // (DB-side cell lost its leading zero — the more common real-world case).
+  let matchedKey = null;
+  if(PRODUCT_DB[raw]){
+    matchedKey = raw;
+  } else {
+    for(const len of [8,12,13,14]){
+      if(raw.length < len){
+        const padded = raw.padStart(len,'0');
+        if(PRODUCT_DB[padded]){ matchedKey = padded; break; }
+      }
+    }
+  }
+  if(!matchedKey){
+    const strippedRaw = raw.replace(/^0+/, '');
+    if(STRIPPED_INDEX[strippedRaw]){ matchedKey = STRIPPED_INDEX[strippedRaw]; }
+    else if(PRODUCT_DB[strippedRaw]){ matchedKey = strippedRaw; }
+  }
+
+  const finalKey = matchedKey || raw; // unknown codes are stored under the raw scanned value
+  const product = matchedKey ? PRODUCT_DB[matchedKey] : null;
+
+  if(!currentSession.items[finalKey]){
+    currentSession.items[finalKey] = {
+      name: product ? product.name : null,
+      count: 0,
+      unknown: !product
+    };
+  }
+  currentSession.items[finalKey].count++;
+  persistCurrentSession();
+
+  const item = currentSession.items[finalKey];
+  updateStatusCard(finalKey, item, product);
+
+  showFlash(product ? 'found' : 'unknown',
+    product ? ('✓ ' + product.name) : ('⚠ Code inconnu : ' + raw));
+
+  renderRows(finalKey);
+  updateTally();
+  document.getElementById('scan-input').focus();
+}
+
+function updateStatusCard(barcode, item, product){
+  const card = document.getElementById('status-card');
+  const icon = document.getElementById('status-icon');
+  const name = document.getElementById('status-name');
+  const detail = document.getElementById('status-detail');
+
+  if(!product){
+    card.className = 'status-card unknown';
+    icon.textContent = '❓';
+    name.textContent = 'Code inconnu — pas dans la base de produits';
+    detail.textContent = barcode + '  •  compté ' + item.count + ' fois cette session';
+    SOUND_UNKNOWN();
+    return;
+  }
+
+  const expected = product.expectedQty;
+  name.textContent = product.name;
+
+  if(expected === null || expected === undefined){
+    card.className = 'status-card neutral';
+    icon.textContent = '✓';
+    detail.textContent = 'Compté : ' + item.count + '  •  Pas de quantité de référence enregistrée';
+    SOUND_OK();
+  } else if(item.count === expected){
+    card.className = 'status-card ok';
+    icon.textContent = '✅';
+    detail.textContent = 'Compté : ' + item.count + '  •  Attendu : ' + expected + '  •  Ça correspond';
+    SOUND_OK();
+  } else if(item.count < expected){
+    card.className = 'status-card under';
+    icon.textContent = '⚠️';
+    detail.textContent = 'Compté : ' + item.count + '  •  Attendu : ' + expected + '  •  Manque ' + (expected-item.count);
+    SOUND_MISMATCH();
+  } else {
+    card.className = 'status-card over';
+    icon.textContent = '🔺';
+    detail.textContent = 'Compté : ' + item.count + '  •  Attendu : ' + expected + '  •  Surplus de ' + (item.count-expected);
+    SOUND_MISMATCH();
+  }
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.target.id === 'scan-input' && e.key === 'Enter'){ handleScan(); }
+});
+
+function showFlash(type, msg){
+  const el = document.getElementById('flash');
+  el.className = 'flash show ' + type;
+  el.textContent = msg;
+  clearTimeout(window._flashTimer);
+  window._flashTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function adjustQty(barcode, delta){
+  const item = currentSession.items[barcode];
+  if(!item) return;
+  item.count += delta;
+  if(item.count <= 0){ delete currentSession.items[barcode]; }
+  persistCurrentSession();
+  renderRows();
+  updateTally();
+}
+
+function deleteRow(barcode){
+  delete currentSession.items[barcode];
+  persistCurrentSession();
+  renderRows();
+  updateTally();
+}
+
+function clearSession(){
+  if(!confirm('Vider toute la session "' + currentSession.name + '" ? Cette action est irréversible.')) return;
+  currentSession.items = {};
+  persistCurrentSession();
+  renderRows();
+  updateTally();
+}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function renderRows(justScanned){
+  const wrap = document.getElementById('rows-wrap');
+  const empty = document.getElementById('empty-state');
+  const keys = Object.keys(currentSession.items);
+  if(!keys.length){ wrap.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  const sorted = keys.sort((a,b) => {
+    const an = currentSession.items[a].name || a;
+    const bn = currentSession.items[b].name || b;
+    return an.localeCompare(bn);
+  });
+
+  wrap.innerHTML = sorted.map(bc => {
+    const item = currentSession.items[bc];
+    const pulse = bc === justScanned ? 'pulse' : '';
+    const product = PRODUCT_DB[bc];
+    const expected = product ? product.expectedQty : null;
+
+    let badge = '';
+    if(item.unknown){
+      badge = '<span class="row-badge badge-unknown">Inconnu</span>';
+    } else if(expected !== null && expected !== undefined){
+      if(item.count === expected) badge = '<span class="row-badge badge-ok">= ' + expected + '</span>';
+      else if(item.count < expected) badge = '<span class="row-badge badge-under">attend. ' + expected + '</span>';
+      else badge = '<span class="row-badge badge-over">attend. ' + expected + '</span>';
+    }
+
+    const label = item.name
+      ? `${item.name}<span class="bc">${bc}</span>`
+      : `<span style="color:var(--warn)">Code inconnu</span><span class="bc">${bc}</span>`;
+    return `<div class="row ${pulse} ${item.unknown ? 'unknown-row' : ''}">
+      <div class="name">${label}${badge}</div>
+      <div class="qty-controls">
+        <button onclick="adjustQty('${bc}', -1)">−</button>
+        <div class="qty-num">${item.count}</div>
+        <button onclick="adjustQty('${bc}', 1)">+</button>
+      </div>
+      <button class="del" onclick="deleteRow('${bc}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function updateTally(){
+  const items = Object.values(currentSession.items);
+  const total = items.reduce((a,i) => a+i.count, 0);
+  const unique = items.length;
+  const unknown = items.filter(i => i.unknown).length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-unique').textContent = unique;
+  document.getElementById('stat-unknown').textContent = unknown;
+}
+
+// ══════════════════════════════════════════
+//  EXPORT (the only way data leaves this tool)
+// ══════════════════════════════════════════
+function exportCSV(){
+  const keys = Object.keys(currentSession.items);
+  if(!keys.length){ showToast('Rien à exporter encore.'); return; }
+  const header = ['Code-barres','Produit','Quantité Comptée'];
+  const rows = keys.sort((a,b)=>{
+    const an = currentSession.items[a].name || a;
+    const bn = currentSession.items[b].name || b;
+    return an.localeCompare(bn);
+  }).map(bc => {
+    const item = currentSession.items[bc];
+    return [bc, item.name || 'INCONNU', item.count];
+  });
+  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (currentSession.name.replace(/[^a-z0-9]+/gi,'_') || 'comptage') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✅ Fichier exporté.');
+}
+
+// ══════════════════════════════════════════
+//  SEND TO SHEET (bulk push — the only way this app writes anywhere)
+// ══════════════════════════════════════════
+async function sendCountsToSheet(){
+  if(!syncUrl || !writeKey){
+    showToast('Configurez le lien et la clé d\'écriture dans les réglages (Changer de session) d\'abord.');
+    return;
+  }
+  if(!currentSession.location){
+    showToast('Cette session n\'a pas d\'emplacement choisi (Store 1 / Store 2 / Entrepôt) — impossible d\'envoyer.');
+    return;
+  }
+  const keys = Object.keys(currentSession.items).filter(k => !currentSession.items[k].unknown);
+  if(!keys.length){ showToast('Rien à envoyer (aucun produit reconnu compté).'); return; }
+
+  const btn = document.getElementById('btn-send');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Envoi…';
+
+  const counts = keys.map(bc => ({ barcode: bc, count: currentSession.items[bc].count }));
+
+  try {
+    const res = await fetch(syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        key: writeKey,
+        action: 'updateCounts',
+        location: currentSession.location,
+        counts: counts
+      })
+    });
+    const data = await res.json();
+    if(data.success){
+      showToast('✅ ' + (data.updated || counts.length) + ' produit(s) envoyé(s) vers ' + currentSession.location + '.');
+    } else {
+      showToast('❌ Échec : ' + (data.error || 'erreur inconnue'));
+    }
+  } catch(err){
+    showToast('❌ Impossible de contacter le Sheet : ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// ══════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════
+let _toastTimer;
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadProductCache();
+document.getElementById('sync-url').value = syncUrl;
+document.getElementById('write-key').value = writeKey;
+updateSyncStatusUI();
+renderRecentSessions();
+if(syncUrl){
+  // silent background refresh of product list on load
+  (async () => {
+    try {
+      const res = await fetch(syncUrl, { cache: 'no-store' });
+      const data = await res.json();
+      if(data.products){
+        PRODUCT_DB = {};
+        data.products.forEach(p => {
+          if(p.barcode && p.name){
+            const expectedQty = (p.subCategory && /^\d+$/.test(String(p.subCategory).trim()))
+              ? parseInt(p.subCategory, 10) : null;
+            PRODUCT_DB[String(p.barcode)] = { name: p.name, category: p.category || '', expectedQty };
+          }
+        });
+        saveProductCache(); buildStrippedIndex();
+        updateSyncStatusUI();
+      }
+    } catch(e){ /* keep using cached product list */ }
+  })();
+}
+</script>
+</body>
+</html>
