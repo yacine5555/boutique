@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Boutique — Admin à distance</title>
+<style>
+  :root{
+    --ink:#111827; --ink3:#6B7280; --ink4:#9CA3AF;
+    --paper:#F9FAFB; --paper2:#F3F4F6; --card:#FFFFFF;
+    --line:#E5E7EB; --border2:#D1D5DB;
+    --blue:#2563EB; --green:#059669; --red:#DC2626; --orange:#D97706;
+    --r-sm:7px; --r-md:12px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--paper); color:var(--ink); font-size:14px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
+  h1{font-size:20px;margin:0}
+  .sub{color:var(--ink3);font-size:12.5px;margin-top:2px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+  .btn{
+    border:1px solid var(--border2); background:var(--card); color:var(--ink);
+    border-radius:var(--r-sm); padding:9px 14px; font-size:13px; cursor:pointer;
+  }
+  .btn:hover{background:var(--paper2)}
+  .btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .btn-primary:hover{background:#1d4ed8}
+  .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+  .btn-red{background:#fff;color:var(--red);border-color:#f0b4ac}
+  .btn-sm{padding:6px 10px;font-size:12px}
+  input, select{
+    width:100%; padding:9px 10px; border:1px solid var(--border2); border-radius:var(--r-sm);
+    font-size:13.5px; margin-bottom:10px; background:#fff; color:var(--ink);
+  }
+  label{font-size:11.5px;color:var(--ink3);display:block;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:820px){ .grid{grid-template-columns:1fr} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:16px}
+  .card.full{grid-column:1/-1}
+  .card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink3);margin-bottom:12px;
+    display:flex;justify-content:space-between;align-items:center}
+  .stat-row{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .stat-row:last-child{border-bottom:none}
+  .stat-big{font-size:26px;font-weight:700}
+  .muted{color:var(--ink3);font-size:12px}
+  .row{padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  .row:last-child{border-bottom:none}
+  .scroll{max-height:320px;overflow-y:auto}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill-red{background:#FEE2E2;color:#991B1B}
+  .pill-green{background:#D1FAE5;color:#065F46}
+  .pill-gray{background:#F3F4F6;color:#4B5563}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase}
+  .login-wrap{max-width:420px;margin:60px auto;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:28px}
+  .err{color:var(--red);font-size:12.5px;margin:6px 0 10px;min-height:16px}
+  .hidden{display:none !important}
+  .emp-row, .store-select-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .emp-row input{margin-bottom:0}
+  .tag{font-size:10.5px;color:var(--ink4)}
+  a.link{color:var(--blue);font-size:12px;cursor:pointer;text-decoration:none}
+</style>
+</head>
+<body>
+
+<div class="login-wrap" id="screen-login">
+  <h1>🔑 Admin à distance</h1>
+  <div class="sub" style="margin-bottom:18px">Voir et gérer les deux boutiques depuis cet ordinateur, sans y aller.</div>
+  <label>Web App URL</label>
+  <input id="in-url" placeholder="https://script.google.com/macros/s/XXXX/exec"/>
+  <label>Write Key</label>
+  <input id="in-key" type="password" placeholder="La même que dans le POS"/>
+  <label>Mot de passe admin à distance</label>
+  <input id="in-pass" type="password" placeholder="REMOTE_ADMIN_PASSPHRASE"/>
+  <div class="err" id="login-err"></div>
+  <button class="btn btn-primary" style="width:100%;padding:11px" onclick="doConnect()">Se connecter</button>
+</div>
+
+<div class="wrap hidden" id="screen-app">
+  <div class="topbar">
+    <div>
+      <h1>🏪 Admin à distance</h1>
+      <div class="sub" id="last-refresh">—</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="loadAll()">🔄 Tout actualiser</button>
+      <button class="btn btn-red" onclick="doDisconnect()">Se déconnecter</button>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Dashboard -->
+    <div class="card full">
+      <div class="card-title">📊 Aujourd'hui — <span id="dash-date"></span></div>
+      <div id="dash-content" class="muted">Chargement…</div>
+    </div>
+
+    <!-- Discrepancies -->
+    <div class="card">
+      <div class="card-title">⚠️ Écarts de caisse</div>
+      <div id="discrepancy-list" class="scroll muted">Chargement…</div>
+    </div>
+
+    <!-- Expenses -->
+    <div class="card">
+      <div class="card-title">💸 Sorties de caisse</div>
+      <div id="expenses-list" class="scroll muted">Chargement…</div>
+    </div>
+
+    <!-- Daily / monthly summary -->
+    <div class="card full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span>📅 Résumé quotidien</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-sm" onclick="shiftSummaryMonth(-1)" title="Mois précédent">◀</button>
+          <input type="month" id="summary-month" style="font-size:12px;padding:5px 6px" onchange="onSummaryMonthChange()"/>
+          <button class="btn btn-sm" onclick="shiftSummaryMonth(1)" title="Mois suivant">▶</button>
+        </div>
+      </div>
+      <div id="daily-list" class="scroll muted">Chargement…</div>
+      <div id="month-summary" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"></div>
+    </div>
+
+    <!-- Mensualités -->
+    <div class="card">
+      <div class="card-title">📅 Mensualités</div>
+      <div id="installments-list" class="scroll muted">Chargement…</div>
+    </div>
+
+    <!-- Holds -->
+    <div class="card">
+      <div class="card-title">🔖 Réservations</div>
+      <div id="holds-list" class="scroll muted">Chargement…</div>
+    </div>
+
+    <!-- Customers -->
+    <div class="card full">
+      <div class="card-title">👥 Clients</div>
+      <input id="cust-search" placeholder="Rechercher par nom ou téléphone…" oninput="renderCustomers()"/>
+      <div id="customers-list" class="scroll muted">Chargement…</div>
+    </div>
+
+    <!-- MANAGE: branding -->
+    <div class="card full">
+      <div class="card-title">🏪 Gérer — Infos boutique</div>
+      <div class="store-select-row">
+        <select id="store-select" onchange="onStoreSelect()" style="margin-bottom:0"></select>
+        <button class="btn btn-sm" onclick="newStoreForm()">+ Nouvelle boutique</button>
+      </div>
+      <label>Nom de la boutique (identifiant — doit correspondre à celui utilisé sur l'appareil du magasin)</label>
+      <input id="st-name"/>
+      <label>Icône</label>
+      <input id="st-icon" maxlength="4" placeholder="ex: 👗"/>
+      <label>Slogan</label>
+      <input id="st-tagline"/>
+      <label>Téléphone</label>
+      <input id="st-phone"/>
+      <label>Adresse</label>
+      <input id="st-address"/>
+      <label>Message de clôture</label>
+      <input id="st-closing"/>
+      <button class="btn btn-green" onclick="saveStore()">Enregistrer cette boutique</button>
+      <div class="tag" style="margin-top:8px">Les changements sont récupérés par l'appareil du magasin dans les 15 minutes.</div>
+    </div>
+
+    <!-- MANAGE: employees -->
+    <div class="card">
+      <div class="card-title">👤 Gérer — Employés</div>
+      <div id="emp-mgmt-list" style="margin-bottom:12px"></div>
+      <div class="emp-row">
+        <input id="new-emp-name" placeholder="Nom"/>
+        <input id="new-emp-pin" placeholder="PIN (4 chiffres)" maxlength="4"/>
+        <button class="btn btn-sm btn-green" onclick="addEmployeeRemote()">Ajouter</button>
+      </div>
+    </div>
+
+    <!-- MANAGE: global settings -->
+    <div class="card">
+      <div class="card-title">⚙️ Gérer — Paramètres globaux</div>
+      <label>PIN Admin (partagé, utilisé dans les deux boutiques)</label>
+      <input id="gs-adminpin" maxlength="8"/>
+      <label>Durée des réservations (jours)</label>
+      <input id="gs-holddays" type="number" min="1"/>
+      <button class="btn btn-green" onclick="saveGlobal()">Enregistrer</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let radmUrl = localStorage.getItem('radm_url') || '';
+let radmKey = localStorage.getItem('radm_key') || '';
+let radmPass = localStorage.getItem('radm_pass') || '';
+
+let _stores = [];       // cached StoreSettings rows
+let _employees = [];    // cached Employees rows
+let _customers = [];    // cached Customers rows
+// This page has no UI for the EmailJS receipt-email fields (service/template/
+// key/email) yet — cached here on load purely so saveGlobal() can send them
+// back unchanged instead of accidentally blanking them out.
+let _globalEmailJs = {};
+let _summaryMonth = ''; // "yyyy-MM"; '' = current month, set on first load
+
+function fmt(n){ return (Number(n)||0).toLocaleString('fr-FR'); }
+
+async function apiGet(action, mode, params){
+  const url = new URL(radmUrl);
+  url.searchParams.set('action', action);
+  if(mode === 'pass') url.searchParams.set('pass', radmPass);
+  else if(mode === 'key') url.searchParams.set('key', radmKey);
+  if(params) Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const res = await fetch(url.toString(), {cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data;
+}
+async function apiPost(action, payload){
+  const res = await fetch(radmUrl, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({ key: radmKey, remotePass: radmPass, action: action }, payload || {}))
+  });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data;
+}
+
+async function doConnect(){
+  const url = document.getElementById('in-url').value.trim();
+  const key = document.getElementById('in-key').value.trim();
+  const pass = document.getElementById('in-pass').value.trim();
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  if(!url || !key || !pass){ err.textContent = 'Remplissez les trois champs.'; return; }
+  radmUrl = url; radmKey = key; radmPass = pass;
+  try {
+    await apiGet('getDashboardData', 'pass');
+  } catch(e){
+    err.textContent = '❌ Connexion échouée — ' + e.message;
+    return;
+  }
+  localStorage.setItem('radm_url', radmUrl);
+  localStorage.setItem('radm_key', radmKey);
+  localStorage.setItem('radm_pass', radmPass);
+  document.getElementById('screen-login').classList.add('hidden');
+  document.getElementById('screen-app').classList.remove('hidden');
+  loadAll();
+}
+function doDisconnect(){
+  document.getElementById('screen-app').classList.add('hidden');
+  document.getElementById('screen-login').classList.remove('hidden');
+}
+
+async function loadAll(){
+  document.getElementById('last-refresh').textContent = 'Actualisation…';
+  await Promise.all([
+    loadDashboard(), loadReconciliation(), loadExpenses(), loadDailySummary(),
+    loadInstallments(), loadHolds(), loadCustomers(),
+    loadStoreSettings(), loadEmployees(), loadGlobalSettings(),
+  ]);
+  document.getElementById('last-refresh').textContent = 'Dernière actualisation : ' + new Date().toLocaleTimeString('fr-FR');
+}
+
+// ---- Dashboard ----
+async function loadDashboard(){
+  const el = document.getElementById('dash-content');
+  try {
+    const d = await apiGet('getDashboardData', 'pass');
+    document.getElementById('dash-date').textContent = d.today || '';
+    const pm = d.payBreakdown || {};
+    const storeRows = (d.stores||[]).map(s => `
+      <tr><td>${s.store}</td><td>${s.sales}</td><td>${fmt(s.gross)}</td>
+        <td>${s.returns}</td><td>${fmt(s.refunds)}</td><td><strong>${fmt(s.net)}</strong></td></tr>`).join('');
+    el.innerHTML = `
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><div class="stat-big" style="color:var(--green)">${fmt(d.netRevenue)}</div><div class="muted">Net CFA</div></div>
+        <div><div class="stat-big">${d.salesCount||0}</div><div class="muted">Ventes</div></div>
+        <div><div class="stat-big">${d.returnsCount||0}</div><div class="muted">Retours</div></div>
+      </div>
+      <div class="stat-row"><span>💵 Cash</span><strong>${fmt(pm.cash)} CFA</strong></div>
+      <div class="stat-row"><span>🟠 Orange Money</span><strong>${fmt(pm.orange)} CFA</strong></div>
+      <div class="stat-row"><span>🌊 Wave</span><strong>${fmt(pm.wave)} CFA</strong></div>
+      <div class="stat-row"><span>🏦 Virement</span><strong>${fmt(pm.bank)} CFA</strong></div>
+      <div class="stat-row"><span>📅 Mensualité</span><strong>${fmt(pm.monthly)} CFA</strong></div>
+      ${storeRows ? `<table style="margin-top:14px"><tr><th>Magasin</th><th>Ventes</th><th>Brut</th><th>Retours</th><th>Remb.</th><th>Net</th></tr>${storeRows}</table>` : ''}
+    `;
+  } catch(e){ el.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Discrepancies ----
+async function loadReconciliation(){
+  const el = document.getElementById('discrepancy-list');
+  try {
+    const d = await apiGet('getReconciliation', 'pass');
+    const list = d.reconciliations || [];
+    if(!list.length){ el.innerHTML = '<div class="muted">Aucun écart signalé.</div>'; return; }
+    el.innerHTML = list.map(r=>{
+      const lines = [];
+      if(r.cashDiscrepancy) lines.push(`💵 Cash : compté ${fmt(r.endingCash)} / attendu ${fmt(r.expectedCash)} <strong style="color:var(--red)">(${r.cashDiscrepancy>0?'+':''}${fmt(r.cashDiscrepancy)})</strong>`);
+      if(r.orangeDiscrepancy) lines.push(`🟠 Orange : compté ${fmt(r.endingOrange)} / attendu ${fmt(r.expectedOrange)} <strong style="color:var(--red)">(${r.orangeDiscrepancy>0?'+':''}${fmt(r.orangeDiscrepancy)})</strong>`);
+      return `<div class="row"><strong>${r.employee||'—'}</strong> <span class="muted">· ${r.store||''} · ${r.date||''} ${r.time||''}</span><br/>${lines.join('<br/>')}</div>`;
+    }).join('');
+  } catch(e){ el.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Expenses ----
+async function loadExpenses(){
+  const el = document.getElementById('expenses-list');
+  try {
+    const d = await apiGet('getExpenses', 'pass');
+    const list = d.expenses || [];
+    if(!list.length){ el.innerHTML = '<div class="muted">Aucune sortie de caisse.</div>'; return; }
+    el.innerHTML = list.map(e=>`
+      <div class="row"><strong>${fmt(e.amount)} CFA</strong> — ${e.note||''}
+        <div class="muted">${e.employee||'—'} · ${e.store||''} · ${e.date||''} ${e.time||''}</div>
+      </div>`).join('');
+  } catch(e){ el.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Daily / monthly summary ----
+// _summaryMonth ('' = current month) is sent as the "month" param to
+// getDailySummary — the arrow buttons and the <input type="month"> below
+// just change this and re-call loadDailySummary(), same pattern as every
+// other card's refresh.
+function _monthInputValue(){
+  if(_summaryMonth) return _summaryMonth;
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+}
+function shiftSummaryMonth(delta){
+  const [y,m] = _monthInputValue().split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  _summaryMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  document.getElementById('summary-month').value = _summaryMonth;
+  loadDailySummary();
+}
+function onSummaryMonthChange(){
+  _summaryMonth = document.getElementById('summary-month').value || '';
+  loadDailySummary();
+}
+async function loadDailySummary(){
+  const listEl = document.getElementById('daily-list');
+  const monthEl = document.getElementById('month-summary');
+  const monthInput = document.getElementById('summary-month');
+  if(monthInput && !monthInput.value) monthInput.value = _monthInputValue();
+  try {
+    const d = await apiGet('getDailySummary', 'pass', _summaryMonth ? {month: _summaryMonth} : undefined);
+    const days = d.days || [];
+    if(!days.length){ listEl.innerHTML = '<div class="muted">Aucune vente ce mois-ci.</div>'; monthEl.innerHTML=''; return; }
+    listEl.innerHTML = days.map(day => `
+      <div class="row">
+        <div style="display:flex;justify-content:space-between">
+          <strong>${day.date}</strong><strong style="color:var(--green)">${fmt(day.total)} CFA</strong>
+        </div>
+        <div class="muted">💵 ${fmt(day.cash)} · 🟠 ${fmt(day.orange)} · 🌊 ${fmt(day.wave)} · 🏦 ${fmt(day.bank)}</div>
+      </div>`).join('');
+    const m = d.month || {};
+    monthEl.innerHTML = `
+      <div class="card-title" style="margin-bottom:6px">Résumé — ${d.monthLabel||''}</div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px">
+        <span>Total</span><strong style="color:var(--green)">${fmt(m.total)} CFA</strong>
+      </div>
+      <div class="muted">💵 Cash ${fmt(m.cash)} · 🟠 Orange ${fmt(m.orange)} · 🌊 Wave ${fmt(m.wave)} · 🏦 Virement ${fmt(m.bank)}</div>
+    `;
+  } catch(e){ listEl.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Mensualités ----
+async function loadInstallments(){
+  const el = document.getElementById('installments-list');
+  try {
+    const d = await apiGet('getAllInstallmentPlans', 'pass');
+    const plans = (d.plans||[]).filter(p=>p.status==='open').concat((d.plans||[]).filter(p=>p.status!=='open'));
+    if(!plans.length){ el.innerHTML = '<div class="muted">Aucun plan.</div>'; return; }
+    el.innerHTML = plans.slice(0,40).map(p=>`
+      <div class="row">
+        <div style="display:flex;justify-content:space-between">
+          <strong>${p.customerName||p.phone}</strong>
+          <span class="pill ${p.status==='open'?'pill-red':'pill-green'}">${p.status==='open'?'en cours':'soldé'}</span>
+        </div>
+        <div class="muted">${p.store||''} · Solde : ${fmt(p.balance)} / ${fmt(p.totalDue)} CFA</div>
+      </div>`).join('');
+  } catch(e){ el.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Holds ----
+async function loadHolds(){
+  const el = document.getElementById('holds-list');
+  try {
+    const d = await apiGet('getHolds', 'pass');
+    const holds = (d.holds||[]).filter(h=>h.status==='active');
+    if(!holds.length){ el.innerHTML = '<div class="muted">Aucune réservation active.</div>'; return; }
+    el.innerHTML = holds.slice(0,40).map(h=>`
+      <div class="row">
+        <strong>${h.customerName||h.phone}</strong> <span class="muted">· ${h.store||''}</span><br/>
+        <span class="muted">Expire : ${h.expiryDate||'—'} · ${fmt(h.total)} CFA</span>
+      </div>`).join('');
+  } catch(e){ el.innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+
+// ---- Customers ----
+async function loadCustomers(){
+  try {
+    const d = await apiGet('getCustomers', 'none');
+    _customers = d.customers || [];
+    renderCustomers();
+  } catch(e){ document.getElementById('customers-list').innerHTML = '<span style="color:var(--red)">Erreur : ' + e.message + '</span>'; }
+}
+function renderCustomers(){
+  const el = document.getElementById('customers-list');
+  const q = (document.getElementById('cust-search').value||'').toLowerCase();
+  const list = _customers.filter(c => !q || (c.name||'').toLowerCase().includes(q) || (c.phone||'').includes(q));
+  if(!list.length){ el.innerHTML = '<div class="muted">Aucun client.</div>'; return; }
+  el.innerHTML = list.slice(0,80).map(c=>`
+    <div class="row"><strong>${c.name||'—'}</strong> <span class="muted">· ${c.phone||''} · ${c.store||''}</span></div>
+  `).join('');
+}
+
+// ---- MANAGE: Store branding ----
+async function loadStoreSettings(){
+  try {
+    const d = await apiGet('getStoreSettings', 'key');
+    _stores = d.stores || [];
+    const sel = document.getElementById('store-select');
+    sel.innerHTML = _stores.map(s=>`<option value="${s.store}">${s.store}</option>`).join('') +
+      '<option value="__new__">+ Nouvelle boutique…</option>';
+    if(_stores.length) onStoreSelect(); else newStoreForm();
+  } catch(e){ /* leave the form editable even if the read fails */ }
+}
+function onStoreSelect(){
+  const sel = document.getElementById('store-select').value;
+  if(sel === '__new__'){ newStoreForm(); return; }
+  const s = _stores.find(x=>x.store===sel);
+  if(!s) return;
+  document.getElementById('st-name').value = s.store||'';
+  document.getElementById('st-icon').value = s.icon||'';
+  document.getElementById('st-tagline').value = s.tagline||'';
+  document.getElementById('st-phone').value = s.phone||'';
+  document.getElementById('st-address').value = s.address||'';
+  document.getElementById('st-closing').value = s.closingMsg||'';
+}
+function newStoreForm(){
+  ['st-name','st-icon','st-tagline','st-phone','st-address','st-closing'].forEach(id=>document.getElementById(id).value='');
+}
+async function saveStore(){
+  const store = document.getElementById('st-name').value.trim();
+  if(!store){ alert('Entrez le nom exact de la boutique (doit correspondre à celui utilisé sur l\'appareil du magasin).'); return; }
+  try {
+    await apiPost('saveStoreSettings', {
+      store, icon: document.getElementById('st-icon').value.trim(),
+      name: store, tagline: document.getElementById('st-tagline').value.trim(),
+      phone: document.getElementById('st-phone').value.trim(),
+      address: document.getElementById('st-address').value.trim(),
+      closingMsg: document.getElementById('st-closing').value.trim(),
+    });
+    await loadStoreSettings();
+    alert('✅ Boutique enregistrée. L\'appareil du magasin la récupérera dans les 15 minutes.');
+  } catch(e){ alert('❌ ' + e.message); }
+}
+
+// ---- MANAGE: Employees ----
+async function loadEmployees(){
+  try {
+    const d = await apiGet('getEmployees', 'key');
+    _employees = d.employees || [];
+    renderEmpMgmt();
+  } catch(e){ /* keep whatever was last rendered */ }
+}
+function renderEmpMgmt(){
+  const el = document.getElementById('emp-mgmt-list');
+  if(!_employees.length){ el.innerHTML = '<div class="muted">Aucun employé.</div>'; return; }
+  el.innerHTML = _employees.map((e,i)=>`
+    <div class="emp-row">
+      <div style="flex:1">${e.name}</div>
+      <div class="muted">PIN ****</div>
+      <button class="btn btn-sm btn-red" onclick="removeEmployeeRemote(${i})">Retirer</button>
+    </div>`).join('');
+}
+async function addEmployeeRemote(){
+  const name = document.getElementById('new-emp-name').value.trim();
+  const pin = document.getElementById('new-emp-pin').value.trim();
+  if(!name || !/^\d{4}$/.test(pin)){ alert('Nom + PIN à 4 chiffres requis.'); return; }
+  if(_employees.find(e=>e.name.toLowerCase()===name.toLowerCase())){ alert('Ce nom existe déjà.'); return; }
+  _employees.push({name, pin});
+  try {
+    await apiPost('saveEmployees', { employees: _employees });
+    document.getElementById('new-emp-name').value=''; document.getElementById('new-emp-pin').value='';
+    renderEmpMgmt();
+  } catch(e){ _employees.pop(); alert('❌ ' + e.message); }
+}
+async function removeEmployeeRemote(i){
+  const removed = _employees[i];
+  if(!confirm('Retirer ' + removed.name + ' ?')) return;
+  _employees.splice(i,1);
+  try { await apiPost('saveEmployees', { employees: _employees }); renderEmpMgmt(); }
+  catch(e){ _employees.splice(i,0,removed); alert('❌ ' + e.message); }
+}
+
+// ---- MANAGE: Global settings ----
+async function loadGlobalSettings(){
+  try {
+    const d = await apiGet('getGlobalSettings', 'key');
+    const s = d.settings;
+    if(s){
+      document.getElementById('gs-adminpin').value = s.adminPin || '';
+      document.getElementById('gs-holddays').value = s.holdDurationDays || 3;
+      _globalEmailJs = s.emailJs || {};
+    }
+  } catch(e){ /* keep defaults */ }
+}
+async function saveGlobal(){
+  try {
+    await apiPost('saveGlobalSettings', {
+      adminPin: document.getElementById('gs-adminpin').value.trim() || '1234',
+      holdDurationDays: parseInt(document.getElementById('gs-holddays').value,10) || 3,
+      emailJs: _globalEmailJs,
+    });
+    alert('✅ Paramètres enregistrés.');
+  } catch(e){ alert('❌ ' + e.message); }
+}
+
+// ---- Auto-connect if credentials already saved ----
+if(radmUrl && radmKey && radmPass){
+  document.getElementById('in-url').value = radmUrl;
+  document.getElementById('in-key').value = radmKey;
+  document.getElementById('in-pass').value = radmPass;
+  doConnect();
+}
+</script>
+</body>
+</html>
