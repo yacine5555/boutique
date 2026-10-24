@@ -277,6 +277,22 @@ input,select{font-family:inherit}
 .feedback.success{background:var(--green-lt);border-color:#6EE7B7}
 .feedback.error{background:var(--red-lt);border-color:#FCA5A5}
 .fb-icon{font-size:26px;flex-shrink:0}
+/* New products from the full-store scan */
+.nc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;overflow-y:auto;min-height:140px;padding:2px}
+.nc-tile{border:1.5px solid var(--border,#e5e7eb);border-radius:12px;background:#fff;padding:9px;display:flex;flex-direction:column;gap:6px}
+.nc-tile.st-ok{border-color:#16a34a;background:#f0fdf4}
+.nc-hd{display:flex;gap:6px;align-items:center;font-size:12px}.nc-hd b{flex:1;font-family:'Courier New',monospace}
+.nc-q{background:#0f766e;color:#fff;border-radius:10px;padding:1px 8px;font-weight:800}
+.nc-ty{background:#f1f5f9;border-radius:10px;padding:1px 8px;color:#475569;font-weight:600}
+.nc-ph{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.nc-ph button{border:2px solid #e2e8f0;border-radius:8px;background:#fff;padding:2px;cursor:pointer}
+.nc-ph button.on{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.3)}
+.nc-ph img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block}
+.nc-sg{display:flex;flex-direction:column;gap:4px}
+.nc-sg button{text-align:left;border:1.5px solid #c7d2fe;background:#eef2ff;border-radius:8px;padding:6px 8px;cursor:pointer;font-size:12.5px;font-weight:700;color:#1e1b4b}
+.nc-sg button small{display:block;font-size:10px;font-weight:500;color:#64748b}
+.nc-in{width:100%;box-sizing:border-box;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13.5px}
+.nc-same{border:1px dashed #0f766e;background:#f0fdfa;color:#0f766e;border-radius:8px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;text-align:left}
 /* Price labels card */
 .lbl-prev-in .L{width:40mm;height:30mm;box-sizing:border-box;padding:1.1mm 1.8mm .8mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;}.L-top{height:3.4mm;display:flex;align-items:center;justify-content:center;font-size:2.3mm;font-weight:800;letter-spacing:.35mm;text-transform:uppercase;white-space:nowrap;overflow:hidden;max-width:100%}.L-top img{max-height:3.4mm;max-width:24mm;object-fit:contain;filter:grayscale(1) contrast(1.4)}.L-top.be{height:5.2mm}.L-top.be svg{height:5.2mm;width:auto;display:block}.L-top.be + .L-nm{font-size:2.6mm;max-height:6mm}.L-nm{font-size:2.7mm;font-weight:700;line-height:1.15;text-align:center;width:100%;max-height:6.25mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}.L-pr{font-size:6.2mm;font-weight:900;line-height:1;white-space:nowrap;letter-spacing:-.1mm}.L-pr small{font-size:2.8mm;font-weight:800;margin-left:.6mm}.L.nobc .L-pr{font-size:8.5mm}.L.nobc .L-nm{font-size:3.1mm;max-height:7.2mm}.L-bc{display:flex;flex-direction:column;align-items:center}.L-bc svg{display:block;fill:#000}.L-bc div{font-size:2mm;letter-spacing:.3mm;line-height:1;margin-top:.3mm}
 .lbl-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px;font-size:13px}
@@ -1295,7 +1311,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v22-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v22-oct-e</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1466,6 +1482,21 @@ input,select{font-family:inherit}
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
           <button class="btn-primary" style="width:auto;padding:9px 16px" onclick="catAdmSave()">💾 Enregistrer la liste</button>
           <span class="dlv-dim" id="catadm-msg"></span>
+        </div>
+      </div>
+
+      <!-- New products from the full-store scan (sales script "Nouveaux codes") -->
+      <div class="admin-card" id="nc-card">
+        <div class="admin-card-title">🆕 Nouveaux produits scannés</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
+          1. Collez tous les scans (doublons compris = quantité) dans l'onglet « Codes scannés » du Sheet des ventes.
+          2. « Traiter » : stock Balkuy mis à jour pour les produits connus, recherche des noms + photos pour les nouveaux.
+          3. « Valider » : choisir le bon nom, la teinte, le prix, la photo → ajouté au catalogue avec son stock.
+        </div>
+        <div class="pim-sum" id="nc-card-sum"><span>…</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm btn-outline" id="nc-process-btn" onclick="ncProcess()">⚙️ Traiter les codes scannés</button>
+          <button class="btn-sm" style="background:#0f766e;color:#fff;border:none" onclick="openNewCodes()">✍️ Valider les noms</button>
         </div>
       </div>
 
@@ -4046,6 +4077,151 @@ if(navigator.usb && navigator.usb.addEventListener){
 }
 
 // ══════════════════════════════════════════
+//  NOUVEAUX PRODUITS (full-store scan) — Admin → 🆕
+//  Server side: sales script "Codes scannés" → "Nouveaux codes"
+//  (processScannedCodes / getNewCodes / addNewCode / skipNewCode).
+//  For each new barcode: up to 3 suggested names + photos; the employee
+//  holds the product, picks the right name, types the shade, the price,
+//  taps a photo, then ✓ Ajouter (Product Master + Balkuy stock = scanned
+//  quantity + price + photo). "Même produit" reuses the last name/price so
+//  a whole range of shades goes fast.
+// ══════════════════════════════════════════
+const NC_TABS = [
+  ['todo', 'À valider', it => it.type !== 'Connu' && ['Suggestions', 'Introuvable', 'À nommer'].indexOf(it.status) >= 0],
+  ['wait', 'En recherche', it => it.status === 'À chercher'],
+  ['added', 'Ajoutés', it => it.status === 'Ajouté'],
+  ['known', 'Déjà connus (stock appliqué)', it => it.type === 'Connu'],
+  ['skip', 'Ignorés', it => it.status === 'Ignoré'],
+];
+let _nc = { items: [], tab: 'todo', loadedAt: 0, busy: {}, last: null, photo: {}, draft: {}, sum: null };
+function _ncEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function _ncUrl(q){ return syncUrl + (syncUrl.indexOf('?') >= 0 ? '&' : '?') + q + '&key=' + encodeURIComponent(writeKey); }
+async function _ncPostJ(body){
+  const r = await fetch(syncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: writeKey }, body)) });
+  return r.json();
+}
+async function loadNewCodes(force){
+  if(!syncUrl || !writeKey){ _ncCard(); return; }
+  if(!force && Date.now() - _nc.loadedAt < 60000){ _ncCard(); return; }
+  try {
+    const d = await (await fetch(_ncUrl('action=getNewCodes'), { cache: 'no-store' })).json();
+    if(d && d.success){ _nc.items = d.items || []; _nc.sum = d; _nc.loadedAt = Date.now(); }
+  } catch(e){}
+  _ncCard();
+  if(document.getElementById('nc-modal').classList.contains('open')) renderNewCodes();
+}
+function _ncCounts(){ const c = {}; NC_TABS.forEach(t => c[t[0]] = _nc.items.filter(t[2]).length); return c; }
+function _ncCard(){
+  const el = document.getElementById('nc-card-sum'); if(!el) return;
+  if(!_nc.sum){ el.innerHTML = '<span>' + (syncUrl ? 'Pas encore de données — collez les scans puis « Traiter »' : 'Configurez d\'abord Sales Sync') + '</span>'; return; }
+  const c = _ncCounts();
+  el.innerHTML = '<span>📥 ' + (_nc.sum.pasted || 0) + ' scans collés</span><span>✍️ ' + c.todo + ' à valider</span><span>🔎 ' + c.wait + ' en recherche</span><span>✅ ' + c.added + ' ajoutés</span><span>📦 ' + c.known + ' déjà connus</span>';
+}
+async function ncProcess(){
+  if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
+  const b = document.getElementById('nc-process-btn'); if(b){ b.disabled = true; b.textContent = '⏳ Traitement…'; }
+  try {
+    const d = await _ncPostJ({ action: 'processScannedCodes' });
+    if(!d || !d.success) throw new Error((d && d.error) || 'réponse inattendue — script des ventes redéployé ?');
+    showToast('✅ ' + d.scans + ' scans → ' + d.codes + ' codes : ' + d.known + ' déjà connus (stock Balkuy mis à jour : ' + d.applied + '), ' + d.fresh + ' nouveaux. Les noms arrivent dans les 15 min.' + (d.failed ? ' ⚠ ' + d.failed + ' échec(s) de stock.' : ''), 12000);
+    loadNewCodes(true);
+  } catch(e){ showToast('⚠ ' + (e && e.message || e), 7000); }
+  if(b){ b.disabled = false; b.textContent = '⚙️ Traiter les codes scannés'; }
+}
+function openNewCodes(){ document.getElementById('nc-modal').classList.add('open'); renderNewCodes(); loadNewCodes(true); }
+function closeNewCodes(){ document.getElementById('nc-modal').classList.remove('open'); }
+function ncSetTab(t){ _nc.tab = t; renderNewCodes(); }
+function _ncNorm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function renderNewCodes(){
+  const c = _ncCounts();
+  document.getElementById('nc-tabs').innerHTML = NC_TABS.map(t => '<button type="button" class="cat-tab' + (t[0] === _nc.tab ? ' on' : '') + '" onclick="ncSetTab(\'' + t[0] + '\')">' + t[1] + ' (' + c[t[0]] + ')</button>').join('');
+  const q = String(document.getElementById('nc-search').value || '').trim();
+  const byCode = isBarcodeQuery(q);
+  const tab = NC_TABS.find(t => t[0] === _nc.tab) || NC_TABS[0];
+  let list = byCode ? _nc.items.filter(it => bcSearchMatch(it.barcode, q))
+    : _nc.items.filter(tab[2]).filter(it => !q || _ncNorm(it.name + ' ' + ((it.sugg[0] || {}).name || '')).indexOf(_ncNorm(q)) >= 0 || bcSearchMatch(it.barcode, q));
+  // similar products next to each other (same first suggested name / product)
+  list = list.slice().sort((a, b) => _ncNorm(a.name || (a.sugg[0] || {}).name || 'zzz').localeCompare(_ncNorm(b.name || (b.sugg[0] || {}).name || 'zzz')));
+  const shown = list.slice(0, 60);
+  const grid = document.getElementById('nc-grid');
+  if(_nc.tab === 'known' && !byCode){
+    grid.className = '';
+    grid.innerHTML = shown.length ? '<div class="pl-scroll">' + shown.map(it => '<div class="ex-row"><div style="flex:1"><b>' + _ncEsc(it.name) + '</b><div class="dlv-dim">' + _ncEsc(it.barcode) + (it.note ? ' · ⚠ ' + _ncEsc(it.note) : '') + '</div></div>' +
+      '<div style="text-align:right;font-size:12.5px">' + (it.before == null ? '—' : it.before) + ' → <b>' + it.qty + '</b><div class="dlv-dim">' + _ncEsc(it.status) + '</div></div></div>').join('') + '</div>' : '<div class="dlv-dim" style="padding:16px">Rien ici.</div>';
+  } else {
+    grid.className = 'nc-grid';
+    grid.innerHTML = shown.length ? shown.map(_ncTile).join('') : '<div class="dlv-dim" style="grid-column:1/-1;padding:20px;text-align:center">' + (_nc.loadedAt ? (byCode ? 'Code ' + _ncEsc(q) + ' : pas dans les scans.' : 'Rien ici 👍') : 'Chargement…') + '</div>';
+  }
+  document.getElementById('nc-foot').textContent = list.length > shown.length ? shown.length + ' sur ' + list.length + ' affichés — traitez ceux-ci, ou cherchez.' : '';
+}
+function _ncD(bc){ return _nc.draft[bc] || (_nc.draft[bc] = { n: '', s: '', p: '' }); }
+function ncDraft(bc, f, v){ _ncD(bc)[f] = v; }
+function _ncTile(it){
+  const bc = _ncEsc(it.barcode), busy = !!_nc.busy[it.barcode], done = it.status === 'Ajouté', d = _ncD(it.barcode);
+  const ph = it.photos || [], sel = _nc.photo[it.barcode];
+  let h = '<div class="nc-tile' + (done ? ' st-ok' : '') + '" id="nc-t-' + bc + '">';
+  h += '<div class="nc-hd"><b>' + bc + '</b><span class="nc-q">×' + it.qty + '</span><span class="nc-ty">' + _ncEsc(it.type === 'Nouveau' ? it.status : it.type) + '</span></div>';
+  if(done){
+    h += '<div class="pim-nm">' + _ncEsc(it.name) + '</div><div class="pim-meta">' + (it.price ? _ncEsc(formatCFA(it.price)) + ' · ' : '') + 'stock Balkuy : ' + it.qty + (it.note ? '<br>' + _ncEsc(it.note) : '') + '</div></div>';
+    return h;
+  }
+  if(ph.length) h += '<div class="nc-ph">' + ph.slice(0, 4).map((p, i) => '<button type="button" class="' + (sel === i ? 'on' : '') + '" onclick="ncPickPhoto(\'' + bc + '\',' + i + ')" title="' + _ncEsc(p.site || '') + '"><img src="' + _ncEsc(p.thumb || p.img) + '" alt="" loading="lazy" onerror="this.parentNode.style.display=\'none\'"></button>').join('') + '</div>';
+  if(it.sugg.length) h += '<div class="nc-sg">' + it.sugg.map((s, i) => '<button type="button" onclick="ncUseName(\'' + bc + '\',' + i + ')">' + _ncEsc(s.name) + '<small>' + _ncEsc(s.source) + '</small></button>').join('') + '</div>';
+  else h += '<div class="pim-meta">' + (it.status === 'À nommer' ? (it.type === 'Interne' ? 'Notre propre code : tapez le nom.' : 'Code douteux (mal scanné ?) : vérifiez sur le produit.') : 'Aucun nom trouvé en ligne : tapez-le, ou cherchez ci-dessous.') + '</div>';
+  h += '<input class="nc-in" id="nc-n-' + bc + '" placeholder="Produit (marque + nom)" value="' + _ncEsc(d.n) + '" oninput="ncDraft(\'' + bc + '\',\'n\',this.value)">';
+  h += '<div style="display:flex;gap:6px"><input class="nc-in" id="nc-s-' + bc + '" placeholder="Teinte / couleur" value="' + _ncEsc(d.s) + '" oninput="ncDraft(\'' + bc + '\',\'s\',this.value)" style="flex:1">' +
+       '<input class="nc-in" id="nc-p-' + bc + '" type="number" min="0" inputmode="numeric" placeholder="Prix CFA" value="' + _ncEsc(d.p) + '" oninput="ncDraft(\'' + bc + '\',\'p\',this.value)" style="width:96px"></div>';
+  if(_nc.last) h += '<button type="button" class="nc-same" onclick="ncSame(\'' + bc + '\')">↳ Même produit que le dernier : ' + _ncEsc(_nc.last.product) + (_nc.last.price ? ' · ' + _ncEsc(formatCFA(_nc.last.price)) : '') + '</button>';
+  h += '<div class="pim-btns"><button class="pim-ok" ' + (busy ? 'disabled ' : '') + 'onclick="ncAdd(\'' + bc + '\')">✓ Ajouter</button>' +
+       (it.status === 'Ignoré' ? '<button class="pim-lnk" onclick="ncSkip(\'' + bc + '\',true)">↩ Remettre</button>' : '<button class="pim-bad" ' + (busy ? 'disabled ' : '') + 'onclick="ncSkip(\'' + bc + '\')">Ignorer</button>') + '</div>';
+  h += '<div class="pim-shop">' + _pimShopLinks({ name: (it.sugg[0] || {}).name || it.barcode, barcode: it.barcode }) + '</div>';
+  if(busy) h += '<div class="pim-meta">Enregistrement…</div>';
+  return h + '</div>';
+}
+function ncPickPhoto(bc, i){ _nc.photo[bc] = _nc.photo[bc] === i ? undefined : i; renderNewCodes(); }
+function ncUseName(bc, i){
+  const it = _nc.items.find(x => x.barcode === bc); if(!it) return;
+  _ncD(bc).n = it.sugg[i].name; renderNewCodes();
+  const s = document.getElementById('nc-s-' + bc); if(s) s.focus();
+}
+function ncSame(bc){
+  if(!_nc.last) return;
+  const d = _ncD(bc); d.n = _nc.last.product; if(!d.p && _nc.last.price) d.p = String(_nc.last.price);
+  renderNewCodes();
+  const s = document.getElementById('nc-s-' + bc); if(s) s.focus();
+}
+async function ncAdd(bc){
+  const it = _nc.items.find(x => x.barcode === bc); if(!it) return;
+  const d = _ncD(bc);
+  const product = String(d.n || '').replace(/\s+/g, ' ').trim(), shade = String(d.s || '').trim();
+  if(product.length < 3){ showToast('⚠ Choisissez ou tapez le nom du produit', 3500); return; }
+  const name = shade ? product + ' - ' + shade : product;
+  const price = Math.round(Number(d.p)) || 0;
+  if(price && priceNeedsDigitWarning(price) && !confirm(formatCFA(price) + ' : plus de 6 chiffres. Confirmer ?')) return;
+  const pi = _nc.photo[bc], photo = (pi != null && it.photos[pi]) ? { img: it.photos[pi].img, thumb: it.photos[pi].thumb } : null;
+  _nc.busy[bc] = true; renderNewCodes();
+  try {
+    const r = await _ncPostJ({ action: 'addNewCode', barcode: bc, name: name, price: price || '', photo: photo, by: currentEmployee || 'Admin' });
+    if(!r || !r.success) throw new Error((r && r.error) || 'refusé');
+    it.status = 'Ajouté'; it.name = name; it.price = price || null; it.note = r.warning || '';
+    _nc.last = { product: product, price: price || null };
+    if(photo){ PROD_IMAGES[_bcKeyClient(bc)] = photo.thumb || photo.img; }
+    if(price){ try { labelQueueAdd(bc, name, price, 1, true); } catch(e){} }
+    showToast('✅ ' + name + ' ajouté (stock Balkuy : ' + it.qty + ')' + (price ? ' · étiquette prête à imprimer' : '') + (r.warning ? ' ⚠ ' + r.warning : ''), 4500);
+    try { syncProducts(false); } catch(e){}
+  } catch(e){ showToast('⚠ ' + (e && e.message || e), 7000); }
+  delete _nc.busy[bc]; _ncCard(); renderNewCodes();
+}
+async function ncSkip(bc, undo){
+  try {
+    const r = await _ncPostJ({ action: 'skipNewCode', barcode: bc, undo: !!undo });
+    if(!r || !r.success) throw new Error((r && r.error) || 'refusé');
+    const it = _nc.items.find(x => x.barcode === bc); if(it) it.status = r.status;
+  } catch(e){ showToast('⚠ ' + (e && e.message || e), 5000); }
+  _ncCard(); renderNewCodes();
+}
+
+// ══════════════════════════════════════════
 //  NAME SUGGESTIONS for an unknown real barcode — asks the sales script
 //  (?action=lookupBarcodeName: free product databases, then a Brave web
 //  search) and shows up to 3 names to tap. Typing still works as before.
@@ -5142,7 +5318,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
@@ -5202,7 +5378,7 @@ function adminTab(t){
   document.querySelectorAll('#screen-admin .admin-pane').forEach(p => p.classList.toggle('on', p.dataset.tab === t));
   document.querySelectorAll('#admin-tabs .admin-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   try { localStorage.setItem('bc_admin_tab', t); } catch(e){}
-  if(t === 'prix'){ try { loadPhotoReview(false); } catch(e){} try { renderLabelCard(); } catch(e){} }
+  if(t === 'prix'){ try { loadPhotoReview(false); } catch(e){} try { renderLabelCard(); } catch(e){} try { loadNewCodes(false); } catch(e){} }
   const w = document.querySelector('#screen-admin .admin-wrap'); if(w) w.scrollTop = 0;
   window.scrollTo(0, 0);
   _adminTabBadges();
@@ -5587,7 +5763,7 @@ function savePaperSale(){
 //  have been waiting more than 30 min, an amber one when the product list
 //  is more than a day old (unknown codes at the till).
 // ══════════════════════════════════════════
-const SCANNER_VERSION = 'v22-oct-d';
+const SCANNER_VERSION = 'v22-oct-e';
 const SYNC_WARN_MIN = 30;
 function _shAgo(iso){
   if(!iso) return null;
@@ -10760,6 +10936,23 @@ closeSale = function(){
       oninput="renderPhotoReview()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.select();}" style="margin:6px 0 8px"/>
     <div id="pim-grid" class="pim-grid"></div>
     <div class="dlv-dim" id="pim-foot" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<!-- ══ NEW PRODUCTS FROM THE FULL-STORE SCAN (admin) ══ -->
+<div class="modal-bg" id="nc-modal">
+  <div class="modal" style="width:min(1040px,97vw);max-height:95vh;display:flex;flex-direction:column;padding:14px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div class="modal-title" style="margin:0;flex:1">🆕 Nouveaux produits — Balkuy</div>
+      <button class="btn-cancel" style="width:auto;padding:8px 12px" onclick="loadNewCodes(true)">↻</button>
+      <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeNewCodes()">Fermer</button>
+    </div>
+    <div class="dlv-dim" style="font-size:12px;margin-bottom:4px">Prenez le produit en main : vérifiez le nom, la <b>teinte</b> et la taille, tapez le prix, touchez la bonne photo, puis ✓ Ajouter. « Même produit » reprend le dernier nom et prix : il ne reste que la teinte.</div>
+    <div id="nc-tabs" class="cat-tabs"></div>
+    <input class="dlv-field" id="nc-search" type="search" placeholder="🔍 Scanner le produit en main, ou chercher…" autocomplete="off"
+      oninput="renderNewCodes()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.select();}" style="margin:6px 0 8px"/>
+    <div id="nc-grid" class="nc-grid"></div>
+    <div class="dlv-dim" id="nc-foot" style="margin-top:6px"></div>
   </div>
 </div>
 

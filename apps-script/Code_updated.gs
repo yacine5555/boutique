@@ -47,7 +47,7 @@ const HEADER_ROW = 3;
 const FIRST_DATA_ROW = 4;
 // Change this to anything private only you know. The Barcode Generator
 // must send this same value for writes to be accepted.
-const WRITE_KEY = "boutique1981";
+const WRITE_KEY = "PUT-YOUR-WRITE-KEY-HERE"; // the real key is only in Apps Script, never on GitHub
 /**
  * handleUpdateCounts — called by the Inventory Counter app when the user
  * taps "Envoyer au Sheet". Expects:
