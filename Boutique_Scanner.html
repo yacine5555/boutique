@@ -1311,7 +1311,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v22-oct-e</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v24-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -4123,7 +4123,7 @@ async function ncProcess(){
   try {
     const d = await _ncPostJ({ action: 'processScannedCodes' });
     if(!d || !d.success) throw new Error((d && d.error) || 'réponse inattendue — script des ventes redéployé ?');
-    showToast('✅ ' + d.scans + ' scans → ' + d.codes + ' codes : ' + d.known + ' déjà connus (stock Balkuy mis à jour : ' + d.applied + '), ' + d.fresh + ' nouveaux. Les noms arrivent dans les 15 min.' + (d.failed ? ' ⚠ ' + d.failed + ' échec(s) de stock.' : ''), 12000);
+    showToast('✅ ' + d.scans + ' scans → ' + d.codes + ' codes : ' + d.known + ' déjà connus (stock mis à jour : ' + d.applied + '), ' + d.fresh + ' nouveaux' + (d.autoAdded ? ' dont ' + d.autoAdded + ' ajoutés directement (nom + prix fournis)' : '') + '. Les noms arrivent dans les 15 min.' + (d.failed ? ' ⚠ ' + d.failed + ' échec(s) de stock.' : ''), 12000);
     loadNewCodes(true);
   } catch(e){ showToast('⚠ ' + (e && e.message || e), 7000); }
   if(b){ b.disabled = false; b.textContent = '⚙️ Traiter les codes scannés'; }
@@ -4146,7 +4146,7 @@ function renderNewCodes(){
   const grid = document.getElementById('nc-grid');
   if(_nc.tab === 'known' && !byCode){
     grid.className = '';
-    grid.innerHTML = shown.length ? '<div class="pl-scroll">' + shown.map(it => '<div class="ex-row"><div style="flex:1"><b>' + _ncEsc(it.name) + '</b><div class="dlv-dim">' + _ncEsc(it.barcode) + (it.note ? ' · ⚠ ' + _ncEsc(it.note) : '') + '</div></div>' +
+    grid.innerHTML = shown.length ? '<div class="pl-scroll">' + shown.map(it => '<div class="ex-row"><div style="flex:1"><b>' + _ncEsc(it.name) + '</b><div class="dlv-dim">' + _ncEsc(it.barcode) + ' · ' + _ncEsc((it.store || 'Balkuy') + (it.zone ? ' · ' + it.zone : '')) + (it.note ? ' · ⚠ ' + _ncEsc(it.note) : '') + '</div></div>' +
       '<div style="text-align:right;font-size:12.5px">' + (it.before == null ? '—' : it.before) + ' → <b>' + it.qty + '</b><div class="dlv-dim">' + _ncEsc(it.status) + '</div></div></div>').join('') + '</div>' : '<div class="dlv-dim" style="padding:16px">Rien ici.</div>';
   } else {
     grid.className = 'nc-grid';
@@ -4161,8 +4161,9 @@ function _ncTile(it){
   const ph = it.photos || [], sel = _nc.photo[it.barcode];
   let h = '<div class="nc-tile' + (done ? ' st-ok' : '') + '" id="nc-t-' + bc + '">';
   h += '<div class="nc-hd"><b>' + bc + '</b><span class="nc-q">×' + it.qty + '</span><span class="nc-ty">' + _ncEsc(it.type === 'Nouveau' ? it.status : it.type) + '</span></div>';
+  h += '<div class="pim-meta">📍 ' + _ncEsc((it.store || 'Balkuy') + (it.zone ? ' · ' + it.zone : '')) + '</div>';
   if(done){
-    h += '<div class="pim-nm">' + _ncEsc(it.name) + '</div><div class="pim-meta">' + (it.price ? _ncEsc(formatCFA(it.price)) + ' · ' : '') + 'stock Balkuy : ' + it.qty + (it.note ? '<br>' + _ncEsc(it.note) : '') + '</div></div>';
+    h += '<div class="pim-nm">' + _ncEsc(it.name) + '</div><div class="pim-meta">' + (it.price ? _ncEsc(formatCFA(it.price)) + ' · ' : '') + 'stock ' + _ncEsc((it.store || 'Balkuy') + (it.zone ? ' · ' + it.zone : '')) + ' : ' + it.qty + (it.note ? '<br>' + _ncEsc(it.note) : '') + '</div></div>';
     return h;
   }
   if(ph.length) h += '<div class="nc-ph">' + ph.slice(0, 4).map((p, i) => '<button type="button" class="' + (sel === i ? 'on' : '') + '" onclick="ncPickPhoto(\'' + bc + '\',' + i + ')" title="' + _ncEsc(p.site || '') + '"><img src="' + _ncEsc(p.thumb || p.img) + '" alt="" loading="lazy" onerror="this.parentNode.style.display=\'none\'"></button>').join('') + '</div>';
@@ -4207,7 +4208,7 @@ async function ncAdd(bc){
     _nc.last = { product: product, price: price || null };
     if(photo){ PROD_IMAGES[_bcKeyClient(bc)] = photo.thumb || photo.img; }
     if(price){ try { labelQueueAdd(bc, name, price, 1, true); } catch(e){} }
-    showToast('✅ ' + name + ' ajouté (stock Balkuy : ' + it.qty + ')' + (price ? ' · étiquette prête à imprimer' : '') + (r.warning ? ' ⚠ ' + r.warning : ''), 4500);
+    showToast('✅ ' + name + ' ajouté (stock ' + (it.store || 'Balkuy') + (it.zone ? ' · ' + it.zone : '') + ' : ' + it.qty + ')' + (price ? ' · étiquette prête à imprimer' : '') + (r.warning ? ' ⚠ ' + r.warning : ''), 4500);
     try { syncProducts(false); } catch(e){}
   } catch(e){ showToast('⚠ ' + (e && e.message || e), 7000); }
   delete _nc.busy[bc]; _ncCard(); renderNewCodes();
@@ -5763,7 +5764,7 @@ function savePaperSale(){
 //  have been waiting more than 30 min, an amber one when the product list
 //  is more than a day old (unknown codes at the till).
 // ══════════════════════════════════════════
-const SCANNER_VERSION = 'v22-oct-e';
+const SCANNER_VERSION = 'v24-oct-a';
 const SYNC_WARN_MIN = 30;
 function _shAgo(iso){
   if(!iso) return null;
@@ -10943,7 +10944,7 @@ closeSale = function(){
 <div class="modal-bg" id="nc-modal">
   <div class="modal" style="width:min(1040px,97vw);max-height:95vh;display:flex;flex-direction:column;padding:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <div class="modal-title" style="margin:0;flex:1">🆕 Nouveaux produits — Balkuy</div>
+      <div class="modal-title" style="margin:0;flex:1">🆕 Nouveaux produits scannés</div>
       <button class="btn-cancel" style="width:auto;padding:8px 12px" onclick="loadNewCodes(true)">↻</button>
       <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeNewCodes()">Fermer</button>
     </div>

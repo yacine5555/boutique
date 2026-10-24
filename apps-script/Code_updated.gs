@@ -366,6 +366,9 @@ function doPost(e) {
     if (body.action === "stock1981Count") {
       return handleStock1981Count(body);
     }
+    if (body.action === "importZoneStock") {
+      return handleImportZoneStock(body);
+    }
     // Default action: add/update a single product's barcode (existing behavior)
     if (!body.name || !body.barcode) {
       return jsonResponse({ error: "Missing name or barcode" }, 400);
@@ -3567,6 +3570,58 @@ function handleStock1981Count(body) {
     log.getRange(r1, 4, logRows.length, 1).setNumberFormat('@');
     log.getRange(r1, 1, logRows.length, S1981_LOG_HEADERS.length).setValues(logRows);
     return jsonResponse({ success: true, products: items.length, changed: changed });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  IMPORT ZONE STOCK (action "importZoneStock"), added 24 Oct 2026
+//  Called by the sales script's "Nouveaux produits" tool (server to server,
+//  write key only) after a product from a scanned list is added or known:
+//  { key, action, location, zone, by, items: [ { barcode, name, qty } ] }
+//  Sets that zone's stock to the scanned quantity. The store total is NOT
+//  touched here (the caller already set it with updateCounts /
+//  addNewProductWithStock). Logged in "Stock1981 Log" (Ajout / réception).
+// ══════════════════════════════════════════════════════════════════════════
+function handleImportZoneStock(body) {
+  const loc = String(body.location || ''), zone = String(body.zone || '').trim();
+  if (VALID_LOCATIONS.indexOf(loc) === -1 || !zone) return jsonResponse({ success: false, error: "Magasin ou zone manquant" }, 400);
+  const items = (Array.isArray(body.items) ? body.items : []).filter(it => normalizeBarcode(it.barcode));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const idx = loadZoneStockIndex();
+    const zs = idx.sheet;
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    const logRows = [], newRows = [];
+    items.forEach(it => {
+      const bc = normalizeBarcode(it.barcode), k = barcodeKey(bc), qty = Math.max(0, Math.round(Number(it.qty) || 0));
+      const rowNum = idx.byLocZoneBarcode[loc + '||' + zone + '||' + k];
+      let before = 0;
+      if (rowNum) {
+        before = Number(zs.getRange(rowNum, ZS_COL_ONHAND).getValue()) || 0;
+        zs.getRange(rowNum, ZS_COL_COUNTED, 1, 2).setValues([[qty, qty]]);
+        if (it.name) zs.getRange(rowNum, ZS_COL_PRODUCT).setValue(String(it.name));
+      } else {
+        newRows.push([loc, zone, bc, String(it.name || ''), qty, qty, false]);
+        idx.byLocZoneBarcode[loc + '||' + zone + '||' + k] = -1;
+      }
+      logRows.push([stamp, loc, zone, bc, String(it.name || ''), before, qty - before, qty, 'Ajout / réception', String(body.by || 'Import'), 'Import des scans', '']);
+    });
+    if (newRows.length) {
+      const r0 = zs.getLastRow() + 1;
+      zs.getRange(r0, ZS_COL_BARCODE, newRows.length, 1).setNumberFormat('@');
+      zs.getRange(r0, 1, newRows.length, ZONE_STOCK_HEADERS.length).setValues(newRows);
+    }
+    if (logRows.length) {
+      const log = s1981LogSheet_();
+      const r1 = log.getLastRow() + 1;
+      log.getRange(r1, 4, logRows.length, 1).setNumberFormat('@');
+      log.getRange(r1, 1, logRows.length, S1981_LOG_HEADERS.length).setValues(logRows);
+    }
+    return jsonResponse({ success: true, items: logRows.length });
   } finally {
     lock.releaseLock();
   }

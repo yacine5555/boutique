@@ -3436,26 +3436,36 @@ function _nmClean_(t, bc) {
 //  already added are left alone.
 // ══════════════════════════════════════════════════════════
 const NC = { PASTE: 'Codes scannés', SHEET: 'Nouveaux codes', LOC: 'Store 1', CHUNK: 120 };
-const NC_HEADERS = ['Barcode', 'Qté scannée', 'Type', 'Produit', 'Stock avant', 'Statut', 'Suggestions noms', 'Suggestions photos', 'Prix', 'Mis à jour', 'Note'];
-const NC_C = { BC: 0, QTY: 1, TYPE: 2, NAME: 3, BEFORE: 4, STATUS: 5, SN: 6, SP: 7, PRICE: 8, AT: 9, NOTE: 10 };
+// 24 Oct: columns 12-13 = store + zone, so one tool handles Balkuy, Ouaga 2000
+// and the warehouse, and stock lands in the right zone (Stock1981).
+const NC_HEADERS = ['Barcode', 'Qté scannée', 'Type', 'Produit', 'Stock avant', 'Statut', 'Suggestions noms', 'Suggestions photos', 'Prix', 'Mis à jour', 'Note', 'Magasin', 'Zone'];
+const NC_C = { BC: 0, QTY: 1, TYPE: 2, NAME: 3, BEFORE: 4, STATUS: 5, SN: 6, SP: 7, PRICE: 8, AT: 9, NOTE: 10, LOC: 11, ZONE: 12 };
 const NC_ST = { APPLY: 'À appliquer', APPLIED: 'Stock appliqué', TODO: 'À chercher', SUGG: 'Suggestions', NONE: 'Introuvable', ADDED: 'Ajouté', SKIP: 'Ignoré', MANUAL: 'À nommer' };
+const NC_PASTE_HEADERS = ['Barcode (collez tous les scans ici, doublons compris)', 'Magasin (Balkuy / Ouaga 2000 / Entrepôt — vide = Balkuy)', 'Zone (ex. M2, Cashier — facultatif)', 'Nom (facultatif)', 'Prix CFA (facultatif)', 'Quantité (vide = 1 par ligne)'];
+const NC_LOCS = { 'balkuy': 'Store 1', 'store 1': 'Store 1', 'ouaga 2000': 'Store 2', 'ouaga2000': 'Store 2', 'store 2': 'Store 2', 'entrepot': 'Warehouse', 'entrepôt': 'Warehouse', 'warehouse': 'Warehouse' };
+const NC_LOC_NAMES = { 'Store 1': 'Balkuy', 'Store 2': 'Ouaga 2000', 'Warehouse': 'Entrepôt' };
+const NC_STOCK_FIELD = { 'Store 1': 's1', 'Store 2': 's2', 'Warehouse': 'wh' };
+function _ncLoc_(v) { const t = String(v || '').trim().toLowerCase(); return t ? (NC_LOCS[t] || null) : NC.LOC; }
+function _ncRowLoc_(r) { return String(r[NC_C.LOC] || '') || NC.LOC; }
 
 function _ncSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let paste = ss.getSheetByName(NC.PASTE);
   if (!paste) {
     paste = ss.insertSheet(NC.PASTE);
-    paste.getRange('A1').setValue('Barcode (collez tous les scans ici, doublons compris)').setFontWeight('bold');
     paste.getRange('A:A').setNumberFormat('@');
     paste.setColumnWidth(1, 320); paste.setFrozenRows(1);
+  }
+  if (!String(paste.getRange('B1').getValue() || '').trim()) {
+    paste.getRange(1, 1, 1, NC_PASTE_HEADERS.length).setValues([NC_PASTE_HEADERS]).setFontWeight('bold');
   }
   let sh = ss.getSheetByName(NC.SHEET);
   if (!sh) {
     sh = ss.insertSheet(NC.SHEET);
-    sh.getRange(1, 1, 1, NC_HEADERS.length).setValues([NC_HEADERS]).setFontWeight('bold');
     sh.setFrozenRows(1); sh.getRange('A:A').setNumberFormat('@');
     sh.setColumnWidth(4, 280); sh.setColumnWidth(7, 160); sh.setColumnWidth(8, 160);
   }
+  sh.getRange(1, 1, 1, NC_HEADERS.length).setValues([NC_HEADERS]).setFontWeight('bold');
   return { paste: paste, sh: sh };
 }
 function _ncNow_() { return Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'dd/MM/yyyy HH:mm'); }
@@ -3476,101 +3486,143 @@ function _ncMaster_() {
   (d.products || []).forEach(p => { const k = _imgKey(p.barcode); if (k) m[k] = { barcode: String(p.barcode), name: String(p.name || '') }; });
   return m;
 }
+// Zone stock (Stock1981) for one store + zone; failures are only noted.
+function _ncZoneStock_(loc, zone, items, by) {
+  if (!zone || !items.length) return '';
+  try {
+    const z = _invPost_({ action: 'importZoneStock', location: loc, zone: zone, by: by || 'Nouveaux produits', items: items });
+    return (z && z.success) ? '' : 'zone non mise à jour (' + ((z && z.error) || '?') + ')';
+  } catch (e) { return 'zone non mise à jour'; }
+}
 
 function processScannedCodes() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { success: false, error: 'Une autre opération est en cours, réessayez dans une minute.' };
   try {
     const { paste, sh } = _ncSheets_();
-    // 1) count the scans
-    const counts = {}, raw = {};
+    // 1) count the scans, per barcode + store + zone
+    const groups = {};
     let scans = 0, ignored = 0;
-    if (paste.getLastRow() >= 1) {
-      paste.getRange(1, 1, paste.getLastRow(), 1).getValues().forEach((r, i) => {
+    if (paste.getLastRow() >= 2) {
+      paste.getRange(2, 1, paste.getLastRow() - 1, 6).getValues().forEach(r => {
         const v = String(r[0] == null ? '' : r[0]).trim();
         if (!v) return;
-        const d = v.replace(/\D/g, '');
-        if (!d || !/^\d+$/.test(v.replace(/\s/g, ''))) { if (i > 0) ignored++; return; } // header / text
+        const d = v.replace(/\s/g, '');
+        if (!/^\d+$/.test(d)) { ignored++; return; }
         const k = _imgKey(d);
-        if (!k) { ignored++; return; }
-        counts[k] = (counts[k] || 0) + 1; scans++;
+        const loc = _ncLoc_(r[1]);
+        if (!k || !loc) { ignored++; return; }
+        const zone = String(r[2] || '').trim();
+        const gk = k + '|' + loc + '|' + zone;
+        const g = groups[gk] || (groups[gk] = { k: k, loc: loc, zone: zone, qty: 0, raw: '', name: '', price: '' });
+        const n = Math.max(1, Math.round(Number(r[5]) || 1));
+        g.qty += n; scans += n;
         const dd = (d.length > 8 && d.length < 12) ? d.padStart(12, '0') : d; // UPC whose leading zero(s) got lost
-        if (!raw[k] || dd.length > raw[k].length) raw[k] = dd;
+        if (!g.raw || dd.length > g.raw.length) g.raw = dd;
+        if (!g.name && String(r[3] || '').trim()) g.name = String(r[3]).replace(/\s+/g, ' ').trim();
+        if (!g.price && Number(r[4]) > 0) g.price = Math.round(Number(r[4]));
       });
     }
-    if (!scans) return { success: false, error: 'Aucun code dans l’onglet « ' + NC.PASTE + ' » (colonne A).' };
+    if (!scans) return { success: false, error: 'Aucun code dans l’onglet « ' + NC.PASTE + ' » (colonne A, à partir de la ligne 2).' };
     // 2) what the system already knows
-    const master = _ncMaster_();
+    let master = _ncMaster_();
     const stockRes = _invGet_('action=getStockSummary');
     const stock = (stockRes && stockRes.stock) || {};
     // 3) upsert rows
     const last = sh.getLastRow();
     const data = last >= 2 ? sh.getRange(2, 1, last - 1, NC_HEADERS.length).getValues() : [];
     const rowOf = {};
-    data.forEach((r, i) => { const k = _imgKey(r[NC_C.BC]); if (k) rowOf[k] = i; });
+    data.forEach((r, i) => { const k = _imgKey(r[NC_C.BC]); if (k) rowOf[k + '|' + _ncRowLoc_(r) + '|' + String(r[NC_C.ZONE] || '')] = i; });
     const now = _ncNow_();
-    Object.keys(counts).forEach(k => {
-      const q = counts[k];
-      let i = rowOf[k];
+    const prefilled = [];
+    Object.keys(groups).forEach(gk => {
+      const g = groups[gk], k = g.k, field = NC_STOCK_FIELD[g.loc];
+      let i = rowOf[gk];
       if (i === undefined) {
         const m = master[k];
         const st = stock[k] || {};
-        const type = m ? 'Connu' : (_imgIsInternal(raw[k]) ? (k.indexOf(IMG.INTERNAL_PREFIX) === 0 ? 'Interne' : 'Invalide') : 'Nouveau');
+        const type = m ? 'Connu' : (_imgIsInternal(g.raw) ? (k.indexOf(IMG.INTERNAL_PREFIX) === 0 ? 'Interne' : 'Invalide') : 'Nouveau');
         const row = new Array(NC_HEADERS.length).fill('');
-        row[NC_C.BC] = m ? m.barcode : raw[k]; row[NC_C.QTY] = q; row[NC_C.TYPE] = type;
-        row[NC_C.NAME] = m ? m.name : ''; row[NC_C.BEFORE] = m ? (st.s1 == null ? '' : st.s1) : '';
+        row[NC_C.BC] = m ? m.barcode : g.raw; row[NC_C.QTY] = g.qty; row[NC_C.TYPE] = type;
+        row[NC_C.NAME] = m ? m.name : g.name; row[NC_C.BEFORE] = m ? (st[field] == null ? '' : st[field]) : '';
         row[NC_C.STATUS] = type === 'Connu' ? NC_ST.APPLY : type === 'Nouveau' ? NC_ST.TODO : NC_ST.MANUAL;
-        row[NC_C.AT] = now;
-        data.push(row); rowOf[k] = data.length - 1;
+        row[NC_C.PRICE] = g.price || ''; row[NC_C.AT] = now; row[NC_C.LOC] = g.loc; row[NC_C.ZONE] = g.zone;
+        data.push(row); i = rowOf[gk] = data.length - 1;
       } else {
         const r = data[i];
-        if (Number(r[NC_C.QTY]) !== q) {
-          r[NC_C.QTY] = q; r[NC_C.AT] = now;
+        if (Number(r[NC_C.QTY]) !== g.qty) {
+          r[NC_C.QTY] = g.qty; r[NC_C.AT] = now;
           if (r[NC_C.TYPE] === 'Connu') r[NC_C.STATUS] = NC_ST.APPLY;
-          else if (r[NC_C.STATUS] === NC_ST.ADDED) r[NC_C.NOTE] = 'Recompté après ajout : ' + q + ' (stock non modifié)';
+          else if (r[NC_C.STATUS] === NC_ST.ADDED) r[NC_C.NOTE] = 'Recompté après ajout : ' + g.qty + ' (stock non modifié)';
         }
-        if (r[NC_C.TYPE] === 'Nouveau' && master[k] && r[NC_C.STATUS] !== NC_ST.ADDED) { // added meanwhile by someone else
+        if (r[NC_C.TYPE] !== 'Connu' && master[k] && r[NC_C.STATUS] !== NC_ST.ADDED) { // added meanwhile by someone else
           r[NC_C.TYPE] = 'Connu'; r[NC_C.NAME] = master[k].name; r[NC_C.STATUS] = NC_ST.APPLY;
         }
       }
+      const r = data[i];
+      if (r[NC_C.TYPE] !== 'Connu' && r[NC_C.STATUS] !== NC_ST.ADDED && r[NC_C.STATUS] !== NC_ST.SKIP && g.name && g.price) prefilled.push(i);
     });
-    // 4) set Balkuy stock of known products to the scanned count
+    // 4) products whose name + price came with the scans: add them straight away
+    let autoAdded = 0;
+    prefilled.forEach(i => {
+      const r = data[i], k = _imgKey(r[NC_C.BC]);
+      if (master[k]) { r[NC_C.TYPE] = 'Connu'; r[NC_C.STATUS] = NC_ST.APPLY; r[NC_C.NAME] = master[k].name; return; }
+      const res = _ncAddProduct_(r, groups[k + '|' + _ncRowLoc_(r) + '|' + String(r[NC_C.ZONE] || '')].name, r[NC_C.PRICE], 'Import des scans', master);
+      if (res.ok) { autoAdded++; master[k] = { barcode: String(r[NC_C.BC]), name: r[NC_C.NAME] }; }
+      else r[NC_C.NOTE] = res.error;
+    });
+    // 5) set store (and zone) stock of known products to the scanned count
     const toApply = data.map((r, i) => i).filter(i => data[i][NC_C.TYPE] === 'Connu' && data[i][NC_C.STATUS] === NC_ST.APPLY);
+    const byLoc = {};
+    toApply.forEach(i => { const l = _ncRowLoc_(data[i]); (byLoc[l] = byLoc[l] || []).push(i); });
     let applied = 0, failed = 0;
-    for (let c = 0; c < toApply.length; c += NC.CHUNK) {
-      const part = toApply.slice(c, c + NC.CHUNK);
-      try {
-        const u = _invPost_({ action: 'updateCounts', location: NC.LOC, counts: part.map(i => ({ barcode: String(data[i][NC_C.BC]), count: Number(data[i][NC_C.QTY]) })) });
-        if (!u || u.success === false) throw new Error((u && u.error) || 'updateCounts');
-        const moves = [];
-        part.forEach(i => {
-          const k = _imgKey(data[i][NC_C.BC]);
-          const before = stock[k] && stock[k].s1 != null ? Number(stock[k].s1) : 0;
-          if (data[i][NC_C.BEFORE] === '') data[i][NC_C.BEFORE] = before;
-          const delta = Number(data[i][NC_C.QTY]) - before;
-          if (delta) moves.push({ barcode: String(data[i][NC_C.BC]), delta: delta, type: 'recount', note: 'Scan complet Balkuy' });
-        });
-        if (moves.length) {
-          const a = _invPost_({ action: 'applyStockMovements', location: NC.LOC, movements: moves });
-          if (!a || a.success === false) throw new Error((a && a.error) || 'applyStockMovements');
+    Object.keys(byLoc).forEach(loc => {
+      const field = NC_STOCK_FIELD[loc], list = byLoc[loc];
+      // one product listed in two zones of the same store: the store total is the sum
+      const total = {};
+      list.forEach(i => { const k = _imgKey(data[i][NC_C.BC]); total[k] = (total[k] || 0) + Number(data[i][NC_C.QTY]); });
+      for (let c = 0; c < list.length; c += NC.CHUNK) {
+        const part = list.slice(c, c + NC.CHUNK);
+        try {
+          const seen = {};
+          const counts = [], moves = [];
+          part.forEach(i => {
+            const k = _imgKey(data[i][NC_C.BC]);
+            const before = stock[k] && stock[k][field] != null ? Number(stock[k][field]) : 0;
+            if (data[i][NC_C.BEFORE] === '') data[i][NC_C.BEFORE] = before;
+            if (seen[k]) return; seen[k] = true;
+            counts.push({ barcode: String(data[i][NC_C.BC]), count: total[k] });
+            const delta = total[k] - before;
+            if (delta) moves.push({ barcode: String(data[i][NC_C.BC]), delta: delta, type: 'recount', note: 'Scan complet ' + NC_LOC_NAMES[loc] });
+          });
+          const u = _invPost_({ action: 'updateCounts', location: loc, counts: counts });
+          if (!u || u.success === false) throw new Error((u && u.error) || 'updateCounts');
+          if (moves.length) {
+            const a = _invPost_({ action: 'applyStockMovements', location: loc, movements: moves });
+            if (!a || a.success === false) throw new Error((a && a.error) || 'applyStockMovements');
+          }
+          const byZone = {};
+          part.forEach(i => { const z = String(data[i][NC_C.ZONE] || ''); if (z) (byZone[z] = byZone[z] || []).push({ barcode: String(data[i][NC_C.BC]), name: String(data[i][NC_C.NAME] || ''), qty: Number(data[i][NC_C.QTY]) }); });
+          const zoneNotes = Object.keys(byZone).map(z => _ncZoneStock_(loc, z, byZone[z], 'Import des scans')).filter(Boolean);
+          part.forEach(i => {
+            const k = _imgKey(data[i][NC_C.BC]);
+            stock[k] = Object.assign({}, stock[k]); stock[k][field] = total[k];
+            data[i][NC_C.STATUS] = NC_ST.APPLIED; data[i][NC_C.AT] = now;
+            if (zoneNotes.length) data[i][NC_C.NOTE] = zoneNotes[0];
+          });
+          applied += part.length;
+        } catch (e) {
+          failed += part.length;
+          part.forEach(i => { data[i][NC_C.NOTE] = 'Échec stock : ' + String(e.message || e).slice(0, 80); });
         }
-        part.forEach(i => {
-          const k = _imgKey(data[i][NC_C.BC]);
-          stock[k] = Object.assign({}, stock[k], { s1: Number(data[i][NC_C.QTY]) });
-          data[i][NC_C.STATUS] = NC_ST.APPLIED; data[i][NC_C.AT] = now;
-        });
-        applied += part.length;
-      } catch (e) {
-        failed += part.length;
-        part.forEach(i => { data[i][NC_C.NOTE] = 'Échec stock : ' + String(e.message || e).slice(0, 80); });
       }
-    }
+    });
     if (data.length) {
       sh.getRange(2, 1, data.length, 1).setNumberFormat('@');
       sh.getRange(2, 1, data.length, NC_HEADERS.length).setValues(data);
     }
     const sum = _ncSummary_(data);
-    sum.scans = scans; sum.ignored = ignored; sum.applied = applied; sum.failed = failed;
+    sum.scans = scans; sum.ignored = ignored; sum.applied = applied; sum.failed = failed; sum.autoAdded = autoAdded;
     return Object.assign({ success: true }, sum);
   } finally { lock.releaseLock(); }
 }
@@ -3625,19 +3677,54 @@ function _getNewCodes() {
     barcode: String(r[NC_C.BC]).trim(), qty: Number(r[NC_C.QTY]) || 0, type: String(r[NC_C.TYPE]), name: String(r[NC_C.NAME] || ''),
     before: r[NC_C.BEFORE] === '' ? null : Number(r[NC_C.BEFORE]), status: String(r[NC_C.STATUS]),
     sugg: _imgSugg_(r[NC_C.SN]), photos: _imgSugg_(r[NC_C.SP]), price: r[NC_C.PRICE] === '' ? null : Number(r[NC_C.PRICE]),
-    at: String(r[NC_C.AT] || ''), note: String(r[NC_C.NOTE] || '') }));
+    at: String(r[NC_C.AT] || ''), note: String(r[NC_C.NOTE] || ''),
+    location: _ncRowLoc_(r), store: NC_LOC_NAMES[_ncRowLoc_(r)] || _ncRowLoc_(r), zone: String(r[NC_C.ZONE] || '') }));
   const pasteSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NC.PASTE);
   return _json(Object.assign({ success: true, items: items, pasted: pasteSh ? Math.max(0, pasteSh.getLastRow() - 1) : 0 }, _ncSummary_(data)));
 }
 
+// The row for this barcode that still needs work (a code scanned in two stores has two rows).
 function _ncFind_(barcode) {
   const { sh } = _ncSheets_();
   const k = _imgKey(barcode);
   const last = sh.getLastRow();
   if (!k || last < 2) return null;
   const data = sh.getRange(2, 1, last - 1, NC_HEADERS.length).getValues();
-  const i = data.findIndex(r => _imgKey(r[NC_C.BC]) === k);
+  let i = data.findIndex(r => _imgKey(r[NC_C.BC]) === k && r[NC_C.STATUS] !== NC_ST.ADDED && r[NC_C.TYPE] !== 'Connu');
+  if (i < 0) i = data.findIndex(r => _imgKey(r[NC_C.BC]) === k);
   return i < 0 ? null : { sh: sh, i: i, row: data[i] };
+}
+// Adds one scanned product to Product Master with its store + zone stock and price.
+// Updates `row` in place; the caller writes it back. Needs the script lock held.
+function _ncAddProduct_(row, name, price, by, master) {
+  name = String(name || '').replace(/\s+/g, ' ').trim();
+  if (name.length < 3) return { ok: false, error: 'Nom trop court' };
+  master = master || _ncMaster_();
+  const k = _imgKey(row[NC_C.BC]);
+  if (master[k]) return { ok: false, error: 'Ce code est déjà dans la liste : ' + master[k].name };
+  const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const same = Object.keys(master).find(x => norm(master[x].name) === norm(name));
+  if (same) return { ok: false, error: 'Ce nom existe déjà (code ' + master[same].barcode + ') — ajoutez la teinte / couleur pour les distinguer.' };
+  const bc = String(row[NC_C.BC]).trim();
+  const qty = Number(row[NC_C.QTY]) || 0;
+  const loc = _ncRowLoc_(row), zone = String(row[NC_C.ZONE] || '');
+  const a = _invPost_({ action: 'addNewProductWithStock', name: name, barcode: bc, category: 'Cosmetics', location: loc, qty: qty });
+  if (!a || a.success === false || (a.masterResult && a.masterResult.success === false))
+    return { ok: false, error: 'Ajout refusé : ' + ((a && (a.error || (a.masterResult && a.masterResult.error))) || 'erreur') };
+  const notes = [];
+  price = Math.round(Number(price));
+  if (price > 0) {
+    try {
+      const pr = _invPost_({ action: 'setStorePrice', mode: 'admin', barcode: bc, prices: { 'Store 1': price, 'Store 2': price }, by: by || 'Nouveaux produits' });
+      if (!pr || pr.success === false) notes.push('prix non enregistré (' + ((pr && pr.error) || '?') + ')');
+    } catch (e) { notes.push('prix non enregistré'); }
+  }
+  const zn = _ncZoneStock_(loc, zone, [{ barcode: bc, name: name, qty: qty }], by);
+  if (zn) notes.push(zn);
+  row[NC_C.NAME] = name; row[NC_C.STATUS] = NC_ST.ADDED; row[NC_C.TYPE] = 'Nouveau';
+  row[NC_C.PRICE] = price > 0 ? price : ''; row[NC_C.AT] = _ncNow_();
+  row[NC_C.NOTE] = [by ? 'par ' + String(by).slice(0, 30) : ''].concat(notes).filter(Boolean).join(' · ');
+  return { ok: true, notes: notes };
 }
 // body: { barcode, name, price, photo: {img, thumb} | null, by }
 function _addNewCode(d) {
@@ -3645,40 +3732,18 @@ function _addNewCode(d) {
   if (!f) return _json({ success: false, error: 'Code introuvable dans « Nouveaux codes »' });
   const row = f.row;
   if (row[NC_C.STATUS] === NC_ST.ADDED) return _json({ success: false, error: 'Déjà ajouté' });
-  const name = String(d.name || '').replace(/\s+/g, ' ').trim();
-  if (name.length < 3) return _json({ success: false, error: 'Nom trop court' });
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) return _json({ success: false, error: 'Occupé, réessayez' });
   try {
-    // refuse a name already used by another product (shades need their own name)
-    const master = _ncMaster_();
-    const k = _imgKey(row[NC_C.BC]);
-    if (master[k]) return _json({ success: false, error: 'Ce code est déjà dans la liste : ' + master[k].name });
-    const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-    const same = Object.keys(master).find(x => norm(master[x].name) === norm(name));
-    if (same) return _json({ success: false, error: 'Ce nom existe déjà (code ' + master[same].barcode + ') — ajoutez la teinte / couleur pour les distinguer.' });
-    const bc = String(row[NC_C.BC]).trim();
-    const qty = Number(row[NC_C.QTY]) || 0;
-    const a = _invPost_({ action: 'addNewProductWithStock', name: name, barcode: bc, category: 'Cosmetics', location: NC.LOC, qty: qty });
-    if (!a || a.success === false || (a.masterResult && a.masterResult.success === false))
-      return _json({ success: false, error: 'Ajout refusé : ' + ((a && (a.error || (a.masterResult && a.masterResult.error))) || 'erreur') });
-    let priceNote = '';
-    const price = Math.round(Number(d.price));
-    if (price > 0) {
-      try {
-        const pr = _invPost_({ action: 'setStorePrice', mode: 'admin', barcode: bc, prices: { 'Store 1': price, 'Store 2': price }, by: d.by || 'Nouveaux produits' });
-        if (!pr || pr.success === false) priceNote = 'prix non enregistré (' + ((pr && pr.error) || '?') + ')';
-      } catch (e) { priceNote = 'prix non enregistré'; }
-    }
+    const res = _ncAddProduct_(row, d.name, d.price, d.by, null);
+    if (!res.ok) return _json({ success: false, error: res.error });
     let photoNote = '';
     if (d.photo && (d.photo.img || d.photo.thumb)) {
-      try { photoNote = _ncSavePhoto_(bc, name, d.photo) ? '' : 'photo illisible'; } catch (e) { photoNote = 'photo non enregistrée'; }
+      try { photoNote = _ncSavePhoto_(String(row[NC_C.BC]).trim(), row[NC_C.NAME], d.photo) ? '' : 'photo illisible'; } catch (e) { photoNote = 'photo non enregistrée'; }
     }
-    row[NC_C.NAME] = name; row[NC_C.STATUS] = NC_ST.ADDED; row[NC_C.TYPE] = 'Nouveau';
-    row[NC_C.PRICE] = price > 0 ? price : ''; row[NC_C.AT] = _ncNow_();
-    row[NC_C.NOTE] = [d.by ? 'par ' + String(d.by).slice(0, 30) : '', priceNote, photoNote].filter(Boolean).join(' · ');
+    if (photoNote) row[NC_C.NOTE] = [row[NC_C.NOTE], photoNote].filter(Boolean).join(' · ');
     f.sh.getRange(f.i + 2, 1, 1, NC_HEADERS.length).setValues([row]);
-    return _json({ success: true, warning: [priceNote, photoNote].filter(Boolean).join(', ') });
+    return _json({ success: true, warning: res.notes.concat(photoNote ? [photoNote] : []).join(', '), store: NC_LOC_NAMES[_ncRowLoc_(row)], zone: String(row[NC_C.ZONE] || '') });
   } finally { lock.releaseLock(); }
 }
 // Chosen photo → Drive + "Product Images" row marked Validé (the scan card shows it right away).
