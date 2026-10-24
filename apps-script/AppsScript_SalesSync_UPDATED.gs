@@ -3772,3 +3772,54 @@ function _skipNewCode(d) {
   f.sh.getRange(f.i + 2, 1, 1, NC_HEADERS.length).setValues([f.row]);
   return _json({ success: true, status: f.row[NC_C.STATUS] });
 }
+
+
+// ══════════════════════════════════════════════════════════
+//  LIGNES DE VENTE — every line of every Sales_yyyy-MM-dd tab in one tab,
+//  rebuilt every hour, so the "Ventes Beauty Empire" dashboard reads one
+//  tab instead of one per day. Run installSalesLinesTrigger() once.
+//  Columns: Date (yyyy-MM-dd), Heure, Type, Code, Produit, Catégorie, Qté,
+//  Prix, Total, Paiement, Caissier, Magasin, TxnID. Added 24 Oct 2026.
+// ══════════════════════════════════════════════════════════
+const SALES_LINES_SHEET = 'Lignes de vente';
+const SALES_LINES_HEADERS = ['Date', 'Heure', 'Type', 'Code', 'Produit', 'Catégorie', 'Qté', 'Prix', 'Total', 'Paiement', 'Caissier', 'Magasin', 'TxnID'];
+function rebuildSalesLines() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tz = CONFIG.TIMEZONE;
+  const out = [];
+  ss.getSheets().forEach(sh => {
+    if (!/^Sales_\d{4}-\d{2}-\d{2}$/.test(sh.getName())) return;
+    const v = sh.getDataRange().getValues();
+    const hi = v.findIndex(r => r[0] === 'Date' && r[2] === 'Type');
+    if (hi < 0) return;
+    const col = {}; v[hi].forEach((h, i) => { if (h) col[String(h)] = i; });
+    const g = (r, name) => col[name] === undefined ? '' : r[col[name]];
+    for (let i = hi + 1; i < v.length; i++) {
+      const r = v[i], d = r[0];
+      let iso = '';
+      if (d instanceof Date) iso = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+      else { const m = String(d).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) iso = m[3] + '-' + m[2] + '-' + m[1]; }
+      if (!iso) continue;
+      const t = g(r, 'Time');
+      out.push([iso, t instanceof Date ? Utilities.formatDate(t, tz, 'HH:mm:ss') : String(t || ''), String(g(r, 'Type') || ''),
+        String(g(r, 'Barcode') || ''), String(g(r, 'Product') || ''), String(g(r, 'Category') || ''),
+        Number(g(r, 'Qty')) || 0, Number(g(r, 'UnitPrice')) || 0, Number(g(r, 'LineTotal')) || 0,
+        String(g(r, 'PayMethod') || ''), String(g(r, 'Employee') || ''), String(g(r, 'Store') || ''), String(g(r, 'TxnID') || '')]);
+    }
+  });
+  out.sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
+  let ws = ss.getSheetByName(SALES_LINES_SHEET);
+  if (!ws) { ws = ss.insertSheet(SALES_LINES_SHEET); ws.setFrozenRows(1); }
+  ws.clearContents();
+  ws.getRange(1, 1, 1, SALES_LINES_HEADERS.length).setValues([SALES_LINES_HEADERS]).setFontWeight('bold');
+  if (out.length) {
+    ws.getRange(2, 4, out.length, 1).setNumberFormat('@');
+    ws.getRange(2, 1, out.length, SALES_LINES_HEADERS.length).setValues(out);
+  }
+  return out.length;
+}
+function installSalesLinesTrigger() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'rebuildSalesLines').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('rebuildSalesLines').timeBased().everyHours(1).create();
+  return rebuildSalesLines();
+}
