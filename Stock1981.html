@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2a1022">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stock1981">
+<title>Stock1981</title>
+<link rel="manifest" href="stock1981.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Stock1981 — Beauty Empire. Layout: one column, app bar on top, screens slide in place (home → store → zone), product sheet from the bottom. */
+:root{
+  --bg:#faf6f8; --surface:#ffffff; --sunk:#f2eaef; --ink:#2a1022; --muted:#7c6573; --line:#eadde5;
+  --brand:#c2186b; --brand-ink:#ffffff; --brand-soft:#fbe1ee; --plum:#2a1022;
+  --ok:#17784a; --ok-soft:#dcf2e6; --warn:#b25a07; --warn-soft:#fdebd6; --bad:#c3262f; --bad-soft:#fbdfe0;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:16px; --shadow:0 1px 2px rgba(42,16,34,.06),0 6px 18px rgba(42,16,34,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#150b11; --surface:#21131b; --sunk:#1a0f16; --ink:#f7ecf2; --muted:#b39aa8; --line:#3a2530;
+  --brand:#f0559c; --brand-ink:#1b0812; --brand-soft:#4a1a32; --plum:#0f070c;
+  --ok:#5fd39a; --ok-soft:#173a29; --warn:#f3a65a; --warn-soft:#432a10; --bad:#ff7d84; --bad-soft:#45191c;
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--body)}
+body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom,0px)}
+button{font:inherit;color:inherit}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* App bar */
+.bar{position:sticky;top:0;z-index:20;background:var(--plum);color:#fbeaf3;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:10px}
+.bar .back{border:0;background:rgba(255,255,255,.1);width:38px;height:38px;border-radius:12px;font-size:20px;cursor:pointer;display:grid;place-items:center;color:#fbeaf3}
+.bar h1{flex:1;min-width:0;margin:0;font:800 20px var(--display);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar h1 small{display:block;font:500 12px var(--body);opacity:.7;letter-spacing:0}
+.bar h1 b{color:#ff8cc0;font-weight:800}
+.who{border:0;background:rgba(255,255,255,.1);color:#fbeaf3;border-radius:99px;padding:6px 12px 6px 8px;font-weight:600;font-size:13px;display:flex;gap:6px;align-items:center;cursor:pointer}
+.who i{width:8px;height:8px;border-radius:50%;background:#7be3a8;display:inline-block}
+.who i.off{background:#f3a65a}
+
+main{max-width:880px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+.notice{display:flex;gap:10px;align-items:center;background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;font-weight:600;font-size:14px;margin-bottom:14px}
+.notice button{margin-left:auto;border:0;background:transparent;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+.notice.ok{background:var(--ok-soft);color:var(--ok)}
+
+/* Search */
+.search{position:relative;margin-bottom:16px}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:13px 14px 13px 42px;font:16px var(--body);color:var(--ink)}
+.search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted)}
+.results{display:flex;flex-direction:column;gap:6px;margin:-6px 0 18px}
+
+/* Store tiles */
+.tiles{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.tiles{grid-template-columns:repeat(3,1fr)}}
+.tile{position:relative;border:0;padding:0;border-radius:20px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:16/10;background:var(--plum);box-shadow:var(--shadow);max-width:100%}
+.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tile::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,6,15,0) 30%,rgba(20,6,15,.85))}
+.tile .pat{position:absolute;inset:0;background:repeating-linear-gradient(135deg,#3a1630 0 18px,#2a1022 18px 36px)}
+.tile .t{position:absolute;left:16px;right:16px;bottom:14px;z-index:1;color:#fff}
+.tile .t h2{margin:0;font:800 26px/1 var(--display);letter-spacing:-.01em}
+.tile .t p{margin:6px 0 0;font-size:13px;opacity:.9}
+.tile .badge{position:absolute;top:12px;right:12px;z-index:1;background:var(--brand);color:#fff;font-weight:700;font-size:12px;padding:4px 10px;border-radius:99px}
+.sect{font:700 12px var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 10px}
+
+/* Zone grid */
+.zgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.zcard{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:0;overflow:hidden;cursor:pointer;text-align:left;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;min-width:0}
+.zcard .ph{width:100%;aspect-ratio:4/3;background:var(--sunk) center/cover no-repeat;position:relative}
+.zcard .ph span{position:absolute;left:8px;top:8px;background:rgba(20,6,15,.78);color:#fff;font:800 15px var(--display);padding:3px 9px;border-radius:9px}
+.zcard .ph .cl{left:auto;right:8px;background:var(--brand);font:700 11px var(--body);padding:4px 8px}
+.zcard .b{padding:9px 10px 11px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.zcard .b strong{font-size:14px}
+.zcard .b small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zcard.isempty .b strong{color:var(--muted);font-weight:500}
+.zcard.unplaced{border:1.5px dashed var(--warn)}
+.zcard.unplaced .ph{background:var(--warn-soft);display:grid;place-items:center;color:var(--warn);font-weight:700}
+
+/* Zone view */
+.hero{border-radius:20px;overflow:hidden;background:var(--sunk);aspect-ratio:16/9;max-height:300px;width:100%;position:relative}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero .nophoto{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-weight:600}
+.zhead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;margin:14px 0 4px}
+.zhead h2{margin:0;font:800 28px var(--display)}
+.zhead p{margin:0;color:var(--muted)}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:92px}
+.stat b{display:block;font:800 20px var(--display)}
+.stat span{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:12px;margin:16px 0 12px}
+.tabs button{flex:1;border:0;background:transparent;padding:9px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+/* Rows */
+.list{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 12px;cursor:pointer;text-align:left;width:100%;min-width:0}
+.row .nm{flex:1;min-width:0}
+.row .nm strong{display:block;font-weight:600;overflow-wrap:anywhere}
+.row .nm small{color:var(--muted);font-size:12px}
+.qty{font:800 20px var(--display);min-width:44px;text-align:right}
+.qty.zero{color:var(--muted)}
+.qty.neg{color:var(--bad)}
+.addbtn{width:100%;border:1.5px dashed var(--line);background:transparent;border-radius:14px;padding:12px;font-weight:600;color:var(--brand);cursor:pointer;margin-top:4px}
+.shelf{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.shelf h4{margin:0 0 6px;display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.shelf h4 span{color:var(--muted);font-weight:500;font-size:12px}
+.shelf ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.shelf li{display:flex;gap:8px;font-size:14px}
+.shelf li span{flex:1;min-width:0;overflow-wrap:anywhere}
+.shelf li b{font-variant-numeric:tabular-nums}
+.shelf .none{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:26px 8px}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(20,6,15,.45);z-index:40}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-radius:22px 22px 0 0;max-height:92vh;overflow:auto;padding:8px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));max-width:640px;margin:0 auto;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
+.sheet .grab{width:40px;height:5px;border-radius:9px;background:var(--line);margin:4px auto 12px}
+.sheet h3{margin:0;font:800 22px/1.15 var(--display);overflow-wrap:anywhere}
+.sheet .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.where{margin:14px 0;display:flex;flex-direction:column;gap:4px}
+.where div{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:var(--sunk);font-size:14px}
+.where div.here{background:var(--brand-soft);font-weight:700}
+.seg{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:12px;margin:8px 0 12px}
+.seg button{flex:1;border:0;background:transparent;padding:10px 6px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--muted);font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 14px}
+.stepper button{width:54px;height:54px;border-radius:16px;border:1px solid var(--line);background:var(--sunk);font-size:26px;font-weight:700;cursor:pointer}
+.stepper input{width:110px;text-align:center;font:800 36px var(--display);border:0;background:transparent;color:var(--ink)}
+.preview{text-align:center;color:var(--muted);font-size:14px;margin:-6px 0 12px}
+.preview b{color:var(--ink)}
+label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 5px}
+select,input.t,textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;font:16px var(--body)}
+textarea{min-height:60px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips button.loss[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.go{width:100%;border:0;background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:16px;border-radius:14px;padding:15px;margin-top:16px;cursor:pointer}
+.go:disabled{opacity:.45;cursor:default}
+.ghost{width:100%;border:0;background:transparent;color:var(--muted);font-weight:600;padding:12px;cursor:pointer}
+.err{color:var(--bad);font-size:14px;font-weight:600;margin-top:8px}
+
+/* Lock */
+.lock{position:fixed;inset:0;z-index:60;background:var(--plum);color:#fbeaf3;display:flex;align-items:center;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));overflow:auto}
+.lockbox{width:100%;max-width:340px;text-align:center}
+.lockbox .logo{font:800 34px var(--display);letter-spacing:-.02em}
+.lockbox .logo b{color:#ff8cc0}
+.lockbox p{opacity:.75;margin:6px 0 18px}
+.users{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px}
+.users button{border:1px solid rgba(255,255,255,.25);background:transparent;color:#fbeaf3;border-radius:99px;padding:8px 16px;font-weight:600;cursor:pointer}
+.users button[aria-pressed="true"]{background:#fbeaf3;color:var(--plum)}
+.dots{display:flex;gap:14px;justify-content:center;margin:6px 0 10px}
+.dots i{width:14px;height:14px;border-radius:50%;border:2px solid #fbeaf3}
+.dots i.f{background:#fbeaf3}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.pad button{height:62px;border-radius:18px;border:0;background:rgba(255,255,255,.09);color:#fbeaf3;font:700 24px var(--display);cursor:pointer}
+.pad button:active{background:rgba(255,255,255,.2)}
+.lockerr{color:#ff9aa1;min-height:20px;font-weight:600}
+.lock input{width:100%;margin:6px 0;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;padding:12px;font:15px var(--body)}
+.lock .go{background:#ff8cc0;color:var(--plum)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:80;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:0}}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <button class="back" id="back" aria-label="Retour" hidden>‹</button>
+  <h1 id="title">Stock<b>1981</b><small id="subtitle">Beauty Empire</small></h1>
+  <button class="who" id="who" aria-label="Verrouiller"><i id="netdot"></i><span id="whoname">—</span></button>
+</header>
+
+<main id="main"></main>
+
+<div class="lock" id="lock" hidden><div class="lockbox" id="lockbox"></div></div>
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="sheet" hidden role="dialog" aria-modal="true"></section>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  Stock1981 — step 1 (24 Oct 2026)
+//  Reads one snapshot from Code_updated.gs (?action=getStock1981), keeps
+//  it on the phone for power/internet cuts, and sends every stock change
+//  (with its reason) through action "stock1981Adjust". Changes made
+//  offline wait in a queue and are sent when the connection is back.
+//  Shares the Sheet link, key and user codes with the Inventory Counter
+//  (same site, same localStorage keys inv_count_*).
+// ══════════════════════════════════════════════════════════════════
+const ZONES = {"Store 1":[{"c":"1A","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1B","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"4,4,4,4,4 T4"},{"c":"1C","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1D","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"3,3,3,3 T3"},{"c":"1E","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1F","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"3,5,5,3 T3"},{"c":"1G","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1H","g":"Étagère 1 (mur, entrée → table de solde)","k":"nouveau meuble 1H (bout de l’étagère 1)","s":"3,3,3,2 T2"},{"c":"2A","g":"Ligne 2 (face à l’étagère 1)","k":"5 étagères + colonne de côté (6) + 1 tiroir","s":"1,1,1,1,1 C6 T1"},{"c":"2B","g":"Ligne 2 (face à l’étagère 1)","k":"5 étagères + colonne de côté (6) + 1 tiroir","s":"1,1,1,1,1 C6 T1"},{"c":"2C","g":"Ligne 2 (face à l’étagère 1)","k":"petit meuble (ancienne table de solde) — côté gauche G, côté droit D","s":"1,1,1 G5 D5"},{"c":"2D","g":"Ligne 2 (face à l’étagère 1)","k":"table de solde (ancien meuble 1H)","s":"1,1,1,1 T2","x":1},{"c":"3A","g":"Côté A","k":"","s":"3,3,3,3,3 T3"},{"c":"M1","g":"Côté A","k":"vitrine fermée","s":"1,1,1,1,1,1,1"},{"c":"M2","g":"Côté A","k":"vitrine fermée","s":"1,1,1,1,1,1"},{"c":"V1","g":"Côté A","k":"penderie — meilleures ventes","s":"1,1,1 T3"},{"c":"V2","g":"Côté A","k":"penderie — meilleures ventes","s":"1,1,1 T3"},{"c":"F1","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F2","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F3a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F3b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F4a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F4b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F5","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F6","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F7a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F7b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F8a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F8b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F9","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F10","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F11a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F11b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F12a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F12b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F13","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F14","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"1O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"2O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"3O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"4O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"5O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"6O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"7O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"1S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"2S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"3S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"Rice","g":"Fenêtre / sol","k":"sacs de riz","s":""},{"c":"PT","g":"Fenêtre / sol","k":"table de présentation","s":""},{"c":"GLV","g":"Fenêtre / sol","k":"glacières et ventilateurs","s":""}],"Store 2":[{"c":"A1","g":"Mur gauche (A1–A4, fond rose)","k":"niche rose — compléments alimentaires","s":"1,1,1,1,1 T1"},{"c":"A2","g":"Mur gauche (A1–A4, fond rose)","k":"niche rose — produits de Thaïlande","s":"1,1,1,1,1 T1"},{"c":"A3","g":"Mur gauche (A1–A4, fond rose)","k":"niche rose — huiles et lotions","s":"1,1,1,1,1 T1"},{"c":"A4","g":"Mur gauche (A1–A4, fond rose)","k":"niche rose","s":"1,1,1,1 T1"},{"c":"A5","g":"Niches A5–A8 (fond blanc)","k":"niche blanche","s":"1,1,1,1,1 T1"},{"c":"A6","g":"Niches A5–A8 (fond blanc)","k":"niche blanche","s":"1,1,1,1,1 T1"},{"c":"A7","g":"Niches A5–A8 (fond blanc)","k":"niche blanche","s":"1,1,1,1,1 T1"},{"c":"A8","g":"Niches A5–A8 (fond blanc)","k":"niche blanche","s":"1,1,1,1,1 T1"},{"c":"B1","g":"Meubles roses","k":"petit meuble rose 3 faces (comme B10) — case 1 = avant, 2 = arrière, 3 = côté","s":"3,3,3,3,3"},{"c":"B2","g":"Meubles roses","k":"grand meuble rose + compartiment de côté","s":"1,1,1,1,1 T2 C6"},{"c":"B3","g":"Meubles roses","k":"grand meuble rose + compartiment de côté","s":"1,1,1,1,1 T2 C6"},{"c":"B10","g":"Meubles roses","k":"petit meuble rose 3 faces — case 1 = avant, 2 = arrière, 3 = côté gauche","s":"3,3,3,3"},{"c":"B4","g":"Gondoles","k":"gondole — bout","s":"1,1,1,1,1,1,1"},{"c":"B5","g":"Gondoles","k":"gondole alimentation — face avant","s":"1,1,1,1,1,1,1"},{"c":"B6","g":"Gondoles","k":"gondole alimentation — arrière de B5","s":"1,1,1,1,1,1,1"},{"c":"B7","g":"Gondoles","k":"gondole","s":"1,1,1,1,1,1,1"},{"c":"B8","g":"Gondoles","k":"gondole","s":"1,1,1,1,1,1,1"},{"c":"B11","g":"Mur de gondoles (droite)","k":"gondole murale","s":"1,1,1,1,1,1,1"},{"c":"B12","g":"Mur de gondoles (droite)","k":"gondole murale — commence et finit aux pâtes Barilla bleues","s":"1,1,1,1,1,1,1"},{"c":"B13","g":"Mur de gondoles (droite)","k":"gondole murale — commence au bidon d’huile jaune","s":"1,1,1,1,1,1,1"},{"c":"B9","g":"Vitrines","k":"vitrine comptoir — parfums, chaussures (ét. 5 = dessus)","s":"1,1,1,1,1"},{"c":"m2","g":"Vitrines","k":"vitrine fermée — sacs à main","s":"1,1,1,1,1,1"},{"c":"B14","g":"Vitrines","k":"vitrine 2 portes — maquillage","s":"1,1,1,1,1,1,1"},{"c":"P1","g":"Vitrines","k":"petite vitrine 1 porte","s":"1,1,1,1,1,1"},{"c":"m3","g":"Vitrines","k":"vitrine comptoir basse — chemises, sacs dessus","s":"1,1,1"},{"c":"D1","g":"Vitrines","k":"vitrine étroite — sous-vêtements hommes, chaussettes (face à la porte)","s":"1,1,1,1,1,1,1"},{"c":"m1","g":"Points fixes","k":"mur de cintres — lingerie","s":""},{"c":"Fridge","g":"Points fixes","k":"frigo à boissons","s":""},{"c":"Cashier","g":"Points fixes","k":"caisse — articles devant","s":""},{"c":"Glaciere","g":"Points fixes","k":"grand présentoir de glacières","s":""},{"c":"Rice","g":"Points fixes","k":"charges lourdes : riz, cuiseurs, seaux de lessive","s":""}],"Warehouse":[{"c":"Entrepôt","g":"Entrepôt","k":"zone unique pour l’instant","s":""}]};
+const LOCS = [
+  { id:'Store 1', name:'Balkuy', slug:'store1', photo:'images/zones/store1/1B.jpg' },
+  { id:'Store 2', name:'Ouaga 2000', slug:'store2', photo:'images/zones/store2/B14.jpg' },
+  { id:'Warehouse', name:'Entrepôt', slug:'warehouse', photo:'' }
+];
+const UNPLACED = 'Non placé';
+const REASONS = {
+  out:   ['Vendu (hors caisse)', 'Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué'],
+  in:    ['Ajout / réception', 'Recomptage'],
+  set:   ['Recomptage']
+};
+const LOSS = ['Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué'];
+const IDLE_MS = 15 * 60 * 1000;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/ | /g, ' ');
+const bkey = b => String(b || '').trim().replace(/^0+/, '');
+function ls(k, v){ try { if(v === undefined) return localStorage.getItem(k); if(v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
+function lsj(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } }
+
+let URL_ = ls('inv_count_sync_url') || '', KEY = ls('inv_count_write_key') || '';
+let USERS = lsj('inv_count_users', []);
+let user = null, pin = '', pickName = null, lastActive = Date.now();
+let DATA = lsj('s1981_cache', null);        // {zones:[[loc,zone,bc,name,qty,cl]], spots:[[loc,zone,spot,bc,name,qty,at,by]], prices:{}, generatedAt}
+let QUEUE = lsj('s1981_queue', []);          // ops waiting to be sent
+let VIEW = { screen:'home' };                // {screen:'home'|'store'|'zone', loc, zone, tab}
+let online = navigator.onLine, sending = false, loading = false, loadErr = '';
+
+// ── network ─────────────────────────────────────────────
+async function api(params){
+  const u = URL_ + (URL_.includes('?') ? '&' : '?') + new URLSearchParams(Object.assign({ key: KEY }, params));
+  const r = await fetch(u, { cache:'no-store' });
+  return r.json();
+}
+async function post(body){
+  const r = await fetch(URL_, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: KEY }, body)) });
+  return r.json();
+}
+async function loadData(){
+  if(!URL_ || !KEY || loading) return;
+  loading = true; loadErr = ''; render();
+  try {
+    const d = await api({ action:'getStock1981' });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, generatedAt: d.generatedAt };
+    reapplyQueue();
+    ls('s1981_cache', JSON.stringify(DATA));
+    online = true;
+  } catch(e){
+    loadErr = /Invalid key|Réponse invalide|getStock1981/.test(e.message) ? 'Le Sheet ne connaît pas encore Stock1981 : collez la nouvelle version de Code_updated.gs et redéployez.' : 'Pas de connexion : données enregistrées sur ce téléphone.';
+    online = false;
+  }
+  loading = false; render();
+}
+async function refreshUsers(){
+  if(!URL_ || !KEY) return;
+  try { const d = await api({ action:'getCounterUsers' }); if(d && d.success && Array.isArray(d.users)){ USERS = d.users; ls('inv_count_users', JSON.stringify(USERS)); } } catch(e){}
+}
+async function flushQueue(){
+  if(sending || !QUEUE.length || !user || !URL_) return;
+  sending = true; render();
+  const batch = QUEUE.slice(0, 40);
+  try {
+    const d = await post({ action:'stock1981Adjust', by: batch[0].by, userHash: batch[0].hash, ops: batch.map(o => o.op) });
+    if(d && d.success){
+      const sent = new Set(d.results.filter(r => r.ok).map(r => r.opId));
+      const failed = d.results.filter(r => !r.ok);
+      QUEUE = QUEUE.filter(o => !sent.has(o.op.opId) && !failed.find(f => f.opId === o.op.opId));
+      if(failed.length) toast(failed.length + ' changement(s) refusé(s) : ' + failed[0].error);
+      online = true;
+    } else if(d && d.error){
+      toast(d.error);
+      if(/Utilisateur|code/i.test(d.error)) QUEUE = QUEUE.filter(o => !batch.includes(o));
+    }
+  } catch(e){ online = false; }
+  ls('s1981_queue', JSON.stringify(QUEUE));
+  sending = false;
+  if(online && QUEUE.length) return flushQueue();
+  if(online) await loadData(); else render();
+}
+window.addEventListener('online', () => { online = true; flushQueue(); loadData(); });
+window.addEventListener('offline', () => { online = false; render(); });
+
+// ── data helpers ────────────────────────────────────────
+function zoneList(loc){ return (ZONES[loc] || []); }
+function rowsAt(loc, zone){ return (DATA ? DATA.zones : []).filter(r => r[0] === loc && (zone == null || r[1] === zone)); }
+function spotsAt(loc, zone){ return (DATA ? DATA.spots : []).filter(r => r[0] === loc && r[1] === zone); }
+function priceOf(bc){ const p = DATA && DATA.prices ? DATA.prices[bkey(bc)] : null; return p == null ? null : p; }
+function productName(bc){
+  const k = bkey(bc);
+  const r = (DATA ? DATA.zones : []).find(x => bkey(x[2]) === k && x[3]); if(r) return r[3];
+  const db = lsj('inv_count_product_cache', {});
+  for(const b in db){ if(bkey(b) === k) return db[b].name; }
+  return '';
+}
+function totals(rows){ let u = 0, p = 0, v = 0; rows.forEach(r => { if(r[4] > 0){ u += r[4]; p++; const pr = priceOf(r[2]); if(pr) v += pr * r[4]; } }); return { units:u, products:p, value:v }; }
+function applyLocal(op){
+  if(!DATA) DATA = { zones:[], spots:[], prices:{} };
+  let r = DATA.zones.find(x => x[0] === op.location && x[1] === op.zone && bkey(x[2]) === bkey(op.barcode));
+  if(!r){ r = [op.location, op.zone, op.barcode, op.name || '', 0, 0]; DATA.zones.push(r); }
+  r[4] = op.mode === 'set' ? op.qty : r[4] + op.qty;
+  if(op.name && !r[3]) r[3] = op.name;
+}
+function reapplyQueue(){ QUEUE.forEach(o => applyLocal(o.op)); }
+function parseShape(str){
+  const o = { rows:[], T:0, C:0, G:0, D:0 };
+  String(str || '').trim().split(/\s+/).forEach(t => {
+    const m = t.match(/^([TCGD])(\d+)$/i);
+    if(m){ o[m[1].toUpperCase()] = +m[2]; return; }
+    t.split(',').forEach(n => { const v = parseInt(n, 10); if(v > 0 && v <= 12) o.rows.push(v); });
+  });
+  return o;
+}
+function shapeSpots(zone, shape){
+  const sh = parseShape(shape), out = [];
+  for(let s = sh.rows.length; s >= 1; s--){ const n = sh.rows[s-1]; for(let c = 1; c <= n; c++) out.push({ code: n > 1 ? `${zone}-${s}-${c}` : `${zone}-${s}`, label: 'Étagère ' + s + (n > 1 ? ' · case ' + c : '') }); }
+  for(let d = 1; d <= sh.T; d++) out.push({ code:`${zone}-T${d}`, label:'Tiroir ' + d });
+  for(let c = 1; c <= sh.C; c++) out.push({ code:`${zone}-C${c}`, label:'Côté · case ' + c });
+  for(let c = 1; c <= sh.G; c++) out.push({ code:`${zone}-G${c}`, label:'Côté gauche · case ' + c });
+  for(let c = 1; c <= sh.D; c++) out.push({ code:`${zone}-D${c}`, label:'Côté droit · case ' + c });
+  return out;
+}
+function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg` : ''; }
+function locName(id){ const L = LOCS.find(l => l.id === id); return L ? L.name : id; }
+function ago(iso){
+  if(!iso) return '';
+  const d = new Date(iso); if(isNaN(d)) return String(iso).slice(0, 10);
+  const days = Math.floor((Date.now() - d) / 864e5);
+  return days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : 'il y a ' + days + ' j';
+}
+
+// ── rendering ───────────────────────────────────────────
+function go(v){ VIEW = Object.assign({ tab:'products' }, v); history.pushState(VIEW, ''); render(); window.scrollTo(0, 0); }
+window.addEventListener('popstate', e => { VIEW = e.state || { screen:'home' }; closeSheet(); render(); });
+$('#back').onclick = () => history.back();
+$('#who').onclick = () => lock();
+
+function render(){
+  const v = VIEW;
+  $('#back').hidden = v.screen === 'home';
+  $('#whoname').textContent = user ? user.name : '—';
+  $('#netdot').className = online ? '' : 'off';
+  const t = $('#title');
+  if(v.screen === 'home') t.innerHTML = 'Stock<b>1981</b><small>Beauty Empire · ' + (DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : 'pas encore chargé') + '</small>';
+  else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
+  else t.innerHTML = 'Zone ' + esc(v.zone) + '<small>' + esc(locName(v.loc)) + '</small>';
+  const m = $('#main');
+  m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
+  bindMain();
+}
+function banner(){
+  let h = '';
+  if(!URL_ || !KEY) return '';
+  if(QUEUE.length) h += `<div class="notice">${QUEUE.length} changement(s) en attente d'envoi${sending ? '…' : ''}<button data-act="flush">Envoyer</button></div>`;
+  if(loadErr) h += `<div class="notice">${esc(loadErr)}<button data-act="reload">Réessayer</button></div>`;
+  else if(loading && !DATA) h += `<div class="notice ok">Chargement du stock…</div>`;
+  return h;
+}
+function homeHTML(){
+  let h = `<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Où est ce produit ? Nom ou code-barres" autocomplete="off" value="${esc(VIEW.q || '')}"></div><div class="results" id="results"></div>`;
+  h += '<div class="tiles">' + LOCS.map(L => {
+    const t = totals(rowsAt(L.id));
+    const un = rowsAt(L.id, UNPLACED).filter(r => r[4] > 0).length;
+    return `<button class="tile" data-loc="${esc(L.id)}">${L.photo ? `<img src="${L.photo}" alt="" loading="lazy" onerror="this.remove()">` : '<div class="pat"></div>'}
+      ${un ? `<span class="badge">${un} non placé${un > 1 ? 's' : ''}</span>` : ''}
+      <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} articles · ${fmt(t.products)} produits${t.value ? ' · ' + fmt(t.value) + ' F' : ''}</p></div></button>`;
+  }).join('') + '</div>';
+  if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
+  return h;
+}
+function storeHTML(loc){
+  const rows = rowsAt(loc);
+  const listed = zoneList(loc);
+  const codes = new Set(listed.map(z => z.c));
+  const extra = [...new Set(rows.map(r => r[1]))].filter(z => !codes.has(z) && z !== UNPLACED);
+  let h = '';
+  const un = rows.filter(r => r[1] === UNPLACED && r[4] > 0);
+  if(un.length) h += `<div class="sect">À ranger</div><div class="zgrid">${zcard(loc, { c: UNPLACED, k: 'produits sans rayon' }, true)}</div>`;
+  const groups = [];
+  listed.forEach(z => { let g = groups.find(x => x.name === z.g); if(!g) groups.push(g = { name: z.g, zones: [] }); g.zones.push(z); });
+  if(extra.length) groups.push({ name: 'Autres zones (dans le Sheet)', zones: extra.map(c => ({ c, k:'' })) });
+  groups.forEach(g => { h += `<div class="sect">${esc(g.name)}</div><div class="zgrid">${g.zones.map(z => zcard(loc, z)).join('')}</div>`; });
+  return h;
+}
+function zcard(loc, z, unplaced){
+  const t = totals(rowsAt(loc, z.c));
+  const ph = unplaced ? '' : photoFor(loc, z.c);
+  return `<button class="zcard ${unplaced ? 'unplaced' : ''} ${t.units ? '' : 'isempty'}" data-zone="${esc(z.c)}">
+    <div class="ph" ${ph ? `style="background-image:url('${ph}')"` : ''}>${unplaced ? 'À ranger' : `<span>${esc(z.c)}</span>`}${z.x ? '<span class="cl">Solde</span>' : ''}</div>
+    <div class="b"><strong class="num">${t.units ? fmt(t.units) + ' articles' : 'Vide'}</strong><small>${t.products ? fmt(t.products) + ' produits' : ''}${t.products && z.k ? ' · ' : ''}${esc(z.k || '')}</small></div></button>`;
+}
+function zoneHTML(loc, zone, tab){
+  const z = zoneList(loc).find(x => x.c === zone) || { c: zone, k: '', s: '' };
+  const rows = rowsAt(loc, zone).filter(r => r[4] !== 0).sort((a, b) => b[4] - a[4]);
+  const t = totals(rows);
+  const ph = zone === UNPLACED ? '' : photoFor(loc, zone);
+  let h = `<div class="hero">${ph ? `<img src="${ph}" alt="Photo de la zone ${esc(zone)}" onerror="this.remove()">` : ''}<div class="nophoto">${ph ? '' : 'Pas de photo'}</div></div>
+    <div class="zhead"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>
+    <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
+  const spots = z.s ? shapeSpots(zone, z.s) : [];
+  h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button></div>`;
+  if(tab === 'shelves'){
+    const counted = spotsAt(loc, zone);
+    const known = new Set(spots.map(s => s.code));
+    const extraSpots = [...new Set(counted.map(r => r[2]))].filter(c => !known.has(c)).map(c => ({ code:c, label:c }));
+    const all = spots.concat(extraSpots);
+    h += all.length ? '<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">Dernier comptage de chaque étagère (les ventes depuis ne sont pas déduites ici).</p><div class="list">' + all.map(s => {
+      const items = counted.filter(r => r[2] === s.code);
+      const last = items.reduce((a, r) => r[6] > a ? r[6] : a, '');
+      const by = items.find(r => r[6] === last);
+      return `<div class="shelf"><h4>${esc(s.label)}<span>${items.length ? esc(ago(last)) + (by && by[7] ? ' · ' + esc(by[7]) : '') : 'jamais compté'}</span></h4>${items.length ? '<ul>' + items.map(r => `<li><span>${esc(r[4] || r[3])}</span><b>${fmt(r[5])}</b></li>`).join('') + '</ul>' : ''}</div>`;
+    }).join('') + '</div>' : '<p class="empty">Cette zone n\'a pas d\'étagères définies.</p>';
+  } else {
+    h += rows.length ? '<div class="list">' + rows.map(r => {
+      const p = priceOf(r[2]);
+      return `<button class="row" data-bc="${esc(r[2])}"><div class="nm"><strong>${esc(r[3] || 'Sans nom')}</strong><small class="num">${esc(r[2])}${p ? ' · ' + fmt(p) + ' F' : ''}</small></div><div class="qty num ${r[4] < 0 ? 'neg' : ''}">${fmt(r[4])}</div></button>`;
+    }).join('') + '</div>' : '<p class="empty">Aucun produit en stock dans cette zone.</p>';
+    if(zone !== UNPLACED) h += `<button class="addbtn" data-act="add">+ Ajouter un produit à ${esc(zone)}</button>`;
+  }
+  return h;
+}
+function bindMain(){
+  document.querySelectorAll('[data-loc]').forEach(b => b.onclick = () => go({ screen:'store', loc: b.dataset.loc }));
+  document.querySelectorAll('[data-zone]').forEach(b => b.onclick = () => go({ screen:'zone', loc: VIEW.loc, zone: b.dataset.zone }));
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { VIEW.tab = b.dataset.tab; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2 || VIEW.loc, b.dataset.zone2 || VIEW.zone, b.dataset.bc));
+  const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
+  const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
+  const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const q = $('#q');
+  if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; renderResults(); }
+}
+function renderResults(){
+  const box = $('#results'); if(!box) return;
+  const q = (VIEW.q || '').trim().toLowerCase();
+  if(q.length < 2){ box.innerHTML = ''; return; }
+  const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
+  box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}"><div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
+  box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
+}
+
+// ── product sheet ───────────────────────────────────────
+let S = null;
+function openSheet(html){ $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').hidden = false; $('#scrim').hidden = false; }
+function closeSheet(){ $('#sheet').hidden = true; $('#scrim').hidden = true; S = null; }
+$('#scrim').onclick = closeSheet;
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+
+function openProduct(loc, zone, bc){
+  const here = rowsAt(loc, zone).find(r => bkey(r[2]) === bkey(bc));
+  S = { loc, zone, bc, name: (here && here[3]) || productName(bc), cur: here ? here[4] : 0, mode:'out', qty:1, reason:null, note:'' };
+  drawProduct();
+}
+function drawProduct(){
+  const all = (DATA ? DATA.zones : []).filter(r => bkey(r[2]) === bkey(S.bc) && r[4] !== 0);
+  const p = priceOf(S.bc);
+  const after = S.mode === 'set' ? S.qty : S.mode === 'out' ? S.cur - S.qty : S.cur + S.qty;
+  const reasons = REASONS[S.mode];
+  if(!reasons.includes(S.reason)) S.reason = reasons.length === 1 ? reasons[0] : null;
+  openSheet(`<h3>${esc(S.name || 'Produit sans nom')}</h3>
+    <div class="sub num">${esc(S.bc)}${p ? ' · ' + fmt(p) + ' F' : ''}</div>
+    <div class="where">${all.length ? all.map(r => `<div class="${r[0] === S.loc && r[1] === S.zone ? 'here' : ''}"><span>${esc(locName(r[0]))} · ${esc(r[1])}</span><b class="num">${fmt(r[4])}</b></div>`).join('') : '<div><span>Nulle part en stock</span><b>0</b></div>'}</div>
+    <div class="seg" role="group" aria-label="Type de changement">
+      <button data-mode="out" aria-pressed="${S.mode === 'out'}">Retirer</button>
+      <button data-mode="in" aria-pressed="${S.mode === 'in'}">Ajouter</button>
+      <button data-mode="set" aria-pressed="${S.mode === 'set'}">Recompter</button></div>
+    <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="sq" class="num" inputmode="numeric" value="${S.qty}" aria-label="Quantité"><button data-step="1" aria-label="Plus">+</button></div>
+    <div class="preview">${S.mode === 'set' ? 'Quantité exacte en rayon' : (S.mode === 'out' ? 'Retirer ' : 'Ajouter ') + S.qty}. Zone ${esc(S.zone)} : <b class="num">${fmt(S.cur)} → ${fmt(after)}</b></div>
+    <label class="f">Raison</label>
+    <div class="chips">${reasons.map(r => `<button data-reason="${esc(r)}" class="${LOSS.includes(r) ? 'loss' : ''}" aria-pressed="${S.reason === r}">${esc(r)}</button>`).join('')}</div>
+    <label class="f" for="snote">Note (facultatif)</label>
+    <textarea id="snote" placeholder="Ex. : boîte écrasée, cliente fidèle…">${esc(S.note)}</textarea>
+    <button class="go" id="sgo" ${S.reason && (S.mode === 'set' ? S.qty >= 0 : S.qty > 0) && !(S.mode === 'set' && S.qty === S.cur) ? '' : 'disabled'}>Enregistrer</button>
+    <button class="ghost" id="sx">Annuler</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; S.qty = S.mode === 'set' ? Math.max(0, S.cur) : 1; drawProduct(); });
+  sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(S.mode === 'set' ? 0 : 1, S.qty + Number(b.dataset.step)); drawProduct(); });
+  sh.querySelectorAll('[data-reason]').forEach(b => b.onclick = () => { S.reason = b.dataset.reason; drawProduct(); });
+  $('#sq').onchange = e => { const v = parseInt(e.target.value, 10); S.qty = isNaN(v) ? S.qty : Math.max(S.mode === 'set' ? 0 : 1, v); drawProduct(); };
+  $('#snote').oninput = e => { S.note = e.target.value; };
+  $('#sx').onclick = closeSheet;
+  $('#sgo').onclick = () => save({ location: S.loc, zone: S.zone, barcode: S.bc, name: S.name, mode: S.mode === 'set' ? 'set' : 'delta', qty: S.mode === 'out' ? -S.qty : S.qty, reason: S.reason, note: S.note });
+}
+function openAdd(loc, zone){
+  S = { loc, zone, bc:'', name:'', qty:1, reason:'Ajout / réception' };
+  drawAdd();
+}
+function drawAdd(err){
+  openSheet(`<h3>Ajouter à ${esc(S.zone)}</h3><div class="sub">${esc(locName(S.loc))}</div>
+    <label class="f" for="abc">Code-barres (scannez ou tapez)</label>
+    <input class="t num" id="abc" inputmode="numeric" autocomplete="off" value="${esc(S.bc)}">
+    <label class="f" for="anm">Nom du produit</label>
+    <input class="t" id="anm" autocomplete="off" value="${esc(S.name)}" placeholder="Rempli automatiquement si connu">
+    <label class="f">Quantité</label>
+    <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="aq" class="num" inputmode="numeric" value="${S.qty}" aria-label="Quantité"><button data-step="1" aria-label="Plus">+</button></div>
+    <label class="f">Raison</label>
+    <div class="chips">${REASONS.in.map(r => `<button data-reason="${esc(r)}" aria-pressed="${S.reason === r}">${esc(r)}</button>`).join('')}</div>
+    ${err ? `<div class="err">${esc(err)}</div>` : ''}
+    <button class="go" id="ago">Ajouter</button><button class="ghost" id="ax">Annuler</button>`);
+  const sh = $('#sheet');
+  const bc = $('#abc'), nm = $('#anm');
+  bc.oninput = () => { S.bc = bc.value.trim(); if(!S.name){ const n = productName(S.bc); if(n){ S.name = n; nm.value = n; } } };
+  bc.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); nm.focus(); } };
+  nm.oninput = () => { S.name = nm.value; };
+  sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(1, S.qty + Number(b.dataset.step)); $('#aq').value = S.qty; });
+  $('#aq').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) S.qty = v; };
+  sh.querySelectorAll('[data-reason]').forEach(b => b.onclick = () => { S.reason = b.dataset.reason; drawAdd(); });
+  $('#ax').onclick = closeSheet;
+  $('#ago').onclick = () => {
+    if(!/^\d{4,14}$/.test(S.bc)) return drawAdd('Le code-barres doit contenir seulement des chiffres. Vérifiez la langue du clavier.');
+    if(!S.name.trim()) return drawAdd('Donnez un nom au produit.');
+    save({ location: S.loc, zone: S.zone, barcode: S.bc, name: S.name.trim(), mode:'delta', qty: S.qty, reason: S.reason, note:'' });
+  };
+  setTimeout(() => bc.focus(), 50);
+}
+function save(op){
+  if(!user){ lock(); return; }
+  op.opId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  applyLocal(op);
+  QUEUE.push({ op, by: user.name, hash: user.hash });
+  ls('s1981_queue', JSON.stringify(QUEUE));
+  ls('s1981_cache', JSON.stringify(DATA));
+  closeSheet(); render();
+  toast(online ? 'Enregistré' : 'Enregistré sur le téléphone, envoi au retour de la connexion');
+  flushQueue();
+}
+let toastT;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+// ── sign-in & lock ──────────────────────────────────────
+async function hashCode(name, code){
+  const data = new TextEncoder().encode('b1981|' + String(name).trim().toLowerCase() + '|' + code);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function activeUsers(){ return USERS.filter(u => u.active !== false); }
+function lock(){ user = null; pin = ''; ls('s1981_auth', null); closeSheet(); $('#lock').hidden = false; drawLock(''); }
+function drawLock(msg){
+  const box = $('#lockbox');
+  if(!URL_ || !KEY){
+    box.innerHTML = `<div class="logo">Stock<b>1981</b></div><p>Collez le lien du Sheet et la clé (les mêmes que dans l'app Comptage).</p>
+      <input id="lu" placeholder="https://script.google.com/…/exec"><input id="lk" placeholder="Clé d'écriture">
+      <button class="go" id="lsave">Enregistrer</button><div class="lockerr">${esc(msg)}</div>`;
+    $('#lsave').onclick = async () => {
+      const u = $('#lu').value.trim(), k = $('#lk').value.trim();
+      if(!/^https:\/\/script\.google\.com\//.test(u) || !k) return drawLock('Lien ou clé manquant.');
+      URL_ = u; KEY = k; ls('inv_count_sync_url', u); ls('inv_count_write_key', k);
+      await refreshUsers(); drawLock('');
+    };
+    return;
+  }
+  const users = activeUsers();
+  if(!users.length){
+    box.innerHTML = `<div class="logo">Stock<b>1981</b></div><p>Aucun code trouvé. Créez d'abord votre code dans l'app Comptage, puis revenez.</p><button class="go" id="lretry">Réessayer</button><div class="lockerr">${esc(msg)}</div>`;
+    $('#lretry').onclick = async () => { await refreshUsers(); drawLock(activeUsers().length ? '' : 'Toujours aucun code.'); };
+    return;
+  }
+  if(!pickName || !users.find(u => u.name === pickName)) pickName = (users.find(u => u.name === ls('inv_count_last_user')) || users[0]).name;
+  box.innerHTML = `<div class="logo">Stock<b>1981</b></div><p>Qui êtes-vous ?</p>
+    <div class="users">${users.map(u => `<button data-u="${esc(u.name)}" aria-pressed="${u.name === pickName}">${esc(u.name)}</button>`).join('')}</div>
+    <div class="dots">${[0,1,2,3].map(i => `<i class="${i < pin.length ? 'f' : ''}"></i>`).join('')}</div>
+    <div class="lockerr">${esc(msg)}</div>
+    <div class="pad">${['1','2','3','4','5','6','7','8','9','','0','⌫'].map(k => k ? `<button data-k="${k}" aria-label="${k === '⌫' ? 'Effacer' : k}">${k}</button>` : '<span></span>').join('')}</div>`;
+  box.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { pickName = b.dataset.u; pin = ''; drawLock(''); });
+  box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => key(b.dataset.k));
+}
+async function key(k){
+  if(k === '⌫'){ pin = pin.slice(0, -1); return drawLock(''); }
+  if(pin.length >= 4) return;
+  pin += k; drawLock('');
+  if(pin.length < 4) return;
+  const u = activeUsers().find(x => x.name === pickName);
+  const h = await hashCode(pickName, pin); pin = '';
+  if(!u || u.hash !== h) return drawLock('Code incorrect.');
+  signIn(u);
+}
+document.addEventListener('keydown', e => { if(!$('#lock').hidden && /^[0-9]$/.test(e.key)) key(e.key); else if(!$('#lock').hidden && e.key === 'Backspace') key('⌫'); });
+function signIn(u){
+  user = { name: u.name, role: u.role, hash: u.hash };
+  lastActive = Date.now();
+  ls('s1981_auth', JSON.stringify({ name: u.name, at: lastActive }));
+  ls('inv_count_last_user', u.name);
+  $('#lock').hidden = true;
+  render();
+  flushQueue();
+}
+['pointerdown', 'keydown', 'scroll'].forEach(ev => window.addEventListener(ev, () => {
+  if(!user) return;
+  lastActive = Date.now();
+}, { passive: true }));
+setInterval(() => {
+  if(user && Date.now() - lastActive > IDLE_MS) lock();
+  else if(user) ls('s1981_auth', JSON.stringify({ name: user.name, at: lastActive }));
+}, 20000);
+
+// ── start ───────────────────────────────────────────────
+(async function start(){
+  if(history.state && history.state.screen) VIEW = history.state; else history.replaceState(VIEW, '');
+  const a = lsj('s1981_auth', null);
+  const u = a && activeUsers().find(x => x.name === a.name);
+  if(u && Date.now() - a.at < IDLE_MS){ user = { name: u.name, role: u.role, hash: u.hash }; lastActive = a.at; }
+  else lock();
+  render();
+  if(URL_ && KEY){ refreshUsers(); await loadData(); flushQueue(); }
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
