@@ -580,6 +580,7 @@ function signIn(u){
   ls('inv_count_last_user', u.name);
   $('#lock').hidden = true;
   render();
+  if(!DATA || !DATA.generatedAt) loadData();
   flushQueue();
 }
 ['pointerdown', 'keydown', 'scroll'].forEach(ev => window.addEventListener(ev, () => {
