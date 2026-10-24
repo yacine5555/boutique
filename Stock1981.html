@@ -165,6 +165,58 @@ textarea{min-height:60px;resize:vertical}
 .lock input{width:100%;margin:6px 0;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;padding:12px;font:15px var(--body)}
 .lock .go{background:#ff8cc0;color:var(--plum)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:80;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.viewsw{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:12px;margin:0 0 14px;max-width:260px}
+.viewsw button{flex:1;border:0;background:transparent;padding:8px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--muted)}
+.viewsw button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.mapwrap{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:8px;overflow-x:auto}
+.mapwrap svg{display:block;width:100%;min-width:820px;height:auto}
+@media (min-width:860px){.mapwrap svg{min-width:0}}
+.mz rect{fill:var(--sunk);stroke:var(--line);stroke-width:1.5;rx:5}
+.mz.has rect{fill:var(--brand-soft);stroke:var(--brand)}
+.mz.sale rect{fill:var(--warn-soft);stroke:var(--warn)}
+.mz{cursor:pointer}
+.mz:hover rect,.mz:focus rect{stroke-width:3}
+.mz text{fill:var(--ink);font:800 15px var(--body);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.mz text.n{font:700 12px var(--body);fill:var(--muted)}
+.mz.has text.n{fill:var(--brand)}
+.map-deco-text{font:13px var(--body);fill:var(--muted)}
+.map-deco-text.strong{font-weight:700;fill:var(--ink);font-size:14px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin:10px 4px 0;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1.5px solid var(--line);background:var(--sunk)}
+.legend i.has{background:var(--brand-soft);border-color:var(--brand)}
+.legend i.sale{background:var(--warn-soft);border-color:var(--warn)}
+.zrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer;min-width:0}
+.zrow .code{font:800 17px var(--display);min-width:54px}
+.zrow .nm{flex:1;min-width:0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.zrow .u{font-weight:700;font-variant-numeric:tabular-nums}
+.zrow.unplaced{border:1.5px dashed var(--warn)}
+.shelfhead{display:flex;align-items:center;gap:8px}
+.shelfhead h4{flex:1;margin:0}
+.cbtn{border:0;background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:13px;border-radius:10px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.cbtn.alt{background:var(--sunk);color:var(--ink)}
+.countbar{position:sticky;top:calc(58px + env(safe-area-inset-top,0px));z-index:5;background:var(--bg);padding:6px 0 10px}
+.scanin{display:flex;gap:8px}
+.scanin input{flex:1;min-width:0;border:2px solid var(--brand);background:var(--surface);color:var(--ink);border-radius:14px;padding:13px;font:600 18px var(--body)}
+.scanin button{border:0;border-radius:14px;padding:0 16px;font-weight:700;cursor:pointer;background:var(--ink);color:var(--bg);font-size:20px}
+.hint{font-size:13px;color:var(--muted);margin:6px 2px 0}
+.citem{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 12px}
+.citem .nm{flex:1;min-width:0}
+.citem .nm strong{display:block;font-weight:600;overflow-wrap:anywhere}
+.citem .nm small{color:var(--muted);font-size:12px}
+.citem .nm input{width:100%;margin-top:4px;border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:9px;padding:7px 9px;font:15px var(--body)}
+.citem button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--sunk);font-size:20px;font-weight:700;cursor:pointer}
+.citem .c{font:800 22px var(--display);min-width:38px;text-align:center}
+.citem.flash{animation:fl .5s}
+@keyframes fl{from{background:var(--brand-soft)}}
+.cfoot{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:16px}
+.cfoot .go{margin:0}
+.cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
+.cam video{flex:1;width:100%;object-fit:cover}
+.cam .camui{position:absolute;left:0;right:0;bottom:0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff}
+.cam .camui span{flex:1;font-weight:600}
+.cam .frame{position:absolute;left:12%;right:12%;top:35%;height:22%;border:3px solid #ff8cc0;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.setrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.setrow small{color:var(--muted);display:block;overflow-wrap:anywhere}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:0}}}
 </style>
 </head>
@@ -199,6 +251,7 @@ const LOCS = [
   { id:'Store 2', name:'Ouaga 2000', slug:'store2', photo:'images/zones/store2/B14.jpg' },
   { id:'Warehouse', name:'Entrepôt', slug:'warehouse', photo:'' }
 ];
+const MAPS = {"Store 1":{"vb":"0 0 1000 680","deco":"<text class=\"map-deco-text strong\" x=\"4\" y=\"98\">Entrée 2 →</text> <text class=\"map-deco-text strong\" x=\"4\" y=\"510\">Entrée →</text> <text class=\"map-deco-text\" x=\"60\" y=\"652\">Étagère 1</text> <text class=\"map-deco-text\" x=\"275\" y=\"426\">Ligne 2</text> <line x1=\"70\" y1=\"290\" x2=\"960\" y2=\"290\" stroke=\"#8a7d6c\" stroke-width=\"1.5\" stroke-dasharray=\"6 4\"/> <text class=\"map-deco-text\" x=\"540\" y=\"284\" text-anchor=\"middle\">allée</text> <text class=\"map-deco-text strong\" x=\"900\" y=\"200\">Côté B</text> <text class=\"map-deco-text strong\" x=\"900\" y=\"322\">Côté A</text>","z":[["1S",110,30,145,28],["2S",290,30,145,28],["3S",470,30,235,28],["1O",110,66,55,26],["2O",200,66,55,26],["3O",290,66,55,26],["4O",380,66,55,26],["5O",470,66,55,26],["6O",560,66,55,26],["7O",650,66,55,26],["F1",110,98,26,162],["F2",139,98,26,162],["F3a",200,98,26,58],["F3b",200,162,26,98],["F4a",229,98,26,58],["F4b",229,162,26,98],["F5",290,98,26,162],["F6",319,98,26,162],["F7a",380,98,26,58],["F7b",380,162,26,98],["F8a",409,98,26,58],["F8b",409,162,26,98],["F9",470,98,26,162],["F10",499,98,26,162],["F11a",560,98,26,58],["F11b",560,162,26,98],["F12a",589,98,26,58],["F12b",589,162,26,98],["F13",650,98,26,162],["F14",679,98,26,162],["GLV",0,195,65,55],["PT",0,300,65,60],["Rice",0,390,65,55],["M1",225,300,40,40],["M2",275,300,40,40],["3A",335,300,120,35],["V1",470,300,145,30],["V2",625,300,130,30],["2A",275,430,50,45],["2B",330,430,50,45],["2C",405,435,110,35],["2D",530,435,150,35],["1A",60,590,40,45],["1B",100,590,110,45],["1C",210,590,40,45],["1D",250,590,110,45],["1E",360,590,40,45],["1F",400,590,180,45],["1G",580,590,40,45],["1H",620,590,155,45]]},"Store 2":{"vb":"0 0 905 1010","deco":"<rect x=\"745\" y=\"855\" width=\"30\" height=\"120\" rx=\"3\" fill=\"#f3d6e3\" stroke=\"#a3165f\" stroke-dasharray=\"5 4\"/> <text class=\"map-deco-text strong\" x=\"760.0\" y=\"847\" text-anchor=\"middle\">Porte</text>","z":[["m1",100,15,180,55],["m2",320,15,180,55],["m3",545,15,180,55],["A4",20,100,35,130],["A3",20,235,35,130],["A2",20,370,35,130],["A1",20,505,35,130],["B3",125,230,145,65],["B2",125,340,145,60],["B1",145,435,105,90],["A8",380,125,20,90],["A7",380,225,20,85],["A6",380,325,25,95],["A5",380,435,25,110],["B4",340,565,70,70],["B9",420,390,25,130],["B10",490,300,155,125],["B8",425,565,80,30],["B7",425,610,80,25],["B6",440,675,85,30],["B5",440,715,85,25],["B14",815,320,50,105],["B13",815,435,50,95],["B12",815,535,50,95],["B11",815,635,50,100],["D1",835,740,30,45],["Fridge",20,665,30,55],["Cashier",20,750,100,100],["Glaciere",105,900,335,80],["Rice",465,870,155,105],["P1",335,520,30,25]]}};
 const UNPLACED = 'Non placé';
 const REASONS = {
   out:   ['Vendu (hors caisse)', 'Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué'],
@@ -239,7 +292,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, generatedAt: d.generatedAt };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, generatedAt: d.generatedAt };
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
     online = true;
@@ -256,24 +309,33 @@ async function refreshUsers(){
 async function flushQueue(){
   if(sending || !QUEUE.length || !user || !URL_) return;
   sending = true; render();
-  const batch = QUEUE.slice(0, 40);
+  let progress = false;
   try {
-    const d = await post({ action:'stock1981Adjust', by: batch[0].by, userHash: batch[0].hash, ops: batch.map(o => o.op) });
-    if(d && d.success){
-      const sent = new Set(d.results.filter(r => r.ok).map(r => r.opId));
-      const failed = d.results.filter(r => !r.ok);
-      QUEUE = QUEUE.filter(o => !sent.has(o.op.opId) && !failed.find(f => f.opId === o.op.opId));
-      if(failed.length) toast(failed.length + ' changement(s) refusé(s) : ' + failed[0].error);
-      online = true;
-    } else if(d && d.error){
-      toast(d.error);
-      if(/Utilisateur|code/i.test(d.error)) QUEUE = QUEUE.filter(o => !batch.includes(o));
+    const first = QUEUE[0];
+    if(first.kind === 'count'){
+      const d = await post(Object.assign({ action:'stock1981Count', by: first.by, userHash: first.hash }, first.body));
+      if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
+      else if(d && d.error){ toast(d.error); if(/Utilisateur|code/i.test(d.error)){ QUEUE.shift(); progress = true; } }
+    } else {
+      const batch = [];
+      for(const o of QUEUE){ if(o.kind === 'count' || batch.length >= 40) break; batch.push(o); }
+      const d = await post({ action:'stock1981Adjust', by: batch[0].by, userHash: batch[0].hash, ops: batch.map(o => o.op) });
+      if(d && d.success){
+        const done = new Set(d.results.map(r => r.opId));
+        const failed = d.results.filter(r => !r.ok);
+        QUEUE = QUEUE.filter(o => o.kind === 'count' || !done.has(o.op.opId));
+        if(failed.length) toast(failed.length + ' changement(s) refusé(s) : ' + failed[0].error);
+        progress = true; online = true;
+      } else if(d && d.error){
+        toast(d.error);
+        if(/Utilisateur|code/i.test(d.error)){ QUEUE = QUEUE.filter(o => !batch.includes(o)); progress = true; }
+      }
     }
   } catch(e){ online = false; }
   ls('s1981_queue', JSON.stringify(QUEUE));
   sending = false;
-  if(online && QUEUE.length) return flushQueue();
-  if(online) await loadData(); else render();
+  if(progress && online && QUEUE.length) return flushQueue();
+  if(progress && online) await loadData(); else render();
 }
 window.addEventListener('online', () => { online = true; flushQueue(); loadData(); });
 window.addEventListener('offline', () => { online = false; render(); });
@@ -285,6 +347,7 @@ function spotsAt(loc, zone){ return (DATA ? DATA.spots : []).filter(r => r[0] ==
 function priceOf(bc){ const p = DATA && DATA.prices ? DATA.prices[bkey(bc)] : null; return p == null ? null : p; }
 function productName(bc){
   const k = bkey(bc);
+  if(DATA && DATA.names && DATA.names[k]) return DATA.names[k];
   const r = (DATA ? DATA.zones : []).find(x => bkey(x[2]) === k && x[3]); if(r) return r[3];
   const db = lsj('inv_count_product_cache', {});
   for(const b in db){ if(bkey(b) === k) return db[b].name; }
@@ -298,7 +361,19 @@ function applyLocal(op){
   r[4] = op.mode === 'set' ? op.qty : r[4] + op.qty;
   if(op.name && !r[3]) r[3] = op.name;
 }
-function reapplyQueue(){ QUEUE.forEach(o => applyLocal(o.op)); }
+function reapplyQueue(){ QUEUE.forEach(o => o.kind === 'count' ? applyCountLocal(o.body) : applyLocal(o.op)); }
+function applyCountLocal(c){
+  if(!DATA) DATA = { zones:[], spots:[], prices:{}, names:{} };
+  const touched = new Set(DATA.spots.filter(r => r[0] === c.location && r[2] === c.spot).map(r => bkey(r[3])));
+  DATA.spots = DATA.spots.filter(r => !(r[0] === c.location && r[2] === c.spot));
+  c.items.forEach(it => { touched.add(bkey(it.barcode)); DATA.spots.push([c.location, c.zone, c.spot, it.barcode, it.name, it.count, c.at, c.by || '']); });
+  touched.forEach(k => {
+    const sum = DATA.spots.filter(r => r[0] === c.location && r[1] === c.zone && bkey(r[3]) === k).reduce((a, r) => a + r[5], 0);
+    let z = DATA.zones.find(r => r[0] === c.location && r[1] === c.zone && bkey(r[2]) === k);
+    if(!z && sum > 0){ const it = c.items.find(i => bkey(i.barcode) === k); z = [c.location, c.zone, it.barcode, it.name, 0, 0]; DATA.zones.push(z); }
+    if(z) z[4] = sum;
+  });
+}
 function parseShape(str){
   const o = { rows:[], T:0, C:0, G:0, D:0 };
   String(str || '').trim().split(/\s+/).forEach(t => {
@@ -315,6 +390,7 @@ function shapeSpots(zone, shape){
   for(let c = 1; c <= sh.C; c++) out.push({ code:`${zone}-C${c}`, label:'Côté · case ' + c });
   for(let c = 1; c <= sh.G; c++) out.push({ code:`${zone}-G${c}`, label:'Côté gauche · case ' + c });
   for(let c = 1; c <= sh.D; c++) out.push({ code:`${zone}-D${c}`, label:'Côté droit · case ' + c });
+  if(!out.length) out.push({ code: zone, label: 'Toute la zone' });
   return out;
 }
 function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg` : ''; }
@@ -330,7 +406,7 @@ function ago(iso){
 function go(v){ VIEW = Object.assign({ tab:'products' }, v); history.pushState(VIEW, ''); render(); window.scrollTo(0, 0); }
 window.addEventListener('popstate', e => { VIEW = e.state || { screen:'home' }; closeSheet(); render(); });
 $('#back').onclick = () => history.back();
-$('#who').onclick = () => lock();
+$('#who').onclick = () => openSettings();
 
 function render(){
   const v = VIEW;
@@ -340,8 +416,10 @@ function render(){
   const t = $('#title');
   if(v.screen === 'home') t.innerHTML = 'Stock<b>1981</b><small>Beauty Empire · ' + (DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : 'pas encore chargé') + '</small>';
   else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
+  else if(v.screen === 'count') t.innerHTML = 'Comptage ' + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
   else t.innerHTML = 'Zone ' + esc(v.zone) + '<small>' + esc(locName(v.loc)) + '</small>';
   const m = $('#main');
+  if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
   bindMain();
 }
@@ -366,26 +444,41 @@ function homeHTML(){
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
   return h;
 }
+function storeView(loc){ return MAPS[loc] ? (ls('s1981_view') || 'plan') : 'list'; }
 function storeHTML(loc){
   const rows = rowsAt(loc);
   const listed = zoneList(loc);
   const codes = new Set(listed.map(z => z.c));
   const extra = [...new Set(rows.map(r => r[1]))].filter(z => !codes.has(z) && z !== UNPLACED);
+  const view = storeView(loc);
   let h = '';
-  const un = rows.filter(r => r[1] === UNPLACED && r[4] > 0);
-  if(un.length) h += `<div class="sect">À ranger</div><div class="zgrid">${zcard(loc, { c: UNPLACED, k: 'produits sans rayon' }, true)}</div>`;
-  const groups = [];
-  listed.forEach(z => { let g = groups.find(x => x.name === z.g); if(!g) groups.push(g = { name: z.g, zones: [] }); g.zones.push(z); });
-  if(extra.length) groups.push({ name: 'Autres zones (dans le Sheet)', zones: extra.map(c => ({ c, k:'' })) });
-  groups.forEach(g => { h += `<div class="sect">${esc(g.name)}</div><div class="zgrid">${g.zones.map(z => zcard(loc, z)).join('')}</div>`; });
+  if(MAPS[loc]) h += `<div class="viewsw" role="group" aria-label="Affichage"><button data-view="plan" aria-pressed="${view === 'plan'}">Plan</button><button data-view="list" aria-pressed="${view === 'list'}">Liste</button></div>`;
+  const un = totals(rows.filter(r => r[1] === UNPLACED));
+  if(un.units) h += `<button class="zrow unplaced" data-zone="${esc(UNPLACED)}" style="margin-bottom:12px"><span class="code">À ranger</span><span class="nm">${fmt(un.products)} produits sans rayon</span><span class="u">${fmt(un.units)}</span></button>`;
+  if(view === 'plan'){
+    const M = MAPS[loc];
+    const [, , vw, vh] = M.vb.split(' ').map(Number);
+    h += `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan de ${esc(locName(loc))}">${M.deco}` + M.z.map(([c, x, y, w, ht]) => {
+      const z = listed.find(q => q.c === c) || {};
+      const t = totals(rowsAt(loc, c));
+      const cls = 'mz' + (z.x ? ' sale' : t.units ? ' has' : '');
+      const small = w < 50 || ht < 34;
+      return `<g class="${cls}" data-zone="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}, ${t.units} articles"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>`
+        + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(c)}</text>`
+                 : `<text x="${x + w / 2}" y="${y + ht / 2 - 7}">${esc(c)}</text><text class="n" x="${x + w / 2}" y="${y + ht / 2 + 8}">${t.units ? fmt(t.units) : '—'}</text>`) + '</g>';
+    }).join('') + `</svg></div><div class="legend"><span>Glissez le plan pour voir toute la boutique.</span><span><i></i>Vide / pas compté</span><span><i class="has"></i>En stock</span><span><i class="sale"></i>Solde</span></div>`;
+  } else {
+    const groups = [];
+    listed.forEach(z => { let g = groups.find(x => x.name === z.g); if(!g) groups.push(g = { name: z.g, zones: [] }); g.zones.push(z); });
+    if(extra.length) groups.push({ name: 'Autres zones (dans le Sheet)', zones: extra.map(c => ({ c, k:'' })) });
+    groups.forEach(g => {
+      h += `<div class="sect">${esc(g.name)}</div><div class="list">` + g.zones.map(z => {
+        const t = totals(rowsAt(loc, z.c));
+        return `<button class="zrow" data-zone="${esc(z.c)}"><span class="code">${esc(z.c)}</span><span class="nm">${esc(z.k || '')}${z.x ? ' · solde' : ''}</span><span class="u">${t.units ? fmt(t.units) : '—'}</span></button>`;
+      }).join('') + '</div>';
+    });
+  }
   return h;
-}
-function zcard(loc, z, unplaced){
-  const t = totals(rowsAt(loc, z.c));
-  const ph = unplaced ? '' : photoFor(loc, z.c);
-  return `<button class="zcard ${unplaced ? 'unplaced' : ''} ${t.units ? '' : 'isempty'}" data-zone="${esc(z.c)}">
-    <div class="ph" ${ph ? `style="background-image:url('${ph}')"` : ''}>${unplaced ? 'À ranger' : `<span>${esc(z.c)}</span>`}${z.x ? '<span class="cl">Solde</span>' : ''}</div>
-    <div class="b"><strong class="num">${t.units ? fmt(t.units) + ' articles' : 'Vide'}</strong><small>${t.products ? fmt(t.products) + ' produits' : ''}${t.products && z.k ? ' · ' : ''}${esc(z.k || '')}</small></div></button>`;
 }
 function zoneHTML(loc, zone, tab){
   const z = zoneList(loc).find(x => x.c === zone) || { c: zone, k: '', s: '' };
@@ -402,24 +495,26 @@ function zoneHTML(loc, zone, tab){
     const known = new Set(spots.map(s => s.code));
     const extraSpots = [...new Set(counted.map(r => r[2]))].filter(c => !known.has(c)).map(c => ({ code:c, label:c }));
     const all = spots.concat(extraSpots);
-    h += all.length ? '<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">Dernier comptage de chaque étagère (les ventes depuis ne sont pas déduites ici).</p><div class="list">' + all.map(s => {
+    h += all.length ? '<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">Comptez une étagère à la fois. Les quantités affichées sont celles du dernier comptage (les ventes depuis ne sont pas déduites ici).</p><div class="list">' + all.map(s => {
       const items = counted.filter(r => r[2] === s.code);
       const last = items.reduce((a, r) => r[6] > a ? r[6] : a, '');
       const by = items.find(r => r[6] === last);
-      return `<div class="shelf"><h4>${esc(s.label)}<span>${items.length ? esc(ago(last)) + (by && by[7] ? ' · ' + esc(by[7]) : '') : 'jamais compté'}</span></h4>${items.length ? '<ul>' + items.map(r => `<li><span>${esc(r[4] || r[3])}</span><b>${fmt(r[5])}</b></li>`).join('') + '</ul>' : ''}</div>`;
+      return `<div class="shelf"><div class="shelfhead"><h4>${esc(s.label)}<span style="display:block;color:var(--muted);font-weight:500;font-size:12px">${items.length ? esc(ago(last)) + (by && by[7] ? ' · ' + esc(by[7]) : '') : 'jamais compté'}</span></h4><button class="cbtn ${items.length ? 'alt' : ''}" data-count="${esc(s.code)}">${items.length ? 'Recompter' : 'Compter'}</button></div>${items.length ? '<ul style="margin-top:6px">' + items.map(r => `<li><span>${esc(r[4] || r[3])}</span><b>${fmt(r[5])}</b></li>`).join('') + '</ul>' : ''}</div>`;
     }).join('') + '</div>' : '<p class="empty">Cette zone n\'a pas d\'étagères définies.</p>';
   } else {
     h += rows.length ? '<div class="list">' + rows.map(r => {
       const p = priceOf(r[2]);
       return `<button class="row" data-bc="${esc(r[2])}"><div class="nm"><strong>${esc(r[3] || 'Sans nom')}</strong><small class="num">${esc(r[2])}${p ? ' · ' + fmt(p) + ' F' : ''}</small></div><div class="qty num ${r[4] < 0 ? 'neg' : ''}">${fmt(r[4])}</div></button>`;
-    }).join('') + '</div>' : '<p class="empty">Aucun produit en stock dans cette zone.</p>';
+    }).join('') + '</div>' : `<p class="empty">Aucun produit en stock dans cette zone.<br><button class="cbtn" data-tab="shelves" style="margin-top:12px">Compter les étagères</button></p>`;
     if(zone !== UNPLACED) h += `<button class="addbtn" data-act="add">+ Ajouter un produit à ${esc(zone)}</button>`;
   }
   return h;
 }
 function bindMain(){
   document.querySelectorAll('[data-loc]').forEach(b => b.onclick = () => go({ screen:'store', loc: b.dataset.loc }));
-  document.querySelectorAll('[data-zone]').forEach(b => b.onclick = () => go({ screen:'zone', loc: VIEW.loc, zone: b.dataset.zone }));
+  document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => go({ screen:'zone', loc: VIEW.loc, zone: b.dataset.zone }); b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); b.onclick(); } }; });
+  document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { ls('s1981_view', b.dataset.view); render(); });
+  document.querySelectorAll('[data-count]').forEach(b => b.onclick = () => startCount(VIEW.loc, VIEW.zone, b.dataset.count));
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { VIEW.tab = b.dataset.tab; history.replaceState(VIEW, ''); render(); });
   document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2 || VIEW.loc, b.dataset.zone2 || VIEW.zone, b.dataset.bc));
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
@@ -435,6 +530,160 @@ function renderResults(){
   const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
   box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}"><div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
   box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
+}
+
+// ── shelf count ─────────────────────────────────────────
+// A count in progress lives in localStorage (s1981_draft) so a power cut or
+// a closed tab doesn't lose it. Blind: what the system expects is not shown.
+let C = lsj('s1981_draft', null);
+function saveDraft(){ ls('s1981_draft', C ? JSON.stringify(C) : null); }
+function spotLabelOf(loc, zone, spot){ const z = zoneList(loc).find(q => q.c === zone); const s = shapeSpots(zone, z && z.s).find(x => x.code === spot); return s ? s.label : spot; }
+function startCount(loc, zone, spot){
+  if(C && C.items.length && !(C.loc === loc && C.spot === spot)){
+    openSheet(`<h3>Un comptage est en cours</h3><div class="sub">${esc(C.zone)} · ${esc(spotLabelOf(C.loc, C.zone, C.spot))} · ${C.items.length} produit(s) scanné(s)</div>
+      <button class="go" id="cres">Reprendre ce comptage</button><button class="ghost" id="cdrop">L'abandonner et compter ${esc(spot)}</button>`);
+    $('#cres').onclick = () => { closeSheet(); go({ screen:'count', loc: C.loc, zone: C.zone, spot: C.spot }); };
+    $('#cdrop').onclick = () => { C = null; saveDraft(); closeSheet(); startCount(loc, zone, spot); };
+    return;
+  }
+  if(!C || C.spot !== spot || C.loc !== loc){ C = { loc, zone, spot, items: [], startedAt: new Date().toISOString() }; saveDraft(); }
+  go({ screen:'count', loc, zone, spot });
+}
+function countHTML(){
+  if(!C) return '<p class="empty">Aucun comptage en cours.</p>';
+  const n = C.items.reduce((a, i) => a + i.count, 0);
+  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez ou tapez un code-barres" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo" title="Appareil photo">📷</button></div>
+    <div class="hint">Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d'autre.</div></div>
+    <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}"><div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}</div>
+      <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
+    <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
+}
+function bindCount(){
+  const inp = $('#scan');
+  if(!inp) return;
+  C.flash = false;
+  const focus = () => { if(!document.querySelector('[data-name]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
+  inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addScan(inp.value); inp.value = ''; } };
+  $('#camb').onclick = openCamera;
+  document.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { C.items[+b.dataset.inc].count++; saveDraft(); render(); });
+  document.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { const it = C.items[+b.dataset.dec]; it.count--; if(it.count <= 0) C.items.splice(+b.dataset.dec, 1); saveDraft(); render(); });
+  document.querySelectorAll('[data-name]').forEach(x => { x.oninput = () => { C.items[+x.dataset.name].pendingName = x.value; saveDraft(); }; x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); nameItem(+x.dataset.name, x.value); } }; x.onblur = () => { if(x.value.trim()) nameItem(+x.dataset.name, x.value); }; });
+  $('#cquit').onclick = () => {
+    if(!C.items.length){ C = null; saveDraft(); history.back(); return; }
+    openSheet(`<h3>Annuler ce comptage ?</h3><div class="sub">${C.items.length} produit(s) scanné(s) seront perdus.</div><button class="go" id="cq1" style="background:var(--bad)">Oui, annuler</button><button class="ghost" id="cq0">Continuer à compter</button>`);
+    $('#cq1').onclick = () => { C = null; saveDraft(); closeSheet(); history.back(); };
+    $('#cq0').onclick = closeSheet;
+  };
+  $('#csend').onclick = finishCount;
+  setTimeout(focus, 30);
+}
+function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); }
+let beepCtx;
+function beep(ok){
+  try {
+    beepCtx = beepCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const n = ok ? 1 : 3;
+    for(let k = 0; k < n; k++){
+      const o = beepCtx.createOscillator(), g = beepCtx.createGain();
+      o.frequency.value = ok ? 1200 : 220; o.connect(g); g.connect(beepCtx.destination);
+      const t0 = beepCtx.currentTime + k * 0.18; g.gain.setValueAtTime(0.15, t0); o.start(t0); o.stop(t0 + (ok ? 0.08 : 0.12));
+    }
+  } catch(e){}
+  if(navigator.vibrate) navigator.vibrate(ok ? 30 : [80, 60, 80]);
+}
+function addScan(raw){
+  const code = String(raw || '').trim();
+  if(!code) return;
+  if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
+  const k = bkey(code);
+  let i = C.items.findIndex(it => bkey(it.barcode) === k);
+  if(i >= 0){ const it = C.items.splice(i, 1)[0]; it.count++; C.items.unshift(it); }
+  else C.items.unshift({ barcode: code, name: productName(code), count: 1 });
+  C.flash = true; beep(true); saveDraft(); render();
+}
+function finishCount(){
+  const unnamed = C.items.filter(it => !it.name);
+  if(unnamed.length){
+    C.items.forEach(it => { if(!it.name && it.pendingName && it.pendingName.trim()){ it.name = it.pendingName.trim(); delete it.pendingName; } });
+    if(C.items.some(it => !it.name)){ toast('Donnez un nom à chaque produit inconnu avant de terminer.'); render(); const x = document.querySelector('[data-name]'); if(x) x.focus(); return; }
+  }
+  const n = C.items.reduce((a, i) => a + i.count, 0);
+  openSheet(`<h3>${C.items.length ? 'Envoyer ce comptage ?' : 'Étagère vide ?'}</h3>
+    <div class="sub">${esc(locName(C.loc))} · ${esc(C.zone)} · ${esc(spotLabelOf(C.loc, C.zone, C.spot))}</div>
+    <div class="where"><div class="here"><span>${C.items.length} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div></div>
+    <div class="sub">${C.items.length ? 'Ce comptage remplace ce qui était enregistré pour cette étagère.' : 'Tout ce qui était enregistré sur cette étagère sera retiré.'}</div>
+    <button class="go" id="cok">Envoyer</button><button class="ghost" id="cno">Revenir au comptage</button>`);
+  $('#cno').onclick = closeSheet;
+  $('#cok').onclick = () => {
+    if(!user){ closeSheet(); lock(); return; }
+    const body = { opId: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), location: C.loc, zone: C.zone, spot: C.spot,
+      at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
+    applyCountLocal(Object.assign({ by: user.name }, body));
+    QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+    ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+    C = null; saveDraft(); closeSheet();
+    VIEW = { screen:'zone', loc: body.location, zone: body.zone, tab:'shelves' }; history.replaceState(VIEW, ''); render();
+    toast(online ? 'Comptage enregistré' : 'Comptage gardé sur le téléphone, envoi au retour de la connexion');
+    flushQueue();
+  };
+}
+
+// ── camera scanning (BarcodeDetector, else ZXing) ───────
+let camStream = null, camTimer = null, zxReader = null;
+async function openCamera(){
+  const box = document.createElement('div');
+  box.className = 'cam'; box.id = 'cam';
+  box.innerHTML = '<video playsinline muted></video><div class="frame"></div><div class="camui"><span id="camtxt">Visez le code-barres</span><button class="cbtn" id="camx">Fermer</button></div>';
+  document.body.appendChild(box);
+  $('#camx').onclick = closeCamera;
+  const video = box.querySelector('video');
+  let last = '', lastAt = 0;
+  const hit = code => { const now = Date.now(); if(code === last && now - lastAt < 1800) return; last = code; lastAt = now; addScan(code); $('#camtxt').textContent = 'Ajouté : ' + (productName(code) || code); };
+  try {
+    if('BarcodeDetector' in window){
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = camStream; await video.play();
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+      camTimer = setInterval(async () => { try { const r = await det.detect(video); if(r[0]) hit(r[0].rawValue); } catch(e){} }, 250);
+    } else {
+      if(!window.ZXing) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+      zxReader = new ZXing.BrowserMultiFormatReader();
+      await zxReader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, r => { if(r) hit(r.getText()); });
+    }
+  } catch(e){ $('#camtxt').textContent = "Appareil photo indisponible. Autorisez l'accès à la caméra pour ce site."; }
+}
+function closeCamera(){
+  clearInterval(camTimer); camTimer = null;
+  try { if(zxReader) zxReader.reset(); } catch(e){} zxReader = null;
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const b = $('#cam'); if(b) b.remove();
+  const inp = $('#scan'); if(inp) inp.focus({ preventScroll: true });
+}
+
+// ── settings ────────────────────────────────────────────
+function openSettings(){
+  const tail = URL_ ? URL_.replace(/\/exec.*$/, '').slice(-8) : '';
+  openSheet(`<h3>${esc(user ? user.name : 'Stock1981')}</h3><div class="sub">${user ? esc(user.role) : ''}</div>
+    <div class="setrow"><div>Lien du Sheet<small>${URL_ ? '…' + esc(tail) + '/exec' : 'non configuré'}</small></div><button class="cbtn alt" id="slink">Modifier</button></div>
+    <div class="setrow"><div>Données<small>${DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleString('fr-FR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : 'pas encore chargées'}${QUEUE.length ? ' · ' + QUEUE.length + ' en attente' : ''}</small></div><button class="cbtn alt" id="sreload">Recharger</button></div>
+    <button class="go" id="slock">Verrouiller</button><button class="ghost" id="sx">Fermer</button>`);
+  $('#sx').onclick = closeSheet;
+  $('#slock').onclick = () => { closeSheet(); lock(); };
+  $('#sreload').onclick = () => { closeSheet(); loadData(); flushQueue(); };
+  $('#slink').onclick = () => {
+    openSheet(`<h3>Lien du Sheet</h3><div class="sub">Le lien « Application Web » du script d'inventaire (se termine par /exec) et la clé d'écriture. Ils sont partagés avec l'app Comptage sur ce téléphone.</div>
+      <label class="f" for="nl">Lien</label><input class="t" id="nl" value="${esc(URL_)}" autocomplete="off">
+      <label class="f" for="nk">Clé d'écriture</label><input class="t" id="nk" value="${esc(KEY)}" autocomplete="off">
+      <div class="err" id="nerr"></div><button class="go" id="nsave">Enregistrer</button><button class="ghost" id="nx">Annuler</button>`);
+    $('#nx').onclick = closeSheet;
+    $('#nsave').onclick = () => {
+      const u = $('#nl').value.trim(), k = $('#nk').value.trim();
+      if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(u) || !k){ $('#nerr').textContent = 'Le lien doit commencer par https://script.google.com/ et finir par /exec, et la clé est obligatoire.'; return; }
+      URL_ = u; KEY = k; ls('inv_count_sync_url', u); ls('inv_count_write_key', k);
+      closeSheet(); toast('Lien enregistré'); refreshUsers(); loadData();
+    };
+  };
 }
 
 // ── product sheet ───────────────────────────────────────

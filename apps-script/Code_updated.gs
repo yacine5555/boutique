@@ -363,6 +363,9 @@ function doPost(e) {
     if (body.action === "stock1981Adjust") {
       return handleStock1981Adjust(body);
     }
+    if (body.action === "stock1981Count") {
+      return handleStock1981Count(body);
+    }
     // Default action: add/update a single product's barcode (existing behavior)
     if (!body.name || !body.barcode) {
       return jsonResponse({ error: "Missing name or barcode" }, 400);
@@ -3341,7 +3344,18 @@ function handleGetStock1981() {
     .map(r => [String(r[0]), String(r[1] || ''), String(r[2]), normalizeBarcode(r[3]), String(r[4] || ''), Number(r[5]) || 0,
       r[6] instanceof Date ? Utilities.formatDate(r[6], tz, "yyyy-MM-dd'T'HH:mm") : String(r[6] || ''), String(r[8] || '')]) : [];
   const prices = _exPriceMap();
-  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
+  // Product Master names (and prices) by barcode key, so the app can name a
+  // scanned product even if it has never been placed on a shelf.
+  const names = {};
+  try {
+    const pm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    if (pm && pm.getLastRow() >= FIRST_DATA_ROW) {
+      pm.getRange(FIRST_DATA_ROW, 1, pm.getLastRow() - FIRST_DATA_ROW + 1, 8).getValues().forEach(r => {
+        if (r[7] && r[1]) names[barcodeKey(r[7])] = String(r[1]);
+      });
+    }
+  } catch (e) { Logger.log('names skipped: ' + e); }
+  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
 }
 
 function s1981UserOk_(body) {
@@ -3456,6 +3470,103 @@ function handleStock1981Adjust(body) {
       lw.getRange(lw.getLastRow() + 1, 1, lossRows.length, LOSS_HEADERS.length).setValues(lossRows);
     }
     return jsonResponse({ success: true, results: results });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STOCK1981 — shelf count (action "stock1981Count"), added 24 Oct 2026
+// ──────────────────────────────────────────────────────────────────────────
+//  { key, action, by, userHash, opId, location, zone, spot, at,
+//    items: [ { barcode, name, count } ] }
+//  - The shelf's list in "Spot Stock" is replaced by this count (what was on
+//    that shelf before and isn't scanned now = no longer there).
+//  - For every product on that shelf (before or now), the zone's stock
+//    ("Zone Qty On Hand") becomes the sum of its latest counts on all the
+//    zone's shelves. A product kept on one shelf (most of them) is therefore
+//    exactly what was just counted.
+//  - Each change is logged in "Stock1981 Log" with reason "Comptage" and the
+//    stock before / after, so gaps can be reviewed.
+// ══════════════════════════════════════════════════════════════════════════
+function handleStock1981Count(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const loc = String(body.location || ''), zone = String(body.zone || '').trim(), spot = String(body.spot || '').trim();
+  if (VALID_LOCATIONS.indexOf(loc) === -1 || !zone || !spot) return jsonResponse({ success: false, error: "Magasin, zone ou étagère manquant" }, 400);
+  const items = (Array.isArray(body.items) ? body.items : [])
+    .map(it => ({ bc: normalizeBarcode(it.barcode), name: String(it.name || ''), count: Math.max(0, Math.round(Number(it.count) || 0)) }))
+    .filter(it => it.bc && it.count > 0);
+  const opId = String(body.opId || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const log = s1981LogSheet_();
+    const lLast = log.getLastRow();
+    if (opId && lLast >= 2) {
+      const from = Math.max(2, lLast - 3000);
+      const ids = log.getRange(from, S1981_LOG_HEADERS.length, lLast - from + 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === opId) return jsonResponse({ success: true, duplicate: true });
+    }
+    // 1. Shelf contents before this count
+    const ss = ensureSpotStockTab();
+    const sLast = ss.getLastRow();
+    const spotRows = sLast >= 2 ? ss.getRange(2, 1, sLast - 1, SPOT_STOCK_HEADERS.length).getValues() : [];
+    const touched = {};   // barcodeKey -> {bc, name}
+    spotRows.forEach(r => {
+      if (String(r[0]) === loc && String(r[2]) === spot && r[3]) touched[barcodeKey(r[3])] = { bc: normalizeBarcode(r[3]), name: String(r[4] || '') };
+    });
+    items.forEach(it => { touched[barcodeKey(it.bc)] = { bc: it.bc, name: it.name || (touched[barcodeKey(it.bc)] || {}).name || '' }; });
+
+    // 2. Replace the shelf in Spot Stock
+    const when = body.at ? new Date(body.at) : new Date();
+    const payload = {};
+    payload[spot] = { zone: zone, at: isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString(), by: String(body.by || ''),
+      items: items.map(it => ({ barcode: it.bc, name: it.name, count: it.count })) };
+    applySpotCountsUnlocked_(loc, payload, 'Stock1981', String(body.by || ''));
+
+    // 3. Sum of latest counts on every shelf of this zone, for the touched products
+    const after = ss.getRange(2, 1, Math.max(1, ss.getLastRow() - 1), SPOT_STOCK_HEADERS.length).getValues();
+    const sum = {};
+    Object.keys(touched).forEach(k => { sum[k] = 0; });
+    after.forEach(r => {
+      if (String(r[0]) !== loc || String(r[1]) !== zone || !r[3]) return;
+      const k = barcodeKey(r[3]);
+      if (k in sum) sum[k] += Number(r[5]) || 0;
+    });
+
+    // 4. Zone Stock + log
+    const idx = loadZoneStockIndex();
+    const zs = idx.sheet;
+    const tz = Session.getScriptTimeZone();
+    const stamp = Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy HH:mm');
+    const who = String(body.by || '');
+    const logRows = [], newRows = [];
+    let changed = 0;
+    Object.keys(touched).forEach(k => {
+      const t = touched[k], target = sum[k];
+      const rowNum = idx.byLocZoneBarcode[loc + '||' + zone + '||' + k];
+      let before = 0;
+      if (rowNum) {
+        before = Number(zs.getRange(rowNum, ZS_COL_ONHAND).getValue()) || 0;
+        zs.getRange(rowNum, ZS_COL_COUNTED, 1, 2).setValues([[target, target]]);
+        if (t.name) zs.getRange(rowNum, ZS_COL_PRODUCT).setValue(t.name);
+      } else if (target > 0) {
+        newRows.push([loc, zone, t.bc, t.name, target, target, false]);
+      } else return;
+      if (before !== target) changed++;
+      logRows.push([stamp, loc, zone, t.bc, t.name, before, target - before, target, 'Comptage', who, 'Étagère ' + spot, opId]);
+    });
+    if (newRows.length) {
+      const r0 = zs.getLastRow() + 1;
+      zs.getRange(r0, ZS_COL_BARCODE, newRows.length, 1).setNumberFormat('@');
+      zs.getRange(r0, 1, newRows.length, ZONE_STOCK_HEADERS.length).setValues(newRows);
+    }
+    if (!logRows.length) logRows.push([stamp, loc, zone, '', '(étagère vide)', 0, 0, 0, 'Comptage', who, 'Étagère ' + spot, opId]);
+    const r1 = log.getLastRow() + 1;
+    log.getRange(r1, 4, logRows.length, 1).setNumberFormat('@');
+    log.getRange(r1, 1, logRows.length, S1981_LOG_HEADERS.length).setValues(logRows);
+    return jsonResponse({ success: true, products: items.length, changed: changed });
   } finally {
     lock.releaseLock();
   }
