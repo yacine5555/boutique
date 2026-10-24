@@ -2437,7 +2437,7 @@ function handleGetZoneStock(location) {
 // Sales Sheet ("Tableau de bords": SalesLog, Sales_yyyy-MM-dd, ShiftReconciliation…).
 // If this ID is wrong or empty, the check falls back to the Stock Ledger
 // (sales synced every 15 min — slightly less precise, no cashier names).
-const SALES_SHEET_ID = '1q_N6h89tkAVmO5-lUwfdsGAtwoeF_Tpjr5Q5I_Xn-lA';
+const SALES_SHEET_ID = 'PUT-THE-SALES-SHEET-ID-HERE';
 const CONTROL_TZ = 'Africa/Ouagadougou';
 const CONTROL_REPORT_EMAIL = '1981estvideo@gmail.com';
 const CONTROL_DRAWS_PER_DAY = 4;

@@ -76,7 +76,7 @@
  * to Store Inventory, so a row is never applied twice. See _dayTab() below.
  */
 const CONFIG = {
-  WRITE_KEY: 'boutique1981',   // must exactly match the "Write Key" field in the scanner Admin panel
+  WRITE_KEY: 'PUT-YOUR-WRITE-KEY-HERE',   // must exactly match the "Write Key" field in the scanner Admin panel
   // Separate, stronger secret for the Remote Admin page only (Boutique_Admin_Remote.html).
   // Change this to a real passphrase (12+ characters, not the 4-digit staff PIN) before
   // using the remote admin page — it guards both reading store data remotely and every
@@ -90,8 +90,8 @@ const CONFIG = {
   // This is the Store Inventory Sheet's OWN script URL/key (the one behind
   // the Scanner/Generator/Counter/Stock-Ledger apps) — NOT this script's
   // own WRITE_KEY above. Copy them from that script's CONFIG.
-  INVENTORY_SYNC_URL: 'https://script.google.com/macros/s/AKfycbzZkQR0pyddlxLumzVLLH_YrrJSvCGJncd8KRPZEFVpuMXDcGJ7b6d3sL8qrPVHufFfDQ/exec',
-  INVENTORY_SYNC_KEY: 'boutique1981',
+  INVENTORY_SYNC_URL: 'PUT-THE-INVENTORY-WEB-APP-URL-HERE',
+  INVENTORY_SYNC_KEY: 'PUT-YOUR-INVENTORY-KEY-HERE',
   INVENTORY_SYNC_LOOKBACK_DAYS: 2,       // how many day-tabs back to re-check for unprocessed rows
 };
 
