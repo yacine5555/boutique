@@ -214,6 +214,7 @@ function doGet(e) {
   if (action === 'getProductImages') return (e.parameter.key === CONFIG.WRITE_KEY) ? _getProductImages() : _json({ error: 'Unauthorized' });
   if (action === 'lookupBarcodeName') return (e.parameter.key === CONFIG.WRITE_KEY) ? _lookupBarcodeName(e.parameter.barcode || '') : _json({ error: 'Unauthorized' });
   if (action === 'getNewCodes') return (e.parameter.key === CONFIG.WRITE_KEY) ? _getNewCodes() : _json({ error: 'Unauthorized' });
+  if (action === 'getDashboard') return (e.parameter.key === CONFIG.WRITE_KEY) ? _getDashboard(e.parameter.force === '1') : _json({ error: 'Unauthorized' });
   if (action === 'getProductImageList') return (e.parameter.key === CONFIG.WRITE_KEY) ? _getProductImageList() : _json({ error: 'Unauthorized' });
   if (action === 'getInstallmentPlans') return _getInstallmentPlans(e.parameter.phone || '');
   // ---- Remote Admin (Boutique_Admin_Remote.html) reads, split into two
@@ -3822,4 +3823,307 @@ function installSalesLinesTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'rebuildSalesLines').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('rebuildSalesLines').timeBased().everyHours(1).create();
   return rebuildSalesLines();
+}
+
+// ══════════════════════════════════════════
+//  SALES DASHBOARD for the Scanner (Admin → 📈 Tableau de bord des ventes)
+//  GET ?action=getDashboard&key=WRITE_KEY. Same figures as the Claude
+//  dashboard "Ventes Beauty Empire": the loaders and calculations below are
+//  copied from it unchanged, then run here on SalesLog, Livraisons and
+//  "Lignes de vente". Only the summary goes back (a few dozen KB).
+// ══════════════════════════════════════════
+function _dashCompute_(answers) {
+  const L = {}, C = {}, order = [];
+  const dash = { loader: (id, o) => { L[id] = o; }, calc: (id, o) => { C[id] = o; order.push(id); } };
+  (function () {
+    // ── Loader: the SalesLog tab (Google Sheets) as rows ──
+    dash.loader('txns', {
+      description: 'La feuille SalesLog en lignes : une ligne par ticket, montant en nombre, date au format AAAA-MM-JJ.',
+      fn: ({ answer }) => {
+        const a = typeof answer === 'string' ? JSON.parse(answer) : answer;
+        if (!a || !Array.isArray(a.values)) throw new Error('Réponse inattendue de Google Sheets : ' + Object.keys(a || {}).join(', '));
+        const [head, ...rest] = a.values;
+        const n = (v) => Number(String(v ?? '').replace(/[\s  ]/g, '').replace(',', '.')) || 0;
+        const iso = (d) => { const m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+        const rows = rest.filter((r) => r[0]).map((r) => {
+          const o = Object.fromEntries(head.map((h, i) => [h, r[i] ?? '']));
+          return { TxnID: o.TxnID, Date: iso(o.Date), Time: o.Time, Employee: o.Employee, Store: o.Store, ItemCount: n(o.ItemCount),
+            Total: n(o.Total), PayMethod: o.PayMethod, SplitPayments: o.SplitPayments, IsDelivery: o.IsDelivery };
+        }).filter((r) => r.Date);
+        return { columns: ['TxnID', 'Date', 'Time', 'Employee', 'Store', 'ItemCount', 'Total', 'PayMethod', 'SplitPayments', 'IsDelivery'], rows };
+      },
+    });
+
+    dash.loader('livraisons', {
+      description: 'L\u2019onglet Livraisons en lignes : une ligne par livraison, lue depuis sa colonne JSON. Les noms, téléphones et adresses des clients ne sont pas repris.',
+      fn: ({ answer }) => {
+        const a = typeof answer === 'string' ? JSON.parse(answer) : answer;
+        if (!a || !Array.isArray(a.values)) throw new Error('Réponse inattendue de Google Sheets : ' + Object.keys(a || {}).join(', '));
+        const [head, ...rest] = a.values;
+        const j = head.indexOf('JSON');
+        const rows = rest.map((r) => { try { return JSON.parse(r[j] || '{}'); } catch (e) { return null; } }).filter((d) => d && d.dlvId).map((d) => ({
+          dlv: d.dlvId, store: d.store || '', created: d.createdTs || '', delivered: d.deliveredTs || '', driver: d.driver || '', payer: d.payer || '',
+          method: d.method || '', fee: Number(d.fee) || 0, settled: !!d.settled, cancelled: !!d.cancelled, morning: !!d.morning,
+          total: d.sale ? Number(d.sale.total) || 0 : (d.txn && d.txn.items ? d.txn.items.reduce((s, i) => s + (Number(i.lineTotal) || 0), 0) : 0),
+          articles: d.txn && d.txn.items ? d.txn.items.length : 0, txn: d.txn ? d.txn.id || '' : '' }));
+        return { columns: ['dlv', 'store', 'created', 'delivered', 'driver', 'payer', 'method', 'fee', 'settled', 'cancelled', 'morning', 'total', 'articles', 'txn'], rows };
+      },
+    });
+
+    dash.loader('lignes', {
+      description: 'L\u2019onglet « Lignes de vente » en lignes : un article vendu par ligne, quantité, prix et total en nombres.',
+      fn: ({ answer }) => {
+        const a = typeof answer === 'string' ? JSON.parse(answer) : answer;
+        if (!a || !Array.isArray(a.values)) throw new Error('Réponse inattendue de Google Sheets : ' + Object.keys(a || {}).join(', '));
+        const [head, ...rest] = a.values;
+        const n = (v) => Number(String(v ?? '').replace(/[\s\u00a0\u202f]/g, '').replace(',', '.')) || 0;
+        const cols = ['Date', 'Heure', 'Type', 'Code', 'Produit', 'Catégorie', 'Qté', 'Prix', 'Total', 'Paiement', 'Caissier', 'Magasin', 'TxnID'];
+        const rows = rest.filter((r) => r[0]).map((r) => {
+          const o = Object.fromEntries(head.map((h, i) => [h, r[i] ?? '']));
+          return Object.fromEntries(cols.map((c) => [c, (c === 'Qté' || c === 'Prix' || c === 'Total') ? n(o[c]) : String(o[c] ?? '')]));
+        });
+        return { columns: cols, rows };
+      },
+    });
+
+    // ── Calculations ──
+    dash.calc('ventes', {
+      title: 'Tickets nettoyés',
+      description: 'Chaque ticket avec le nom court du magasin (Empire Supermarket = Balkuy) et le nom du caissier unifié. Les tickets de plus de 5 millions F sont écartés : ce sont des erreurs de saisie (un code-barres tapé à la place du prix).',
+      inputs: ['txns'],
+      fn: (txns) => {
+        const shop = (s) => s === 'Empire Supermarket' ? 'Balkuy' : s === 'Beauty Empire Ouaga 2000' ? 'Ouaga 2000' : 'Non précisé';
+        const who = (e) => { const t = String(e || '').trim().toLowerCase(); if (!t) return 'Non précisé'; if (t.includes('yacine')) return 'Yacine'; return t.replace(/\b\p{L}/gu, (c) => c.toUpperCase()); };
+        return txns.filter((t) => t.Total <= 5e6).map((t) => ({ txn: t.TxnID, day: t.Date, heure: Number(String(t.Time).slice(0, 2)) || 0, magasin: shop(t.Store),
+          caissier: who(t.Employee), total: t.Total, paiement: t.PayMethod || 'non précisé', split: t.SplitPayments, livraison: String(t.IsDelivery).toUpperCase() === 'TRUE' }));
+      },
+    });
+    dash.calc('lignes_n', {
+      title: 'Articles vendus nettoyés',
+      description: 'Chaque ligne de vente avec quantité et montant en nombres, nom court du magasin et caissier unifié.',
+      inputs: ['lignes'],
+      fn: (lignes) => {
+        const shop = (s) => s === 'Empire Supermarket' ? 'Balkuy' : s === 'Beauty Empire Ouaga 2000' ? 'Ouaga 2000' : 'Non précisé';
+        const who = (e) => { const t = String(e || '').trim().toLowerCase(); if (!t) return 'Non précisé'; if (t.includes('yacine')) return 'Yacine'; return t.replace(/\b\p{L}/gu, (c) => c.toUpperCase()); };
+        return lignes.map((l) => ({ day: l['Date'], type: l['Type'], code: String(l['Code'] || '').replace(/^0+/, ''), produit: String(l['Produit'] || '').trim(),
+          qte: Number(l['Qté']) || 0, total: Number(l['Total']) || 0, caissier: who(l['Caissier']), magasin: shop(l['Magasin']) })).filter((l) => l.total <= 5e6);
+      },
+    });
+    dash.calc('ecartes', {
+      title: 'Tickets écartés',
+      description: 'Tickets de plus de 5 millions F, laissés hors des chiffres car ce sont des erreurs de saisie.',
+      inputs: ['txns'],
+      fn: (txns) => txns.filter((t) => t.Total > 5e6).map((t) => ({ txn: t.TxnID, day: t.Date, total: t.Total })),
+    });
+    dash.calc('kpis', {
+      title: 'Chiffres des 30 derniers jours',
+      description: 'Par magasin et pour les deux : chiffre d’affaires, tickets et panier moyen sur les 30 derniers jours (jusqu’au dernier jour avec des ventes), comparés aux 30 jours d’avant, et total des remises.',
+      inputs: ['ventes', 'lignes_n'],
+      fn: (ventes, lignes_n) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = ventes.reduce((m, v) => v.day > m ? v.day : m, '');
+        const end = t(fin), d30 = end - 29 * 864e5, d60 = end - 59 * 864e5;
+        return ['Tous', 'Balkuy', 'Ouaga 2000'].map((s) => {
+          const mine = ventes.filter((v) => s === 'Tous' || v.magasin === s);
+          const cur = mine.filter((v) => t(v.day) >= d30), prev = mine.filter((v) => t(v.day) >= d60 && t(v.day) < d30);
+          const ca30 = cur.reduce((a, v) => a + v.total, 0), caPrev = prev.reduce((a, v) => a + v.total, 0);
+          const rem = lignes_n.filter((l) => l.type === 'Remise' && l.total < 0 && t(l.day) >= d30 && (s === 'Tous' || l.magasin === s));
+          return { magasin: s, fin, ca30, ca_prec: caPrev, evolution: caPrev ? (ca30 - caPrev) / caPrev : null,
+            ventes30: cur.length, ventes_prec: prev.length, panier30: cur.length ? Math.round(ca30 / cur.length) : 0,
+            remises30: -rem.reduce((a, l) => a + l.total, 0), nb_remises30: rem.length };
+        });
+      },
+    });
+    dash.calc('par_jour', {
+      title: 'Chiffre d’affaires par jour',
+      description: 'Somme des tickets par jour, pour chaque magasin et pour les deux.',
+      inputs: ['ventes'],
+      fn: (ventes) => {
+        const out = new Map();
+        ventes.forEach((v) => ['Tous', v.magasin].forEach((s) => { const k = s + '|' + v.day; const o = out.get(k) || { magasin: s, day: v.day, ca: 0, ventes: 0 }; o.ca += v.total; o.ventes += 1; out.set(k, o); }));
+        return [...out.values()].sort((a, b) => a.day.localeCompare(b.day));
+      },
+    });
+    dash.calc('par_mois', {
+      title: 'Chiffre d’affaires par mois',
+      description: 'Somme des tickets par mois, pour chaque magasin et pour les deux.',
+      inputs: ['ventes'],
+      fn: (ventes) => {
+        const out = new Map();
+        ventes.forEach((v) => ['Tous', v.magasin].forEach((s) => { const m = v.day.slice(0, 7); const k = s + '|' + m; const o = out.get(k) || { magasin: s, mois: m, ca: 0, ventes: 0 }; o.ca += v.total; o.ventes += 1; out.set(k, o); }));
+        return [...out.values()].sort((a, b) => a.mois.localeCompare(b.mois));
+      },
+    });
+    dash.calc('paiements', {
+      title: 'Modes de paiement (30 jours)',
+      description: 'Montant encaissé par mode sur les 30 derniers jours ; un paiement mixte est réparti selon ses montants.',
+      inputs: ['ventes'],
+      fn: (ventes) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = ventes.reduce((m, v) => v.day > m ? v.day : m, '');
+        const d30 = t(fin) - 29 * 864e5;
+        const names = { cash: 'Espèces', orange: 'Orange Money', wave: 'Wave', bank: 'Virement', 'non précisé': 'Non précisé' };
+        const acc = new Map();
+        const add = (s, mode, amt) => { const k = s + '|' + mode; const o = acc.get(k) || { magasin: s, mode: names[mode] || mode, ca: 0 }; o.ca += amt; acc.set(k, o); };
+        ventes.filter((v) => t(v.day) >= d30).forEach((v) => {
+          let parts = [[v.paiement, v.total]];
+          if (v.paiement === 'split') { try { parts = JSON.parse(v.split).map((p) => [p.method, Number(p.amount) || 0]); } catch (e) { parts = [['non précisé', v.total]]; } }
+          parts.forEach(([m, a]) => { add('Tous', m || 'non précisé', a); add(v.magasin, m || 'non précisé', a); });
+        });
+        const rows = [...acc.values()];
+        rows.forEach((r) => { const tot = rows.filter((x) => x.magasin === r.magasin).reduce((a, x) => a + x.ca, 0); r.part = tot ? r.ca / tot : 0; });
+        return rows.sort((a, b) => b.ca - a.ca);
+      },
+    });
+    dash.calc('top', {
+      title: 'Meilleures ventes (30 jours)',
+      description: 'Les 15 produits au plus gros chiffre d’affaires sur les 30 derniers jours, par magasin et pour les deux (lignes de type Sale).',
+      inputs: ['lignes_n'],
+      fn: (lignes_n) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = lignes_n.reduce((m, l) => l.day > m ? l.day : m, '');
+        const d30 = t(fin) - 29 * 864e5;
+        const acc = new Map();
+        lignes_n.filter((l) => l.type === 'Sale' && l.produit && t(l.day) >= d30).forEach((l) => ['Tous', l.magasin].forEach((s) => {
+          const k = s + '|' + l.produit.toLowerCase(); const o = acc.get(k) || { magasin: s, produit: l.produit, qte: 0, ca: 0 }; o.qte += l.qte; o.ca += l.total; acc.set(k, o);
+        }));
+        const out = [];
+        ['Tous', 'Balkuy', 'Ouaga 2000'].forEach((s) => [...acc.values()].filter((o) => o.magasin === s).sort((a, b) => b.ca - a.ca).slice(0, 15).forEach((o, i) => out.push({ ...o, rang: i + 1 })));
+        return out;
+      },
+    });
+    dash.calc('endormis', {
+      title: 'Produits qui ne se vendent plus',
+      description: 'Produits vendus au moins une fois depuis le 10 juillet dont la dernière vente date de 30 jours ou plus, classés par chiffre d’affaires total (30 premiers par magasin).',
+      inputs: ['lignes_n'],
+      fn: (lignes_n) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = lignes_n.reduce((m, l) => l.day > m ? l.day : m, '');
+        const acc = new Map();
+        lignes_n.filter((l) => l.type === 'Sale' && l.produit && l.produit.toLowerCase() !== 'livraison').forEach((l) => ['Tous', l.magasin].forEach((s) => {
+          const k = s + '|' + l.produit.toLowerCase(); const o = acc.get(k) || { magasin: s, produit: l.produit, derniere: l.day, qte: 0, ca: 0 };
+          if (l.day > o.derniere) o.derniere = l.day; o.qte += l.qte; o.ca += l.total; acc.set(k, o);
+        }));
+        const out = [];
+        ['Tous', 'Balkuy', 'Ouaga 2000'].forEach((s) => [...acc.values()].filter((o) => o.magasin === s)
+          .map((o) => ({ ...o, jours: Math.round((t(fin) - t(o.derniere)) / 864e5) })).filter((o) => o.jours >= 30)
+          .sort((a, b) => b.ca - a.ca).slice(0, 30).forEach((o) => out.push(o)));
+        return out;
+      },
+    });
+    dash.calc('caissiers', {
+      title: 'Par caissier (30 jours)',
+      description: 'Tickets, chiffre d’affaires et remises de chaque caissier sur les 30 derniers jours, et part des articles vendus sans code-barres (code vide ou 0).',
+      inputs: ['ventes', 'lignes_n'],
+      fn: (ventes, lignes_n) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = ventes.reduce((m, v) => v.day > m ? v.day : m, '');
+        const d30 = t(fin) - 29 * 864e5;
+        const acc = new Map();
+        const get = (s, c) => { const k = s + '|' + c; if (!acc.has(k)) acc.set(k, { magasin: s, caissier: c, ventes: 0, ca: 0, remises: 0, lignes: 0, sans: 0 }); return acc.get(k); };
+        ventes.filter((v) => t(v.day) >= d30).forEach((v) => ['Tous', v.magasin].forEach((s) => { const o = get(s, v.caissier); o.ventes += 1; o.ca += v.total; }));
+        lignes_n.filter((l) => t(l.day) >= d30).forEach((l) => ['Tous', l.magasin].forEach((s) => {
+          const o = get(s, l.caissier);
+          if (l.type === 'Remise' && l.total < 0) o.remises -= l.total;
+          if (l.type === 'Sale' && l.produit.toLowerCase() !== 'livraison') { o.lignes += 1; if (!l.code) o.sans += 1; }
+        }));
+        return [...acc.values()].filter((o) => o.ventes || o.lignes).map((o) => ({ magasin: o.magasin, caissier: o.caissier, ventes: o.ventes, ca: o.ca, remises: o.remises,
+          sans_code: o.lignes ? o.sans / o.lignes : 0 })).sort((a, b) => b.ca - a.ca);
+      },
+    });
+    dash.calc('livr', {
+      title: 'Livraisons nettoyées',
+      description: 'Chaque livraison avec le nom court du magasin, son état (en attente, livrée avec argent à récupérer, réglée, annulée) et le délai en heures entre la commande et la livraison.',
+      inputs: ['livraisons'],
+      fn: (livraisons) => {
+        const shop = (s) => s === 'Empire Supermarket' ? 'Balkuy' : s === 'Beauty Empire Ouaga 2000' ? 'Ouaga 2000' : 'Non précisé';
+        return livraisons.map((l) => ({ dlv: l.dlv, magasin: shop(l.store), jour: String(l.created).slice(0, 10), total: l.total, frais: l.fee, payeur: l.payer,
+          etat: l.cancelled ? 'Annulée' : l.settled ? 'Réglée' : l.delivered ? 'Livrée, argent à récupérer' : 'En attente',
+          chauffeur: l.driver || 'Non assigné', delai_h: l.delivered && l.created ? (Date.parse(l.delivered) - Date.parse(l.created)) / 36e5 : null, matin: l.morning }));
+      },
+    });
+    dash.calc('livr_kpis', {
+      title: 'Chiffres des livraisons',
+      description: 'Depuis la première livraison suivie : commandes, livrées, annulées, montant livré et sa part du chiffre d\u2019affaires sur la même période, argent pas encore remis par les livreurs, délai médian et frais payés par la boutique.',
+      inputs: ['livr', 'ventes'],
+      fn: (livr, ventes) => {
+        const debut = livr.reduce((m, l) => !m || (l.jour && l.jour < m) ? l.jour : m, '');
+        return ['Tous', 'Balkuy', 'Ouaga 2000'].map((s) => {
+          const mine = livr.filter((l) => s === 'Tous' || l.magasin === s);
+          const ok = mine.filter((l) => l.etat !== 'Annulée');
+          const finies = mine.filter((l) => l.delai_h != null && l.etat !== 'Annulée').map((l) => l.delai_h).sort((a, b) => a - b);
+          const med = finies.length ? (finies.length % 2 ? finies[(finies.length - 1) / 2] : (finies[finies.length / 2 - 1] + finies[finies.length / 2]) / 2) : null;
+          const ca = ok.filter((l) => l.etat !== 'En attente').reduce((a, l) => a + l.total, 0);
+          const caPeriode = ventes.filter((v) => debut && v.day >= debut && (s === 'Tous' || v.magasin === s)).reduce((a, v) => a + v.total, 0);
+          const arec = mine.filter((l) => l.etat === 'Livrée, argent à récupérer');
+          return { magasin: s, debut, commandes: mine.length, livrees: mine.filter((l) => l.etat === 'Réglée' || l.etat === 'Livrée, argent à récupérer').length,
+            annulees: mine.filter((l) => l.etat === 'Annulée').length, en_attente: mine.filter((l) => l.etat === 'En attente').length,
+            ca_livre: ca, part_ca: caPeriode ? ca / caPeriode : null, a_recuperer: arec.reduce((a, l) => a + l.total, 0), nb_a_recuperer: arec.length,
+            delai_median_h: med, frais_boutique: mine.filter((l) => l.payeur === 'us' && l.etat !== 'Annulée').reduce((a, l) => a + l.frais, 0),
+            externes: ok.filter((l) => l.chauffeur === 'Externe').length };
+        });
+      },
+    });
+    dash.calc('livr_mois', {
+      title: 'Ventes livrées par mois',
+      description: 'Nombre et montant des tickets marqués « livraison » dans le Scanner, par mois et par magasin.',
+      inputs: ['ventes'],
+      fn: (ventes) => {
+        const out = new Map();
+        ventes.filter((v) => v.livraison).forEach((v) => ['Tous', v.magasin].forEach((s) => { const m = v.day.slice(0, 7); const k = s + '|' + m; const o = out.get(k) || { magasin: s, mois: m, ca: 0, ventes: 0 }; o.ca += v.total; o.ventes += 1; out.set(k, o); }));
+        return [...out.values()].sort((a, b) => a.mois.localeCompare(b.mois));
+      },
+    });
+    dash.calc('livr_liste', {
+      title: 'Dernières livraisons',
+      description: 'Les 40 livraisons les plus récentes par magasin et pour les deux.',
+      inputs: ['livr'],
+      fn: (livr) => {
+        const out = [];
+        ['Tous', 'Balkuy', 'Ouaga 2000'].forEach((s) => livr.filter((l) => s === 'Tous' || l.magasin === s).sort((a, b) => b.jour.localeCompare(a.jour) || b.dlv.localeCompare(a.dlv)).slice(0, 40)
+          .forEach((l) => out.push({ magasin: s, dlv: l.dlv, jour: l.jour, etat: l.etat, chauffeur: l.chauffeur, total: l.total, boutique: l.magasin })));
+        return out;
+      },
+    });
+    dash.calc('heures', {
+      title: 'Chiffre d’affaires par heure (30 jours)',
+      description: 'Somme des tickets des 30 derniers jours selon l’heure de la vente, par magasin et pour les deux.',
+      inputs: ['ventes'],
+      fn: (ventes) => {
+        const t = (d) => Date.parse(d + 'T00:00:00Z');
+        const fin = ventes.reduce((m, v) => v.day > m ? v.day : m, '');
+        const d30 = t(fin) - 29 * 864e5;
+        const acc = new Map();
+        ventes.filter((v) => t(v.day) >= d30).forEach((v) => ['Tous', v.magasin].forEach((s) => { const k = s + '|' + v.heure; const o = acc.get(k) || { magasin: s, heure: v.heure, ca: 0, ventes: 0 }; o.ca += v.total; o.ventes += 1; acc.set(k, o); }));
+        return [...acc.values()].sort((a, b) => a.heure - b.heure);
+      },
+    });
+  })();
+  const D = {};
+  Object.keys(L).forEach(id => { D[id] = L[id].fn({ answer: answers[id] }).rows; });
+  order.forEach(id => { D[id] = C[id].fn.apply(null, C[id].inputs.map(i => D[i])); });
+  return D;
+}
+
+function _getDashboard(force) {
+  const cache = CacheService.getScriptCache();
+  if (!force) { const hit = cache.get('dash_v1'); if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON); }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const read = (name, cols) => {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 1) return { values: [[]] };
+    return { values: sh.getRange(1, 1, sh.getLastRow(), cols).getDisplayValues() };
+  };
+  let D;
+  try {
+    D = _dashCompute_({ txns: read('SalesLog', 14), livraisons: read('Livraisons', 8), lignes: read('Lignes de vente', 13) });
+  } catch (err) {
+    return _json({ success: false, error: 'Calcul impossible : ' + (err && err.message || err) });
+  }
+  const out = { success: true, at: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') };
+  ['kpis', 'ecartes', 'par_jour', 'par_mois', 'paiements', 'top', 'endormis', 'caissiers', 'heures', 'livr_kpis', 'livr_mois', 'livr_liste']
+    .forEach(k => { out[k] = D[k]; });
+  const txt = JSON.stringify(out);
+  try { if (txt.length < 95000) cache.put('dash_v1', txt, 300); } catch (e) {}
+  return ContentService.createTextOutput(txt).setMimeType(ContentService.MimeType.JSON);
 }

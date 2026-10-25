@@ -798,6 +798,45 @@ input,select{font-family:inherit}
 #admin-today-stats > div[style]{display:inline-block;margin:4px 12px 0 0!important}
 #act-admin-body{max-height:300px;overflow-y:auto;border:1px solid var(--border,#eee);border-radius:8px;padding:4px 8px}
 .pl-scroll{max-height:380px;overflow-y:auto;font-size:12.5px;border:1px solid var(--border,#eee);border-radius:8px}
+/* 📈 Sales dashboard (full screen) */
+#sd-ov{position:fixed;inset:0;z-index:9000;background:#f4f5f7;display:none;flex-direction:column}
+#sd-ov .sd-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e7eb}
+#sd-ov .sd-top b{font-size:16px}
+.sd-seg{display:inline-flex;gap:3px;background:#f1f5f9;border-radius:9px;padding:3px}
+.sd-seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;font-weight:600;font-size:13px;color:#475569;cursor:pointer}
+.sd-seg button.on{background:#fff;color:#0f172a;box-shadow:0 0 0 1px #e2e8f0}
+#sd-ov .sd-top .dlv-dim{margin-left:auto}
+.sd-body{overflow-y:auto;padding:16px;flex:1}
+.sd-body > *{max-width:1180px;margin-left:auto;margin-right:auto}
+.sd-take{font-size:15px;color:#334155;margin:0 auto 10px}
+.sd-warn{font-size:13px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin:0 auto 10px}
+.sd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.sd-kpi{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.sd-kpi span{font-size:12px;color:#64748b}
+.sd-kpi b{font-size:22px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
+.sd-kpi small{font-size:12px;color:#64748b}
+.sd-up{color:#15803d;font-weight:600}.sd-down{color:#b91c1c !important}
+.sd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.sd-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;min-width:0}
+.sd-wide{grid-column:1/-1}
+.sd-card h3,.sd-sec{margin:0 0 2px;font-size:15px}
+.sd-sec{margin-top:8px}
+.sd-note{margin:0 0 8px;font-size:12px;color:#64748b}
+.sd-chart{display:flex;gap:6px;align-items:flex-start}
+.sd-ylab{display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:#64748b;text-align:right;min-width:48px}
+.sd-plot{flex:1;min-width:0}
+.sd-axis{display:flex;font-size:10.5px;color:#64748b;margin-top:2px}
+.sd-axis span{flex:1;text-align:center;white-space:nowrap;overflow:visible;min-width:0}
+.sd-pay{display:grid;grid-template-columns:110px 1fr 60px;gap:8px;align-items:center;font-size:13px;margin:6px 0}
+.sd-track{height:10px;background:#f1f5f9;border-radius:5px;overflow:hidden}.sd-track div{height:100%;border-radius:5px}
+.sd-pay b{text-align:right;font-variant-numeric:tabular-nums}
+.sd-tbl{max-height:420px;overflow:auto}
+.sd-tbl table{width:100%;border-collapse:collapse;font-size:12.5px}
+.sd-tbl th{position:sticky;top:0;background:#fff;text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e5e7eb;padding:5px 6px}
+.sd-tbl td{border-bottom:1px solid #f1f5f9;padding:5px 6px;vertical-align:top}
+.sd-tbl .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sd-bar{display:inline-block;height:8px;background:#99f6e4;border-radius:4px;margin-right:6px;vertical-align:middle}
+.sd-flag{color:#b91c1c;font-weight:700}
 /* Catalogue */
 .cat-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .cat-tab{border:1.5px solid #0f766e;color:#0f766e;background:#fff;border-radius:20px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer}
@@ -1321,7 +1360,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-c</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1540,6 +1579,16 @@ input,select{font-family:inherit}
         <div class="admin-card-title">🗑 Pertes (jeté / perdu)</div>
         <button class="btn-sm btn-blue" onclick="loadLosses(false)">🔄 Actualiser</button>
         <div id="loss-admin-body" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Sales dashboard (full screen) -->
+      <div class="admin-card" style="grid-column:1/-1">
+        <div class="admin-card-title">📈 Tableau de bord des ventes</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
+          Chiffre d'affaires, tickets, panier moyen, ventes par jour et par mois, paiements, meilleures ventes, produits qui ne se vendent plus,
+          caissiers, heures d'affluence et livraisons — pour les deux magasins ou un seul. Tickets à la minute près ; articles mis à jour chaque heure.
+        </div>
+        <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="openSalesDash()">📈 Ouvrir le tableau de bord</button>
       </div>
 
       <!-- Top 25 -->
@@ -5313,6 +5362,135 @@ function updateQueueStatusUI(){
 
 
 // ══════════════════════════════════════════
+//  📈 TABLEAU DE BORD DES VENTES — same figures as the Claude dashboard
+//  "Ventes Beauty Empire", computed by the sales script (action=getDashboard,
+//  write key). Opens full screen from Admin → Aujourd'hui.
+// ══════════════════════════════════════════
+let _sdData = null, _sdStore = 'Tous', _sdLoading = false;
+const _sdMonths = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+function _sdEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function _sdN(n){ return (Math.round(n) || 0).toLocaleString('fr-FR').replace(/[  ]/g, ' '); }
+function _sdF(n){ return _sdN(n) + ' F'; }
+function _sdC(n){ const a = Math.abs(n); return a >= 1e6 ? (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M F' : a >= 1e4 ? Math.round(n / 1e3).toLocaleString('fr-FR') + ' k F' : _sdF(n); }
+function _sdP(x){ return (x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %'; }
+function _sdDay(d){ const p = String(d || '').split('-'); return p.length === 3 ? Number(p[2]) + ' ' + _sdMonths[Number(p[1]) - 1] : d; }
+
+function openSalesDash(){
+  let ov = document.getElementById('sd-ov');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'sd-ov';
+    ov.innerHTML = '<div class="sd-top"><b>📈 Tableau de bord des ventes</b><span class="sd-seg" id="sd-seg"></span>' +
+      '<span class="dlv-dim" id="sd-at"></span><button class="btn-sm btn-outline" onclick="loadSalesDash(true)">🔄</button>' +
+      '<button class="btn-sm btn-outline" onclick="closeSalesDash()">✕ Fermer</button></div><div class="sd-body" id="sd-body"></div>';
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex'; document.body.style.overflow = 'hidden';
+  renderSalesDash();
+  loadSalesDash(false);
+}
+function closeSalesDash(){ const ov = document.getElementById('sd-ov'); if(ov) ov.style.display = 'none'; document.body.style.overflow = ''; }
+async function loadSalesDash(force){
+  if(_sdLoading) return;
+  const at = document.getElementById('sd-at');
+  if(!syncUrl || !writeKey){ if(at) at.textContent = '❌ Lien des ventes ou clé manquant sur cet appareil (Réglages).'; return; }
+  _sdLoading = true; if(at) at.textContent = 'Chargement…';
+  try {
+    const r = await fetch(syncUrl + '?action=getDashboard' + (force ? '&force=1' : '') + '&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.success){ _sdData = d; try { localStorage.setItem('sd_cache', JSON.stringify(d)); } catch(e){} if(at) at.textContent = 'à jour : ' + d.at; }
+    else if(at) at.textContent = '❌ ' + ((d && d.error) || 'Réponse inattendue') + (d && /action|inconnu/i.test(d.error || '') ? ' — le script des ventes doit être mis à jour.' : '');
+  } catch(e){ if(at) at.textContent = '📴 Pas de connexion — dernières données enregistrées.'; }
+  _sdLoading = false;
+  renderSalesDash();
+}
+function sdSetStore(s){ _sdStore = s; renderSalesDash(); }
+
+function _sdBars(rows, xKey, xFmt, tipX, h){
+  if(!rows.length) return '<div class="dlv-dim">Aucune donnée.</div>';
+  h = h || 200; const W = 1000, m = { t: 8, r: 4, b: 2, l: 0 };
+  const max = Math.max(...rows.map(r => r.ca), 1);
+  const step = Math.pow(10, Math.floor(Math.log10(max))); const top = Math.ceil(max / step) * step;
+  const y = v => m.t + (h - m.t - m.b) * (1 - v / top);
+  const bw = (W - m.l - m.r) / rows.length, w = Math.max(1, Math.min(34, bw * 0.75));
+  const pw = Math.max(240, ((document.getElementById('sd-body') || {}).clientWidth || 800) - 120);
+  const every = Math.max(1, Math.ceil(rows.length / Math.max(3, Math.floor(pw / 58))));
+  let s = '<svg viewBox="0 0 ' + W + ' ' + h + '" width="100%" preserveAspectRatio="none" style="height:' + h + 'px;display:block">';
+  [0, 0.5, 1].forEach(f => { const v = top * f; s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#e5e7eb"/>'; });
+  rows.forEach((r, i) => {
+    const x = m.l + i * bw + (bw - w) / 2;
+    s += '<rect x="' + x + '" y="' + y(r.ca) + '" width="' + w + '" height="' + Math.max(0, y(0) - y(r.ca)) + '" rx="2" fill="#0f766e"><title>' + _sdEsc((tipX ? tipX(r) : xFmt(r[xKey])) + ' : ' + _sdF(r.ca) + ' · ' + r.ventes + ' ticket' + (r.ventes > 1 ? 's' : '')) + '</title></rect>';
+  });
+  s += '</svg>';
+  // labels in HTML so the text is not stretched
+  let lab = '<div class="sd-axis">';
+  rows.forEach((r, i) => { lab += '<span>' + (i % every === 0 ? _sdEsc(xFmt(r[xKey])) : '') + '</span>'; });
+  lab += '</div>';
+  return '<div class="sd-chart"><div class="sd-ylab" style="height:' + (h - m.b - m.t + 12) + 'px;margin-top:' + (m.t - 6) + 'px"><span>' + _sdC(top) + '</span><span>' + _sdC(top / 2) + '</span><span>0</span></div><div class="sd-plot">' + s + lab + '</div></div>';
+}
+function _sdTable(head, rows){
+  return '<div class="sd-tbl"><table><thead><tr>' + head.map(h => '<th' + (h[1] ? ' class="n"' : '') + '>' + h[0] + '</th>').join('') + '</tr></thead><tbody>' +
+    (rows.length ? rows.map(r => '<tr>' + r.map((c, i) => '<td' + (head[i][1] ? ' class="n"' : '') + '>' + c + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + head.length + '" class="dlv-dim">Aucune ligne.</td></tr>') +
+    '</tbody></table></div>';
+}
+
+function renderSalesDash(){
+  const body = document.getElementById('sd-body'); if(!body) return;
+  const seg = document.getElementById('sd-seg');
+  seg.innerHTML = [['Tous', 'Les deux'], ['Balkuy', 'Balkuy'], ['Ouaga 2000', 'Ouaga 2000']].map(([k, l]) =>
+    '<button class="' + (k === _sdStore ? 'on' : '') + '" onclick="sdSetStore(\'' + k + '\')">' + l + '</button>').join('');
+  let d = _sdData;
+  if(!d){ try { d = JSON.parse(localStorage.getItem('sd_cache') || 'null'); } catch(e){} }
+  if(!d){ body.innerHTML = '<div class="dlv-dim" style="padding:30px;text-align:center">Chargement des chiffres…</div>'; return; }
+  const s = _sdStore, mine = a => (a || []).filter(r => r.magasin === s);
+  const k = (d.kpis || []).find(r => r.magasin === s) || {};
+  const kb = (d.kpis || []).find(r => r.magasin === 'Balkuy') || {}, ko = (d.kpis || []).find(r => r.magasin === 'Ouaga 2000') || {};
+  const ev = (v, p) => p ? (v - p) / p : null;
+  const evTxt = x => x == null ? '' : '<span class="' + (x >= 0 ? 'sd-up' : 'sd-down') + '">' + (x >= 0 ? '+' : '') + _sdP(x) + '</span> vs les 30 jours d’avant';
+  let h = '';
+  h += '<p class="sd-take">' + (s === 'Tous'
+    ? 'Sur les 30 jours jusqu’au ' + _sdDay(k.fin) + ', les deux magasins ont fait <b>' + _sdC(k.ca30 || 0) + '</b>' + (k.evolution == null ? '.' : ' (' + (k.evolution >= 0 ? '+' : '') + _sdP(k.evolution) + ').') + ' Balkuy ' + _sdC(kb.ca30 || 0) + ', Ouaga 2000 ' + _sdC(ko.ca30 || 0) + '.'
+    : 'Sur les 30 jours jusqu’au ' + _sdDay(k.fin) + ', ' + s + ' a fait <b>' + _sdC(k.ca30 || 0) + '</b> en ' + _sdN(k.ventes30) + ' tickets' + (k.evolution == null ? '.' : ' (' + (k.evolution >= 0 ? '+' : '') + _sdP(k.evolution) + ').')) + '</p>';
+  if((d.ecartes || []).length) h += '<p class="sd-warn">' + d.ecartes.length + ' ticket(s) écarté(s) pour montant impossible (' + d.ecartes.map(e => _sdEsc(e.txn) + ', ' + _sdDay(e.day)).join(' ; ') + ') : à corriger dans Historique des ventes.</p>';
+  h += '<div class="sd-kpis">' +
+    '<div class="sd-kpi"><span>Chiffre d’affaires · 30 j</span><b>' + _sdC(k.ca30 || 0) + '</b><small>' + evTxt(k.evolution) + '</small></div>' +
+    '<div class="sd-kpi"><span>Tickets · 30 j</span><b>' + _sdN(k.ventes30) + '</b><small>' + evTxt(ev(k.ventes30, k.ventes_prec)) + '</small></div>' +
+    '<div class="sd-kpi"><span>Panier moyen · 30 j</span><b>' + _sdF(k.panier30 || 0) + '</b><small>montant moyen par ticket</small></div>' +
+    '<div class="sd-kpi"><span>Remises · 30 j</span><b>' + _sdC(k.remises30 || 0) + '</b><small>' + (k.nb_remises30 || 0) + ' remise(s)' + (k.ca30 ? ' · ' + _sdP((k.remises30 || 0) / (k.ca30 + (k.remises30 || 0))) + ' du brut' : '') + '</small></div></div>';
+  h += '<div class="sd-grid">';
+  h += '<section class="sd-card sd-wide"><h3>Chiffre d’affaires par jour</h3><p class="sd-note">Depuis le 10 juillet. Ouaga 2000 : les ventes de fin septembre à la 1re semaine d’octobre ne sont pas encore saisies.</p>' +
+    _sdBars(mine(d.par_jour), 'day', _sdDay, null, 210) + '</section>';
+  h += '<section class="sd-card"><h3>Par mois</h3><p class="sd-note">Juillet commence le 10. Le mois en cours n’est pas terminé.</p>' +
+    _sdBars(mine(d.par_mois), 'mois', v => _sdMonths[Number(v.slice(5, 7)) - 1], r => _sdMonths[Number(r.mois.slice(5, 7)) - 1] + ' ' + r.mois.slice(0, 4), 180) + '</section>';
+  const pays = mine(d.paiements);
+  const cols = ['#0f766e', '#ea580c', '#2563eb', '#7c3aed', '#64748b', '#ca8a04'];
+  h += '<section class="sd-card"><h3>Modes de paiement · 30 j</h3><p class="sd-note">Les paiements mixtes sont répartis entre leurs modes.</p>' +
+    (pays.length ? pays.map((r, i) => '<div class="sd-pay"><span>' + _sdEsc(r.mode) + '</span><div class="sd-track"><div style="width:' + (r.part * 100) + '%;background:' + cols[i % cols.length] + '"></div></div><b title="' + _sdF(r.ca) + '">' + _sdP(r.part) + '</b></div>').join('') : '<div class="dlv-dim">Aucune donnée.</div>') + '</section>';
+  const top = mine(d.top), tmax = Math.max(1, ...top.map(r => r.ca));
+  h += '<section class="sd-card sd-wide"><h3>Meilleures ventes · 30 jours</h3><p class="sd-note">Classées par chiffre d’affaires. Les produits sans code-barres sont comptés sous le nom tapé à la caisse.</p>' +
+    _sdTable([['#', 1], ['Produit'], ['Qté', 1], ['CA', 1]], top.map(r => [r.rang, _sdEsc(r.produit), _sdN(r.qte), '<span class="sd-bar" style="width:' + Math.round(60 * r.ca / tmax) + 'px"></span>' + _sdF(r.ca)])) + '</section>';
+  h += '<section class="sd-card"><h3>Produits qui ne se vendent plus</h3><p class="sd-note">Vendus depuis juillet, mais plus depuis 30 jours ou plus. À vérifier en rayon : stock dormant, rupture ou prix.</p>' +
+    _sdTable([['Produit'], ['Sans vente', 1], ['Vendus', 1], ['CA', 1]], mine(d.endormis).map(r => [_sdEsc(r.produit), r.jours + ' j', _sdN(r.qte), _sdF(r.ca)])) + '</section>';
+  h += '<section class="sd-card"><h3>Par caissier · 30 j</h3><p class="sd-note">« Sans code » = part des articles vendus sans scanner de code-barres.</p>' +
+    _sdTable([['Caissier'], ['Tickets', 1], ['CA', 1], ['Remises', 1], ['Sans code', 1]], mine(d.caissiers).map(r => [_sdEsc(r.caissier), _sdN(r.ventes), _sdC(r.ca), r.remises ? _sdC(r.remises) : '0 F', '<span' + (r.sans_code >= 0.25 ? ' class="sd-flag"' : '') + '>' + _sdP(r.sans_code) + '</span>'])) + '</section>';
+  h += '<section class="sd-card"><h3>Heures d’affluence · 30 j</h3><p class="sd-note">Chiffre d’affaires par heure de la journée.</p>' +
+    _sdBars(mine(d.heures), 'heure', v => v + 'h', r => r.heure + 'h – ' + (r.heure + 1) + 'h', 180) + '</section>';
+  const l = (d.livr_kpis || []).find(r => r.magasin === s) || {};
+  const del = l.delai_median_h == null ? '—' : l.delai_median_h < 24 ? Math.round(l.delai_median_h) + ' h' : (l.delai_median_h / 24).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' j';
+  h += '<h3 class="sd-wide sd-sec">Livraisons</h3><div class="sd-kpis sd-wide">' +
+    '<div class="sd-kpi"><span>Commandes à livrer</span><b>' + _sdN(l.commandes) + '</b><small>' + _sdN(l.livrees) + ' livrées · ' + _sdN(l.en_attente) + ' en attente · ' + _sdN(l.annulees) + ' annulées</small></div>' +
+    '<div class="sd-kpi"><span>CA livré</span><b>' + _sdC(l.ca_livre || 0) + '</b><small>' + (l.part_ca == null ? '' : _sdP(l.part_ca) + ' du CA depuis le ' + _sdDay(l.debut)) + '</small></div>' +
+    '<div class="sd-kpi"><span>Argent encore chez les livreurs</span><b class="' + (l.a_recuperer > 0 ? 'sd-down' : '') + '">' + _sdC(l.a_recuperer || 0) + '</b><small>' + _sdN(l.nb_a_recuperer) + ' livraison(s) à régler</small></div>' +
+    '<div class="sd-kpi"><span>Délai commande → livraison</span><b>' + del + '</b><small>médiane</small></div>' +
+    '<div class="sd-kpi"><span>Frais payés par la boutique</span><b>' + _sdF(l.frais_boutique || 0) + '</b><small>' + _sdN(l.externes) + ' livreur(s) externe(s)</small></div></div>';
+  h += '<section class="sd-card"><h3>Ventes livrées par mois</h3><p class="sd-note">Tickets marqués « livraison » dans le Scanner.</p>' +
+    _sdBars(mine(d.livr_mois), 'mois', v => _sdMonths[Number(v.slice(5, 7)) - 1], null, 170) + '</section>';
+  h += '<section class="sd-card"><h3>Dernières livraisons</h3><p class="sd-note">Sans les noms ni téléphones des clients.</p>' +
+    _sdTable([['N°'], ['Date'], ['État'], ['Livreur'], ['Montant', 1]], mine(d.livr_liste).map(r => [_sdEsc(r.dlv), _sdDay(r.jour), _sdEsc(r.etat), _sdEsc(r.chauffeur), _sdF(r.total)])) + '</section>';
+  h += '</div>';
+  body.innerHTML = h;
+}
+
+// ══════════════════════════════════════════
 //  ADMIN TABS — the Admin page is split into tabs so each part only shows
 //  what is needed (owner's list of 14 Oct, section C). Cards keep their own
 //  code; they are only MOVED into a tab pane, by matching their title.
@@ -5320,6 +5498,7 @@ function updateQueueStatusUI(){
 // ══════════════════════════════════════════
 const ADMIN_TABS = [['today', "Aujourd'hui"], ['ventes', 'Ventes'], ['caisse', 'Caisse'], ['prix', 'Prix & stock'], ['reglages', 'Réglages'], ['journal', 'Journal']];
 const ADMIN_CARD_TAB = [
+  [/Tableau de bord des ventes/, 'today', 0.5, 'wide'],
   [/Clôture du jour|Close the Day/, 'today', 1, 'compact'],
   [/^📊/, 'today', 2, 'compact stats'],
   [/Demandes clients/, 'today', 3, 'wide'],
