@@ -81,7 +81,7 @@ const CONFIG = {
   // Change this to a real passphrase (12+ characters, not the 4-digit staff PIN) before
   // using the remote admin page — it guards both reading store data remotely and every
   // remote "manage" action (branding, employees, settings). Staff PINs are unaffected.
-  REMOTE_ADMIN_PASSPHRASE: 'nassourou1235',
+  REMOTE_ADMIN_PASSPHRASE: 'PUT-YOUR-REMOTE-ADMIN-PASSPHRASE-HERE',
   REPORT_EMAIL: '1981estvideo@gmail.com',
   REPORT_HOUR: 21,                       // 24h clock — 21 = 9 PM
   REPORT_MINUTE: 15,
