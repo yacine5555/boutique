@@ -1311,7 +1311,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v24-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -5764,7 +5764,7 @@ function savePaperSale(){
 //  have been waiting more than 30 min, an amber one when the product list
 //  is more than a day old (unknown codes at the till).
 // ══════════════════════════════════════════
-const SCANNER_VERSION = 'v24-oct-a';
+const SCANNER_VERSION = 'v25-oct-a';
 const SYNC_WARN_MIN = 30;
 function _shAgo(iso){
   if(!iso) return null;
@@ -6055,7 +6055,10 @@ async function flushScanQueue(manualTrigger){
       const res = await fetch(syncUrl, {
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
+        // Always send with the CURRENT write key: an item queued before a
+        // key change keeps its old key inside it, would be refused forever,
+        // and would block every newer sale queued behind it (25 Oct fix).
+        body: JSON.stringify(Object.assign({}, payload, { key: writeKey }))
       });
       // A response arriving is NOT the same as the write actually
       // succeeding — doPost catches its own exceptions and still returns
