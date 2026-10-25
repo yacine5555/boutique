@@ -231,6 +231,10 @@ function doGet(e) {
     if (e.parameter && e.parameter.action === 'getExpiryWatchlist') {
       return handleGetExpiryWatchlist(e.parameter.location);
     }
+    if (e.parameter && e.parameter.action === 'getPrintQueue') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetPrintQueue(e.parameter.store || '');
+    }
     if (e.parameter && e.parameter.action === 'getStock1981') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
       return handleGetStock1981();
@@ -365,6 +369,12 @@ function doPost(e) {
     }
     if (body.action === "stock1981Count") {
       return handleStock1981Count(body);
+    }
+    if (body.action === "stock1981Labels") {
+      return handleStock1981Labels(body);
+    }
+    if (body.action === "markLabelsPrinted") {
+      return handleMarkLabelsPrinted(body);
     }
     if (body.action === "importZoneStock") {
       return handleImportZoneStock(body);
@@ -3319,6 +3329,9 @@ const S1981_LOG_SHEET = 'Stock1981 Log';
 const S1981_LOG_HEADERS = ['Timestamp', 'Location', 'Zone', 'Barcode', 'Product', 'Before', 'Change', 'After', 'Reason', 'By', 'Note', 'OpId'];
 const S1981_REASONS = ['Vendu (hors caisse)', 'Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué', 'Recomptage', 'Ajout / réception'];
 const S1981_LOSS_REASONS = ['Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué'];
+// Accepted from the app but not offered as a manual reason: one move = a
+// "Transfert" out of one zone + a "Transfert" into another (25 Oct 2026).
+const S1981_INTERNAL_REASONS = ['Transfert'];
 
 function s1981LogSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -3398,7 +3411,7 @@ function handleStock1981Adjust(body) {
       const reason = String(op.reason || '');
       if (opId && done[opId]) { results.push({ opId: opId, ok: true, duplicate: true }); return; }
       if (VALID_LOCATIONS.indexOf(loc) === -1 || !zone || !bc) { results.push({ opId: opId, ok: false, error: 'Données incomplètes' }); return; }
-      if (S1981_REASONS.indexOf(reason) === -1) { results.push({ opId: opId, ok: false, error: 'Raison inconnue' }); return; }
+      if (S1981_REASONS.indexOf(reason) === -1 && S1981_INTERNAL_REASONS.indexOf(reason) === -1) { results.push({ opId: opId, ok: false, error: 'Raison inconnue' }); return; }
       const qty = Math.round(Number(op.qty));
       if (isNaN(qty)) { results.push({ opId: opId, ok: false, error: 'Quantité invalide' }); return; }
 
@@ -3622,6 +3635,103 @@ function handleImportZoneStock(body) {
       log.getRange(r1, 1, logRows.length, S1981_LOG_HEADERS.length).setValues(logRows);
     }
     return jsonResponse({ success: true, items: logRows.length });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LABELS TO PRINT — added 25 Oct 2026
+// ──────────────────────────────────────────────────────────────────────────
+//  Stock1981 (on the phone) moves stock from the Entrepôt to a store and asks
+//  for that many stickers; it can also ask for one box label (code, name,
+//  quantity in the box). Those requests wait in "Étiquettes à imprimer"
+//  until the Scanner on the computer with the label printer prints them.
+//  stock1981Labels   (POST, user-signed) { by, userHash, labels:[{id, barcode,
+//                     name, qty, store, kind:'unit'|'box'}] } — id makes a
+//                     retried request count once.
+//  getPrintQueue     (GET, key, store?) — labels still to print.
+//  markLabelsPrinted (POST, key) { ids:[…] } — after printing.
+// ══════════════════════════════════════════════════════════════════════════
+const S1981_LABEL_SHEET = 'Étiquettes à imprimer';
+const S1981_LABEL_HEADERS = ['Id', 'Date', 'Barcode', 'Produit', 'Qté', 'Magasin', 'Type', 'Par', 'Statut', 'Imprimé le'];
+const S1981_LABEL_TODO = 'À imprimer', S1981_LABEL_DONE = 'Imprimé';
+
+function s1981LabelSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName(S1981_LABEL_SHEET);
+  if (!ws) {
+    ws = ss.insertSheet(S1981_LABEL_SHEET);
+    ws.appendRow(S1981_LABEL_HEADERS);
+    ws.setFrozenRows(1);
+    ws.getRange(1, 1, 1, S1981_LABEL_HEADERS.length).setFontWeight('bold');
+    ws.getRange('C:C').setNumberFormat('@');
+    ws.setColumnWidth(4, 240);
+  }
+  return ws;
+}
+
+function handleStock1981Labels(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const labels = Array.isArray(body.labels) ? body.labels : [];
+  if (!labels.length) return jsonResponse({ success: false, error: "Aucune étiquette" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const ws = s1981LabelSheet_();
+    const last = ws.getLastRow();
+    const seen = {};
+    if (last >= 2) {
+      const from = Math.max(2, last - 3000);
+      ws.getRange(from, 1, last - from + 1, 1).getValues().forEach(r => { if (r[0]) seen[String(r[0])] = true; });
+    }
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    const rows = [];
+    labels.forEach(l => {
+      const id = String(l.id || '');
+      const bc = normalizeBarcode(l.barcode);
+      const qty = Math.round(Number(l.qty));
+      if (!id || seen[id] || !bc || !(qty > 0) || qty > 2000) return;
+      seen[id] = true;
+      rows.push([id, stamp, bc, String(l.name || ''), qty, String(l.store || ''), l.kind === 'box' ? 'Carton' : 'Unités',
+        String(body.by || ''), S1981_LABEL_TODO, '']);
+    });
+    if (rows.length) ws.getRange(ws.getLastRow() + 1, 1, rows.length, S1981_LABEL_HEADERS.length).setValues(rows);
+    return jsonResponse({ success: true, added: rows.length });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleGetPrintQueue(store) {
+  const ws = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(S1981_LABEL_SHEET);
+  const out = [];
+  if (ws && ws.getLastRow() >= 2) {
+    ws.getRange(2, 1, ws.getLastRow() - 1, S1981_LABEL_HEADERS.length).getDisplayValues().forEach(r => {
+      if (r[8] !== S1981_LABEL_TODO) return;
+      if (store && r[5] !== store) return;
+      out.push({ id: r[0], date: r[1], barcode: r[2], name: r[3], qty: Number(r[4]) || 0, store: r[5], kind: r[6] === 'Carton' ? 'box' : 'unit', by: r[7] });
+    });
+  }
+  return jsonResponse({ success: true, labels: out });
+}
+
+function handleMarkLabelsPrinted(body) {
+  const ids = {};
+  (Array.isArray(body.ids) ? body.ids : []).forEach(i => { ids[String(i)] = true; });
+  const ws = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(S1981_LABEL_SHEET);
+  if (!ws || ws.getLastRow() < 2) return jsonResponse({ success: true, marked: 0 });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const n = ws.getLastRow() - 1;
+    const vals = ws.getRange(2, 1, n, S1981_LABEL_HEADERS.length).getValues();
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    let marked = 0;
+    vals.forEach(r => { if (ids[String(r[0])] && r[8] === S1981_LABEL_TODO) { r[8] = S1981_LABEL_DONE; r[9] = stamp; marked++; } });
+    if (marked) ws.getRange(2, 9, n, 2).setValues(vals.map(r => [r[8], r[9]]));
+    return jsonResponse({ success: true, marked: marked });
   } finally {
     lock.releaseLock();
   }

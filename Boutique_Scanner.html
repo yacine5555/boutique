@@ -302,6 +302,11 @@ input,select{font-family:inherit}
 .lbl-prev-in{width:calc(40mm * 2);height:calc(30mm * 2);background:#f1f5f9;border-radius:8px;padding:6px;box-sizing:content-box}
 .lbl-prev-in .L{transform:scale(2);transform-origin:0 0;box-shadow:0 0 0 .2mm #94a3b8;border-radius:.6mm}
 .lbl-side{flex:1;min-width:240px}
+.lbl-rq{border:1.5px solid #0f766e;border-radius:8px;padding:6px 8px;margin:4px 0 6px;background:#f0fdfa}
+.lbl-rq .h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700;font-size:12.5px;color:#0f766e}
+.lbl-rq .g{font-size:12px;margin-top:6px}
+.lbl-rq .g b{display:block;margin-bottom:2px}
+.lbl-rq .r{display:flex;justify-content:space-between;gap:6px;padding:2px 0;border-top:1px dashed #ccfbf1}
 .lbl-q{max-height:220px;overflow-y:auto;border:1px solid var(--border,#eee);border-radius:8px}
 .lbl-qi{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #f1f1f1;font-size:12.5px}
 .lbl-qi button{border:1px solid #d4d4d8;background:#fff;border-radius:6px;width:26px;height:26px;cursor:pointer;font-weight:700}
@@ -1360,7 +1365,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3782,7 +3787,7 @@ function lblLabelHTML(it){
   let bc = '';
   if(_lblOpt.barcode && it.barcode){ const b = lblBarcodeSVG(it.barcode, 34, 6.2); bc = '<div class="L-bc">' + b.svg + '<div>' + _lblEsc(b.text) + '</div></div>'; }
   return '<div class="L' + (bc ? '' : ' nobc') + '">' + top + '<div class="L-nm">' + _lblEsc(it.name || it.barcode) + '</div>' +
-    '<div class="L-pr">' + _lblFmtPrice(it.price) + '<small>CFA</small></div>' + bc + '</div>';
+    '<div class="L-pr">' + (it.box ? '× ' + it.box + '<small>UNITÉS</small>' : _lblFmtPrice(it.price) + '<small>CFA</small>') + '</div>' + bc + '</div>';
 }
 
 // ── Queue ──
@@ -3889,6 +3894,7 @@ function renderLabelCard(){
     '<div class="lbl-wrap"><div class="lbl-prev"><div class="lbl-prev-in">' + (_lblOpt.via !== 'window' ? '<img src="' + lblPreviewCanvas(sample) + '" style="width:80mm;height:60mm;image-rendering:pixelated;display:block;border-radius:2px;box-shadow:0 0 0 1px #cbd5e1" alt="">' : lblLabelHTML(sample)) + '</div><div class="dlv-dim" style="text-align:center;margin-top:4px">Aperçu ' + LBL_SIZE.w + ' × ' + LBL_SIZE.h + ' mm' + (_lblQ.length ? '' : ' (exemple)') + '</div></div>' +
     '<div class="lbl-side"><input class="dlv-field" id="lbl-search" type="search" placeholder="Scanner ou chercher un produit…" autocomplete="off" oninput="lblSearch(this.value)" onkeydown="lblSearchKey(event)" style="margin:0 0 4px">' +
       '<div id="lbl-results"></div>' +
+      lblRemoteHTML() +
       '<button class="btn-sm btn-outline" style="margin:4px 0" onclick="lblAddTasks()">＋ Étiquettes à changer — ' + (_lblOpt.store === 'Store 2' ? 'Ouaga 2000' : 'Balkuy') + ' (' + nTasks + ')</button>' +
       '<div class="lbl-q">' + (_lblQ.length ? _lblQ.map((it, i) => '<div class="lbl-qi"><div style="flex:1;min-width:0"><b>' + _lblEsc(it.name) + '</b><div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + _lblFmtPrice(it.price) + ' CFA</div></div>' +
         '<button onclick="lblSetQty(' + i + ',-1)">−</button><span>' + (it.qty || 1) + '</span><button onclick="lblSetQty(' + i + ',1)">+</button><button onclick="lblRemove(' + i + ')" title="Retirer">✕</button></div>').join('') : '<div class="dlv-dim" style="padding:6px">Aucune étiquette. Scannez un produit, ou les prix enregistrés sur cet ordinateur s\'ajoutent tout seuls.</div>') + '</div></div></div>' +
@@ -3903,6 +3909,72 @@ function renderLabelCard(){
       '<li><b>USB direct</b> : cliquez « Connecter l\'imprimante », choisissez l\'Xprinter, c\'est tout. Si un message dit que l\'imprimante est occupée par le pilote du Mac : Réglages Système → Imprimantes → supprimez l\'Xprinter (−), débranchez/rebranchez, réessayez.</li>' +
       '<li>Si l\'étiquette sort à cheval sur deux : maintenez FEED 2–3 s (calibrage), ou ajustez « Espace entre étiquettes ».</li>' +
       '<li>Impression directe (sans fenêtre) : imprimante par défaut = Xprinter, taille de papier par défaut = Étiquette 40x30, puis Chrome ouvert avec « Chrome Étiquettes ». La taille vient de l\'imprimante, pas de la page, pour que Chrome n\'envoie pas l\'étiquette couchée.</li></ol></details>';
+}
+// ── Labels asked for from Stock1981 (moves to a store, box labels) ──
+//  Stock1981 on the phone writes them to "Étiquettes à imprimer" in the
+//  inventory Sheet; this computer (the one with the label printer) prints
+//  them and marks them printed. Unit stickers carry the price of the store
+//  the stock went to.
+let _lblRemote = null, _lblRemoteBusy = false, _lblRemoteErr = '';
+function _lblGroupOf(x){ return x.kind === 'box' ? 'Cartons — ' + (x.store || 'Entrepôt') : (x.store || '?'); }
+function _lblPriceAt(bc, storeName){
+  const p = (typeof _plMap !== 'undefined') ? _plMap[_bcKeyClient(bc)] : null;
+  if(!p) return null;
+  const c = /ouaga/i.test(storeName || '') ? 's2' : 's1';
+  return p[c] != null ? p[c] : (p.m != null ? p.m : null);
+}
+async function lblLoadRemote(){
+  if(_lblRemoteBusy) return;
+  if(!productSyncUrl || !writeKey){ _lblRemoteErr = 'Lien produits ou clé manquant sur cet ordinateur.'; renderLabelCard(); return; }
+  _lblRemoteBusy = true; renderLabelCard();
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPrintQueue&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.success){ _lblRemote = d.labels || []; _lblRemoteErr = ''; }
+    else if(d && Array.isArray(d.products)) _lblRemoteErr = 'Le script d’inventaire n’est pas à jour (collez la nouvelle version et redéployez).';
+    else _lblRemoteErr = (d && d.error) || 'Réponse inattendue';
+  } catch(e){ _lblRemoteErr = 'Pas de connexion.'; }
+  _lblRemoteBusy = false; renderLabelCard();
+}
+function lblRemoteHTML(){
+  if(_lblRemote === null && !_lblRemoteBusy && !_lblRemoteErr) setTimeout(lblLoadRemote, 0);
+  const list = _lblRemote || [];
+  const n = list.reduce((s, x) => s + (x.kind === 'box' ? 1 : x.qty), 0);
+  const groups = {};
+  list.forEach(x => { const g = _lblGroupOf(x); (groups[g] = groups[g] || []).push(x); });
+  const keys = Object.keys(groups);
+  return '<div class="lbl-rq"><div class="h">📦 Déplacements & cartons à imprimer' + (_lblRemote ? ' (' + n + ')' : '') +
+      ' <button class="btn-sm btn-outline" style="margin-left:auto;padding:3px 8px" onclick="lblLoadRemote()">' + (_lblRemoteBusy ? '…' : '🔄') + '</button></div>' +
+    (_lblRemoteErr ? '<div class="g" style="color:#b45309">⚠ ' + _lblEsc(_lblRemoteErr) + '</div>' : '') +
+    (_lblRemote && !list.length ? '<div class="g dlv-dim">Rien à imprimer. Les étiquettes demandées dans Stock1981 (Déplacer, Étiquette de carton) arrivent ici.</div>' : '') +
+    keys.map((g, gi) => {
+      const items = groups[g], cnt = items.reduce((s, x) => s + (x.kind === 'box' ? 1 : x.qty), 0);
+      return '<div class="g"><b>' + _lblEsc(g) + ' · ' + cnt + ' étiquette(s) <button class="btn-sm" style="background:#0f766e;color:#fff;border:none;padding:3px 10px;margin-left:6px" onclick="lblPrintRemote(' + gi + ')">🖨 Imprimer</button></b>' +
+        items.map(x => '<div class="r"><span>' + _lblEsc(x.name || x.barcode) + '</span><span class="dlv-dim">' + (x.kind === 'box' ? 'carton × ' + x.qty : x.qty + ' ét.') + ' · ' + _lblEsc(x.by || '') + '</span></div>').join('') + '</div>';
+    }).join('') + '</div>';
+}
+async function lblPrintRemote(gi){
+  const keys = [];
+  (_lblRemote || []).forEach(x => { const g = _lblGroupOf(x); if(!keys.includes(g)) keys.push(g); });
+  const group = keys[gi];
+  const items = (_lblRemote || []).filter(x => _lblGroupOf(x) === group);
+  if(!items.length) return;
+  const list = items.map(x => x.kind === 'box'
+    ? { barcode: x.barcode, name: 'CARTON · ' + (x.name || x.barcode), box: x.qty, qty: 1 }
+    : { barcode: x.barcode, name: x.name || x.barcode, price: _lblPriceAt(x.barcode, x.store), qty: x.qty });
+  const noPrice = list.filter(x => !x.box && x.price == null).length;
+  if(noPrice && !confirm(noPrice + ' produit(s) sans prix pour ' + group + ' : l’étiquette affichera « — ». Imprimer quand même ?')) return;
+  let ok;
+  if(_lblOpt.via === 'window'){ printLabels(list); ok = confirm('Les étiquettes sont-elles bien sorties ? OK = les retirer de la liste.'); }
+  else ok = await lblUsbPrint(list);
+  if(!ok) return;
+  try {
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: writeKey, action: 'markLabelsPrinted', ids: items.map(x => x.id) }) });
+    const d = await r.json();
+    if(d && d.success){ const ids = new Set(items.map(x => x.id)); _lblRemote = _lblRemote.filter(x => !ids.has(x.id)); renderLabelCard(); }
+    else showToast('⚠ Imprimées, mais pas retirées de la liste : ' + ((d && d.error) || '?'), 4000);
+  } catch(e){ showToast('⚠ Imprimées, mais pas retirées de la liste (connexion) : touchez 🔄 avant de réimprimer.', 5000); }
 }
 function printLabelQueue(){
   if(!_lblQ.length) return;
@@ -4011,13 +4083,14 @@ function lblDrawCanvas(it){
   lines.forEach((l, i) => c.fillText(l, W / 2, y + i * nameSize * 1.12));
   y += nameH + gap;
   // price
-  const pr = _lblFmtPrice(it.price).replace(/ | /g, ' ');
+  const pr = it.box ? '× ' + it.box : _lblFmtPrice(it.price).replace(/ | /g, ' ');
+  const unit = it.box ? 'UNITÉS' : 'CFA';
   c.font = font(priceSize, '900'); const pw = c.measureText(pr).width;
-  c.font = font(Math.round(2.8 * d), 'bold'); const cw = c.measureText('CFA').width;
+  c.font = font(Math.round(2.8 * d), 'bold'); const cw = c.measureText(unit).width;
   const sx = (W - pw - 0.6 * d - cw) / 2;
   c.textAlign = 'left'; c.textBaseline = 'alphabetic';
   c.font = font(priceSize, '900'); c.fillText(pr, sx, y + priceSize * 0.86);
-  c.font = font(Math.round(2.8 * d), 'bold'); c.fillText('CFA', sx + pw + 0.6 * d, y + priceSize * 0.86);
+  c.font = font(Math.round(2.8 * d), 'bold'); c.fillText(unit, sx + pw + 0.6 * d, y + priceSize * 0.86);
   y += priceSize + gap;
   // barcode: whole dots per bar so it scans cleanly
   if(withBc){
@@ -4112,7 +4185,8 @@ async function lblUsbPrint(list){
       n += Math.max(1, it.qty || 1);
     }
     showToast('🖨 ' + n + ' étiquette(s) envoyée(s)', 2500);
-  } catch(e){ _lblUsbError(e); }
+    return true;
+  } catch(e){ _lblUsbError(e); return false; }
 }
 function lblFeed(){ // one blank label forward, e.g. after loading a roll
   _lblUsbEnsure().then(u => u.dev.transferOut(u.ep, new TextEncoder().encode('SIZE ' + LBL_SIZE.w + ' mm,' + LBL_SIZE.h + ' mm\r\nGAP ' + (_lblOpt.gapMm != null ? _lblOpt.gapMm : 3) + ' mm,0 mm\r\nFORMFEED\r\n'))).catch(_lblUsbError);

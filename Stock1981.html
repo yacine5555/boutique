@@ -145,6 +145,9 @@ textarea{min-height:60px;resize:vertical}
 .go:disabled{opacity:.45;cursor:default}
 .ghost{width:100%;border:0;background:transparent;color:var(--muted);font-weight:600;padding:12px;cursor:pointer}
 .err{color:var(--bad);font-size:14px;font-weight:600;margin-top:8px}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:14px 0 4px;font-size:14px;line-height:1.35;cursor:pointer}
+.chk input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:var(--brand)}
+select.t{appearance:auto}
 
 /* Lock */
 .lock{position:fixed;inset:0;z-index:60;background:var(--plum);color:#fbeaf3;display:flex;align-items:center;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));overflow:auto}
@@ -312,18 +315,22 @@ async function flushQueue(){
   let progress = false;
   try {
     const first = QUEUE[0];
-    if(first.kind === 'count'){
+    if(first.kind === 'labels'){
+      const d = await post({ action:'stock1981Labels', by: first.by, userHash: first.hash, labels: first.labels });
+      if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
+      else if(d && d.error){ toast(d.error); if(/Utilisateur|code|Aucune/i.test(d.error)){ QUEUE.shift(); progress = true; } }
+    } else if(first.kind === 'count'){
       const d = await post(Object.assign({ action:'stock1981Count', by: first.by, userHash: first.hash }, first.body));
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
       else if(d && d.error){ toast(d.error); if(/Utilisateur|code/i.test(d.error)){ QUEUE.shift(); progress = true; } }
     } else {
       const batch = [];
-      for(const o of QUEUE){ if(o.kind === 'count' || batch.length >= 40) break; batch.push(o); }
+      for(const o of QUEUE){ if(o.kind || batch.length >= 40) break; batch.push(o); }
       const d = await post({ action:'stock1981Adjust', by: batch[0].by, userHash: batch[0].hash, ops: batch.map(o => o.op) });
       if(d && d.success){
         const done = new Set(d.results.map(r => r.opId));
         const failed = d.results.filter(r => !r.ok);
-        QUEUE = QUEUE.filter(o => o.kind === 'count' || !done.has(o.op.opId));
+        QUEUE = QUEUE.filter(o => o.kind || !done.has(o.op.opId));
         if(failed.length) toast(failed.length + ' changement(s) refusé(s) : ' + failed[0].error);
         progress = true; online = true;
       } else if(d && d.error){
@@ -361,7 +368,7 @@ function applyLocal(op){
   r[4] = op.mode === 'set' ? op.qty : r[4] + op.qty;
   if(op.name && !r[3]) r[3] = op.name;
 }
-function reapplyQueue(){ QUEUE.forEach(o => o.kind === 'count' ? applyCountLocal(o.body) : applyLocal(o.op)); }
+function reapplyQueue(){ QUEUE.forEach(o => o.kind === 'count' ? applyCountLocal(o.body) : o.kind === 'labels' ? null : applyLocal(o.op)); }
 function applyCountLocal(c){
   if(!DATA) DATA = { zones:[], spots:[], prices:{}, names:{} };
   const touched = new Set(DATA.spots.filter(r => r[0] === c.location && r[2] === c.spot).map(r => bkey(r[3])));
@@ -699,6 +706,7 @@ function openProduct(loc, zone, bc){
   drawProduct();
 }
 function drawProduct(){
+  if(S.mode === 'move') return drawMove();
   const all = (DATA ? DATA.zones : []).filter(r => bkey(r[2]) === bkey(S.bc) && r[4] !== 0);
   const p = priceOf(S.bc);
   const after = S.mode === 'set' ? S.qty : S.mode === 'out' ? S.cur - S.qty : S.cur + S.qty;
@@ -710,7 +718,8 @@ function drawProduct(){
     <div class="seg" role="group" aria-label="Type de changement">
       <button data-mode="out" aria-pressed="${S.mode === 'out'}">Retirer</button>
       <button data-mode="in" aria-pressed="${S.mode === 'in'}">Ajouter</button>
-      <button data-mode="set" aria-pressed="${S.mode === 'set'}">Recompter</button></div>
+      <button data-mode="set" aria-pressed="${S.mode === 'set'}">Recompter</button>
+      <button data-mode="move" aria-pressed="false">Déplacer</button></div>
     <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="sq" class="num" inputmode="numeric" value="${S.qty}" aria-label="Quantité"><button data-step="1" aria-label="Plus">+</button></div>
     <div class="preview">${S.mode === 'set' ? 'Quantité exacte en rayon' : (S.mode === 'out' ? 'Retirer ' : 'Ajouter ') + S.qty}. Zone ${esc(S.zone)} : <b class="num">${fmt(S.cur)} → ${fmt(after)}</b></div>
     <label class="f">Raison</label>
@@ -718,9 +727,11 @@ function drawProduct(){
     <label class="f" for="snote">Note (facultatif)</label>
     <textarea id="snote" placeholder="Ex. : boîte écrasée, cliente fidèle…">${esc(S.note)}</textarea>
     <button class="go" id="sgo" ${S.reason && (S.mode === 'set' ? S.qty >= 0 : S.qty > 0) && !(S.mode === 'set' && S.qty === S.cur) ? '' : 'disabled'}>Enregistrer</button>
+    <button class="ghost" id="sbox">🏷 Étiquette de carton</button>
     <button class="ghost" id="sx">Annuler</button>`);
   const sh = $('#sheet');
   sh.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; S.qty = S.mode === 'set' ? Math.max(0, S.cur) : 1; drawProduct(); });
+  $('#sbox').onclick = () => { S.box = { per: Math.max(1, S.cur || 1), n: 1 }; drawBox(); };
   sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(S.mode === 'set' ? 0 : 1, S.qty + Number(b.dataset.step)); drawProduct(); });
   sh.querySelectorAll('[data-reason]').forEach(b => b.onclick = () => { S.reason = b.dataset.reason; drawProduct(); });
   $('#sq').onchange = e => { const v = parseInt(e.target.value, 10); S.qty = isNaN(v) ? S.qty : Math.max(S.mode === 'set' ? 0 : 1, v); drawProduct(); };
@@ -759,6 +770,89 @@ function drawAdd(err){
     save({ location: S.loc, zone: S.zone, barcode: S.bc, name: S.name.trim(), mode:'delta', qty: S.qty, reason: S.reason, note:'' });
   };
   setTimeout(() => bc.focus(), 50);
+}
+// ── move between stores / storage (+ stickers printed later on the Mac) ──
+function moveDefaults(){
+  if(!S.to) S.to = S.loc === 'Warehouse' ? 'Store 1' : 'Warehouse';
+  const zs = zoneList(S.to).map(z => z.c);
+  if(!S.toZone || (S.toZone !== UNPLACED && !zs.includes(S.toZone))){
+    const there = (DATA ? DATA.zones : []).filter(r => r[0] === S.to && bkey(r[2]) === bkey(S.bc)).sort((a, b) => b[4] - a[4])[0];
+    S.toZone = S.to === 'Warehouse' ? 'Entrepôt' : (there ? there[1] : UNPLACED);
+  }
+  if(S.print == null || S.printFor !== S.to){ S.print = S.to !== 'Warehouse'; S.printFor = S.to; }
+}
+function drawMove(){
+  moveDefaults();
+  const p = priceOf(S.bc);
+  const zs = S.to === 'Warehouse' ? ['Entrepôt'] : [UNPLACED].concat(zoneList(S.to).map(z => z.c));
+  const over = S.qty > S.cur;
+  openSheet(`<h3>Déplacer · ${esc(S.name || 'Produit sans nom')}</h3>
+    <div class="sub num">${esc(S.bc)}${p ? ' · ' + fmt(p) + ' F' : ''}</div>
+    <div class="where"><div class="here"><span>Depuis : ${esc(locName(S.loc))} · ${esc(S.zone)}</span><b class="num">${fmt(S.cur)}</b></div></div>
+    <label class="f">Vers</label>
+    <div class="chips">${LOCS.filter(l => !(l.id === S.loc && S.loc === 'Warehouse')).map(l => `<button data-to="${esc(l.id)}" aria-pressed="${S.to === l.id}">${esc(l.name)}</button>`).join('')}</div>
+    <label class="f" for="mz">Zone d’arrivée</label>
+    <select class="t" id="mz">${zs.filter(z => !(S.to === S.loc && z === S.zone)).map(z => `<option value="${esc(z)}"${z === S.toZone ? ' selected' : ''}>${esc(z === UNPLACED ? 'Non placé (à ranger)' : z)}</option>`).join('')}</select>
+    <label class="f">Quantité</label>
+    <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="mq" class="num" inputmode="numeric" value="${S.qty}" aria-label="Quantité"><button data-step="1" aria-label="Plus">+</button></div>
+    ${over ? `<div class="err">Plus que les ${fmt(S.cur)} enregistrés ici : vérifiez le compte (le stock passera en négatif).</div>` : ''}
+    <label class="chk"><input type="checkbox" id="mp" ${S.print ? 'checked' : ''}> 🏷 Imprimer ${fmt(S.qty)} étiquette${S.qty > 1 ? 's' : ''} (prix ${esc(locName(S.to))}) sur l’ordinateur de l’imprimante</label>
+    <button class="go" id="mgo" ${S.qty > 0 && S.toZone ? '' : 'disabled'}>Déplacer ${fmt(S.qty)}</button>
+    <button class="ghost" id="mback">Retour</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-to]').forEach(b => b.onclick = () => { S.to = b.dataset.to; S.toZone = null; drawMove(); });
+  $('#mz').onchange = e => { S.toZone = e.target.value; };
+  if(!zs.includes(S.toZone) || (S.to === S.loc && S.toZone === S.zone)) S.toZone = $('#mz').value;
+  sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(1, S.qty + Number(b.dataset.step)); drawMove(); });
+  $('#mq').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) S.qty = v; drawMove(); };
+  $('#mp').onchange = e => { S.print = e.target.checked; };
+  $('#mback').onclick = () => { S.mode = 'out'; S.qty = 1; drawProduct(); };
+  $('#mgo').onclick = () => {
+    const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const base = { barcode: S.bc, name: S.name, mode:'delta', reason:'Transfert' };
+    const ops = [
+      Object.assign({}, base, { location: S.loc, zone: S.zone, qty: -S.qty, note: 'vers ' + locName(S.to) + ' · ' + S.toZone }),
+      Object.assign({}, base, { location: S.to, zone: S.toZone, qty: S.qty, note: 'depuis ' + locName(S.loc) + ' · ' + S.zone })
+    ];
+    const labels = S.print ? [{ id: id + '-u', barcode: S.bc, name: S.name, qty: S.qty, store: locName(S.to), kind:'unit' }] : [];
+    queueWork(ops, labels, S.qty + ' déplacé' + (S.qty > 1 ? 's' : '') + ' vers ' + locName(S.to) + (labels.length ? ' · étiquettes envoyées à l’imprimante' : ''));
+  };
+}
+function drawBox(){
+  const b = S.box;
+  openSheet(`<h3>🏷 Étiquette de carton</h3>
+    <div class="sub">${esc(S.name || 'Produit sans nom')} · <span class="num">${esc(S.bc)}</span></div>
+    <p class="sub" style="margin:8px 0">Une étiquette par carton : code-barres, nom et quantité dans le carton. Elle s’imprime sur l’ordinateur de l’imprimante.</p>
+    <label class="f">Unités dans chaque carton</label>
+    <div class="stepper"><button data-b="per" data-step="-1" aria-label="Moins">−</button><input id="bper" class="num" inputmode="numeric" value="${b.per}" aria-label="Unités par carton"><button data-b="per" data-step="1" aria-label="Plus">+</button></div>
+    <label class="f">Nombre de cartons</label>
+    <div class="stepper"><button data-b="n" data-step="-1" aria-label="Moins">−</button><input id="bn" class="num" inputmode="numeric" value="${b.n}" aria-label="Nombre de cartons"><button data-b="n" data-step="1" aria-label="Plus">+</button></div>
+    <button class="go" id="bgo">Envoyer ${fmt(b.n)} étiquette${b.n > 1 ? 's' : ''} de carton</button>
+    <button class="ghost" id="bback">Retour</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-b]').forEach(x => x.onclick = () => { b[x.dataset.b] = Math.max(1, b[x.dataset.b] + Number(x.dataset.step)); drawBox(); });
+  $('#bper').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) b.per = v; drawBox(); };
+  $('#bn').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) b.n = Math.min(50, v); drawBox(); };
+  $('#bback').onclick = () => drawProduct();
+  $('#bgo').onclick = () => {
+    const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const labels = Array.from({ length: b.n }, (_, i) => ({ id: id + '-' + i, barcode: S.bc, name: S.name, qty: b.per, store: locName(S.loc), kind:'box' }));
+    queueWork([], labels, b.n + ' étiquette' + (b.n > 1 ? 's' : '') + ' de carton envoyée' + (b.n > 1 ? 's' : '') + ' à l’imprimante');
+  };
+}
+function queueWork(ops, labels, msg){
+  if(!user){ lock(); return; }
+  ops.forEach((op, i) => {
+    op.opId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + i;
+    applyLocal(op);
+    QUEUE.push({ op, by: user.name, hash: user.hash });
+  });
+  if(labels.length) QUEUE.push({ kind:'labels', labels, by: user.name, hash: user.hash });
+  ls('s1981_queue', JSON.stringify(QUEUE));
+  ls('s1981_cache', JSON.stringify(DATA));
+  closeSheet(); render();
+  toast(online ? msg : 'Enregistré sur le téléphone, envoi au retour de la connexion');
+  flushQueue();
 }
 function save(op){
   if(!user){ lock(); return; }
