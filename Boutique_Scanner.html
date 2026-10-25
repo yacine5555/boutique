@@ -802,7 +802,7 @@ input,select{font-family:inherit}
 .cat-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .cat-tab{border:1.5px solid #0f766e;color:#0f766e;background:#fff;border-radius:20px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer}
 .cat-tab.on{background:#0f766e;color:#fff}
-.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;overflow-y:auto;min-height:120px}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;overflow-y:auto;min-height:120px}
 .cat-tile{display:flex;flex-direction:column;align-items:stretch;border:1.5px solid var(--border,#e5e7eb);border-radius:10px;background:#fff;cursor:pointer;padding:6px;text-align:left}
 .cat-tile:hover{border-color:#0f766e;box-shadow:0 2px 8px rgba(15,118,110,.15)}
 .cat-tile .ph{aspect-ratio:1/1;border-radius:7px;background:#f6f7f9;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}
@@ -811,8 +811,18 @@ input,select{font-family:inherit}
 .cat-tile .nm{font-size:12px;font-weight:600;line-height:1.25;color:var(--ink,#111);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:3.75em}
 .cat-tile .pr{font-size:12.5px;font-weight:800;color:#15803d;margin-top:3px}
 .cat-tile .pr.none{color:#b45309;font-weight:700}
-.catadm-row{display:grid;grid-template-columns:44px 1fr 170px 26px 26px 26px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #f1f1f1}
-.catadm-row img,.catadm-row .noimg{width:44px;height:44px;object-fit:contain;border-radius:6px;background:#f6f7f9;display:flex;align-items:center;justify-content:center;font-size:11px;color:#94a3b8}
+.catadm-row{display:grid;grid-template-columns:120px 1fr 200px 30px 30px 30px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f1f1}
+.catadm-row img,.catadm-row .noimg{width:120px;height:120px;object-fit:contain;border-radius:8px;background:#f6f7f9;display:flex;align-items:center;justify-content:center;font-size:12px;color:#94a3b8;cursor:pointer;border:1px solid #e5e7eb}
+.catadm-row img:hover,.catadm-row .noimg:hover{border-color:#0f766e}
+@media (max-width:640px){.catadm-row{grid-template-columns:96px 1fr 30px 30px 30px}.catadm-row img,.catadm-row .noimg{width:96px;height:96px}.catadm-row select{grid-column:1/-1}}
+.catpick-ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+.catpick-box{background:#fff;border-radius:12px;max-width:1000px;width:100%;max-height:90vh;display:flex;flex-direction:column;padding:14px;gap:10px}
+.catpick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;overflow-y:auto}
+.catpick-it{border:2px solid #e5e7eb;border-radius:10px;padding:6px;cursor:pointer;background:#fff;text-align:center;font-size:11.5px;line-height:1.25;color:#334155}
+.catpick-it:hover{border-color:#0f766e}
+.catpick-it.on{border-color:#0f766e;background:#f0fdfa}
+.catpick-it.used{opacity:.55}
+.catpick-it img{width:100%;aspect-ratio:1/1;object-fit:contain;background:#f6f7f9;border-radius:7px;margin-bottom:4px;display:block}
 .catadm-row select{font-size:12px;padding:5px;border:1px solid #d4d4d8;border-radius:6px;width:100%}
 .catadm-row button{border:none;background:none;cursor:pointer;font-size:15px}
 .catadm-res{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:13px}
@@ -1311,7 +1321,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -5554,13 +5564,31 @@ function catAdmRenderItems(){
   el.innerHTML = '<div class="dlv-dim" style="margin-bottom:4px">' + _catEsc(_catAdm.list || '') + ' : ' + _catAdm.items.length + ' produit(s)' + (_catAdm.dirty ? ' · <b style="color:#b45309">pas encore enregistré</b>' : '') + '</div>' +
     (_catAdm.items.length ? _catAdm.items.map((it, i) =>
       '<div class="catadm-row">' +
-        (it.photo ? '<img src="images/products/' + encodeURIComponent(it.photo) + '" alt="" onerror="this.outerHTML=\'<div class=noimg>?</div>\'">' : '<div class="noimg">—</div>') +
+        (it.photo ? '<img src="images/products/' + encodeURIComponent(it.photo) + '" alt="" title="Changer la photo" onclick="catAdmPhotoPicker(' + i + ')" onerror="this.outerHTML=\'<div class=noimg onclick=catAdmPhotoPicker(' + i + ')>?</div>\'">' : '<div class="noimg" title="Choisir une photo" onclick="catAdmPhotoPicker(' + i + ')">🖼 Choisir</div>') +
         '<div style="font-size:12.5px;line-height:1.25"><b>' + _catEsc(it.name) + '</b><div class="dlv-dim">' + _catEsc(it.barcode) + (usedBy[it.photo] > 1 ? ' · <span style="color:#b45309">photo utilisée 2 fois</span>' : '') + '</div></div>' +
         '<select onchange="catAdmSet(' + i + ',\'photo\',this.value)"><option value="">— pas de photo —</option>' +
           photos.map(f => '<option value="' + _catEsc(f) + '"' + (f === it.photo ? ' selected' : '') + '>' + _catEsc(f.replace(/\.[a-z]+$/i, '')) + '</option>').join('') + '</select>' +
         '<button title="Monter" onclick="catAdmMove(' + i + ',-1)">↑</button><button title="Descendre" onclick="catAdmMove(' + i + ',1)">↓</button>' +
         '<button title="Retirer" style="color:#b91c1c" onclick="catAdmDel(' + i + ')">✕</button></div>').join('')
     : '<div class="dlv-dim">Liste vide : cherchez un produit ci-dessus pour l\'ajouter.</div>');
+}
+// Big photo picker: tap a product's photo in Admin → Catalogue to see every photo large.
+function catAdmPhotoPicker(i){
+  const it = _catAdm.items[i]; if(!it) return;
+  const photos = _photoIndex || [];
+  const used = new Set(_catAdm.items.filter((x, j) => j !== i).map(x => x.photo).filter(Boolean));
+  const ov = document.createElement('div'); ov.className = 'catpick-ov';
+  ov.onclick = (e) => { if(e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="catpick-box"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+    '<div><b>Photo pour :</b> ' + _catEsc(it.name) + '<div class="dlv-dim">Touchez une photo pour la choisir. Les photos pâles sont déjà utilisées dans cette liste.</div></div>' +
+    '<button class="btn-sm btn-outline" data-x="1">✕ Fermer</button></div>' +
+    '<div class="catpick-grid">' +
+      '<div class="catpick-it' + (it.photo ? '' : ' on') + '" data-f=""><div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background:#f6f7f9;border-radius:7px;margin-bottom:4px;font-size:28px">—</div>Pas de photo</div>' +
+      photos.map(f => '<div class="catpick-it' + (f === it.photo ? ' on' : '') + (used.has(f) ? ' used' : '') + '" data-f="' + _catEsc(f) + '"><img loading="lazy" alt="" src="images/products/' + encodeURIComponent(f) + '">' + _catEsc(f.replace(/\.[a-z]+$/i, '').replace(/-/g, ' ')) + '</div>').join('') +
+    '</div></div>';
+  ov.querySelector('[data-x]').onclick = () => ov.remove();
+  ov.querySelectorAll('.catpick-it').forEach(el => el.onclick = () => { catAdmSet(i, 'photo', el.getAttribute('data-f')); ov.remove(); });
+  document.body.appendChild(ov);
 }
 async function _catAdmPost(payload){
   const msg = document.getElementById('catadm-msg');
