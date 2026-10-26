@@ -295,7 +295,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, generatedAt: d.generatedAt };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, generatedAt: d.generatedAt };
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
     online = true;
@@ -532,8 +532,9 @@ function bindMain(){
 }
 function renderResults(){
   const box = $('#results'); if(!box) return;
-  const q = (VIEW.q || '').trim().toLowerCase();
+  let q = (VIEW.q || '').trim().toLowerCase();
   if(q.length < 2){ box.innerHTML = ''; return; }
+  if(/^\d{6,}$/.test(q)) q = aliasOf(q);
   const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
   box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}"><div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
   box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
@@ -599,8 +600,9 @@ function beep(ok){
   } catch(e){}
   if(navigator.vibrate) navigator.vibrate(ok ? 30 : [80, 60, 80]);
 }
+function aliasOf(raw){ const s = String(raw || '').trim(); const a = DATA && DATA.aliases ? DATA.aliases[bkey(s)] : null; return a || s; }
 function addScan(raw){
-  const code = String(raw || '').trim();
+  const code = aliasOf(raw);
   if(!code) return;
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
   const k = bkey(code);
@@ -757,7 +759,7 @@ function drawAdd(err){
     <button class="go" id="ago">Ajouter</button><button class="ghost" id="ax">Annuler</button>`);
   const sh = $('#sheet');
   const bc = $('#abc'), nm = $('#anm');
-  bc.oninput = () => { S.bc = bc.value.trim(); if(!S.name){ const n = productName(S.bc); if(n){ S.name = n; nm.value = n; } } };
+  bc.oninput = () => { S.bc = aliasOf(bc.value); if(!S.name){ const n = productName(S.bc); if(n){ S.name = n; nm.value = n; } } };
   bc.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); nm.focus(); } };
   nm.oninput = () => { S.name = nm.value; };
   sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(1, S.qty + Number(b.dataset.step)); $('#aq').value = S.qty; });

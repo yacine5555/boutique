@@ -253,8 +253,10 @@ function doGet(e) {
     const reqLoc = (e.parameter && e.parameter.location) || '';
     const spByKey = (reqLoc === 'Store 1' || reqLoc === 'Store 2') ? _spMap(_spSheet()) : null;
     const products = [];
+    const aliasMap = loadAliasMap_();
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
+      if (row[7] && aliasMap[barcodeKey(row[7])]) continue; // replaced by its real barcode (second code)
       const name = row[1];     // B: Product Name
       const category = row[3]; // D: Category
       const subCategory = row[4]; // E: Sub-Category
@@ -275,6 +277,7 @@ function doGet(e) {
     }
     return jsonResponse({
       products: products,
+      aliases: aliasMap,
       count: products.length,
       generatedAt: new Date().toISOString()
     });
@@ -372,6 +375,9 @@ function doPost(e) {
     }
     if (body.action === "stock1981Labels") {
       return handleStock1981Labels(body);
+    }
+    if (body.action === "applyCodeReplacements") {
+      return jsonResponse(applyCodeReplacements());
     }
     if (body.action === "markLabelsPrinted") {
       return handleMarkLabelsPrinted(body);
@@ -731,6 +737,7 @@ function handleApplyStockMovements(body) {
   if (!Array.isArray(body.movements) || !body.movements.length) {
     return jsonResponse({ success: false, error: "No movements provided" }, 400);
   }
+  body.movements = body.movements.map(m => Object.assign({}, m, { barcode: resolveAlias_(m.barcode) }));
   const lastRow = sheet.getLastRow();
   if (lastRow < FIRST_DATA_ROW) {
     return jsonResponse({ success: false, error: "Destination sheet is empty" });
@@ -3371,7 +3378,7 @@ function handleGetStock1981() {
       });
     }
   } catch (e) { Logger.log('names skipped: ' + e); }
-  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
+  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, aliases: loadAliasMap_(), reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
 }
 
 function s1981UserOk_(body) {
@@ -3407,7 +3414,7 @@ function handleStock1981Adjust(body) {
       const opId = String(op.opId || '');
       const loc = String(op.location || '');
       const zone = String(op.zone || '').trim();
-      const bc = normalizeBarcode(op.barcode);
+      const bc = normalizeBarcode(resolveAlias_(op.barcode));
       const reason = String(op.reason || '');
       if (opId && done[opId]) { results.push({ opId: opId, ok: true, duplicate: true }); return; }
       if (VALID_LOCATIONS.indexOf(loc) === -1 || !zone || !bc) { results.push({ opId: opId, ok: false, error: 'Données incomplètes' }); return; }
@@ -3511,7 +3518,7 @@ function handleStock1981Count(body) {
   const loc = String(body.location || ''), zone = String(body.zone || '').trim(), spot = String(body.spot || '').trim();
   if (VALID_LOCATIONS.indexOf(loc) === -1 || !zone || !spot) return jsonResponse({ success: false, error: "Magasin, zone ou étagère manquant" }, 400);
   const items = (Array.isArray(body.items) ? body.items : [])
-    .map(it => ({ bc: normalizeBarcode(it.barcode), name: String(it.name || ''), count: Math.max(0, Math.round(Number(it.count) || 0)) }))
+    .map(it => ({ bc: normalizeBarcode(resolveAlias_(it.barcode)), name: String(it.name || ''), count: Math.max(0, Math.round(Number(it.count) || 0)) }))
     .filter(it => it.bc && it.count > 0);
   const opId = String(body.opId || '');
   const lock = LockService.getScriptLock();
@@ -3734,5 +3741,174 @@ function handleMarkLabelsPrinted(body) {
     return jsonResponse({ success: true, marked: marked });
   } finally {
     lock.releaseLock();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SECOND CODES (aliases) — added 26 Oct 2026
+// ──────────────────────────────────────────────────────────────────────────
+//  A made-up code (0610000…) can be replaced by the product's real barcode
+//  while the old stickers keep scanning: the old code becomes a "second
+//  code" of the real one. Kept in the "Codes secondaires" tab.
+//  - The product feed (doGet) leaves the old Product Master row out and
+//    sends `aliases` {oldKey: realBarcode}; the Scanner and Stock1981 swap a
+//    scanned old code for the real one before anything is recorded.
+//  - Stock movements, Stock1981 changes and shelf counts map old codes too,
+//    in case an old device or an offline queue still sends them.
+//  - applyCodeReplacements() applies the rows ticked « Remplacer par le code
+//    réel » in the « Codes maison → codes réels » tab: adds the second code,
+//    copies the price if the real product has none, and moves stock rows
+//    (store tabs, Zone Stock, Spot Stock) from the old code to the real one.
+//    Runnable from the editor or POST {action:"applyCodeReplacements"}.
+// ══════════════════════════════════════════════════════════════════════════
+const ALIAS_SHEET = 'Codes secondaires';
+const ALIAS_HEADERS = ['Code secondaire', 'Code principal', 'Produit', 'Ajouté le', 'Par', 'Note'];
+const REPL_SHEET = 'Codes maison → codes réels';
+const REPL_CHOICE = 'Remplacer par le code réel';
+let _aliasCache = null;
+
+function aliasSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName(ALIAS_SHEET);
+  if (!ws) {
+    ws = ss.insertSheet(ALIAS_SHEET);
+    ws.appendRow(ALIAS_HEADERS);
+    ws.setFrozenRows(1);
+    ws.getRange(1, 1, 1, ALIAS_HEADERS.length).setFontWeight('bold');
+    ws.getRange('A:B').setNumberFormat('@');
+    ws.setColumnWidth(3, 260);
+  }
+  return ws;
+}
+
+function loadAliasMap_() {
+  if (_aliasCache) return _aliasCache;
+  const map = {};
+  const ws = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ALIAS_SHEET);
+  if (ws && ws.getLastRow() >= 2) {
+    ws.getRange(2, 1, ws.getLastRow() - 1, 2).getValues().forEach(r => {
+      if (r[0] && r[1] && barcodeKey(r[0]) !== barcodeKey(r[1])) map[barcodeKey(r[0])] = normalizeBarcode(r[1]);
+    });
+  }
+  _aliasCache = map;
+  return map;
+}
+
+function resolveAlias_(bc) {
+  if (bc === null || bc === undefined || bc === '') return bc;
+  const real = loadAliasMap_()[barcodeKey(bc)];
+  return real || bc;
+}
+
+function applyCodeReplacements() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rs = ss.getSheetByName(REPL_SHEET);
+  if (!rs || rs.getLastRow() < 5) return { success: false, error: "Onglet « " + REPL_SHEET + " » introuvable ou vide." };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const n = rs.getLastRow() - 4;
+    const rows = rs.getRange(5, 1, n, 11).getValues();
+    const tz = Session.getScriptTimeZone();
+    const stamp = Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy HH:mm');
+    const pm = ss.getSheetByName(SHEET_NAME);
+    const pmData = pm.getRange(FIRST_DATA_ROW, 1, pm.getLastRow() - FIRST_DATA_ROW + 1, 10).getValues();
+    const pmRow = {};
+    pmData.forEach((r, i) => { if (r[7]) { const k = barcodeKey(r[7]); if (!pmRow[k]) pmRow[k] = { row: FIRST_DATA_ROW + i, name: String(r[1] || ''), price: r[9] }; } });
+    const aws = aliasSheet_();
+    const existing = loadAliasMap_();
+    const done = [], notes = [];
+    rows.forEach((r, i) => {
+      const choice = String(r[9] || ''), note = String(r[10] || '');
+      if (choice !== REPL_CHOICE || /Appliqué/.test(note)) return;
+      const oldBc = normalizeBarcode(r[1]), realBc = normalizeBarcode(r[5]);
+      if (!oldBc || !realBc) return;
+      const oldK = barcodeKey(oldBc), realK = barcodeKey(realBc);
+      const real = pmRow[realK], old = pmRow[oldK];
+      if (!real) { notes.push([i, 'Code réel absent de Product Master']); return; }
+      // 1. second code
+      if (!existing[oldK]) {
+        aws.getRange(aws.getLastRow() + 1, 1, 1, ALIAS_HEADERS.length)
+          .setValues([[oldBc, realBc, real.name, stamp, 'Codes maison → codes réels', old ? 'Ancien nom : ' + old.name : '']]);
+        existing[oldK] = realBc;
+      }
+      // 2. price: keep the real product's, else take the old one's
+      if ((real.price === '' || real.price === null) && old && old.price !== '' && old.price !== null) {
+        pm.getRange(real.row, 10).setValue(old.price);
+      }
+      try { _moveStoreStock_(oldK, realBc, real.name); } catch (e) { Logger.log('store stock: ' + e); }
+      try { _moveZoneRows_(oldK, realBc, real.name); } catch (e) { Logger.log('zone stock: ' + e); }
+      notes.push([i, 'Appliqué ' + stamp]);
+      done.push(oldBc + ' → ' + realBc);
+    });
+    notes.forEach(([i, txt]) => rs.getRange(5 + i, 11).setValue(txt));
+    _aliasCache = null;
+    return { success: true, applied: done.length, details: done };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Store tabs: the old code's Qty On Hand goes onto the real code's row.
+function _moveStoreStock_(oldK, realBc, realName) {
+  VALID_LOCATIONS.forEach(loc => {
+    const sh = getLocationSheetOrNull(loc);
+    if (!sh || sh.getLastRow() < FIRST_DATA_ROW) return;
+    const qtyCol = getOrCreateColumnByHeader(sh, HEADER_ROW, QTY_ON_HAND_HEADER);
+    const n = sh.getLastRow() - FIRST_DATA_ROW + 1;
+    const bcs = sh.getRange(FIRST_DATA_ROW, LOCATION_BARCODE_COL, n, 1).getValues();
+    let oldRow = 0, realRow = 0;
+    bcs.forEach((r, i) => { const k = barcodeKey(r[0]); if (k === oldK && !oldRow) oldRow = FIRST_DATA_ROW + i; if (k === barcodeKey(realBc) && !realRow) realRow = FIRST_DATA_ROW + i; });
+    if (!oldRow) return;
+    const oldQty = Number(sh.getRange(oldRow, qtyCol).getValue()) || 0;
+    if (realRow) {
+      if (oldQty) {
+        const c = sh.getRange(realRow, qtyCol);
+        c.setValue((Number(c.getValue()) || 0) + oldQty);
+        sh.getRange(oldRow, qtyCol).setValue(0);
+      }
+    } else {
+      sh.getRange(oldRow, LOCATION_BARCODE_COL).setNumberFormat('@').setValue(realBc);
+      sh.getRange(oldRow, LOCATION_NAME_COL).setValue(realName);
+    }
+  });
+}
+
+// Zone Stock and Spot Stock rows of the old code are relabelled to the real
+// code (merged into an existing row of the same zone / shelf when there is one).
+function _moveZoneRows_(oldK, realBc, realName) {
+  const realK = barcodeKey(realBc);
+  const zs = ensureZoneStockTab();
+  if (zs.getLastRow() >= 2) {
+    const n = zs.getLastRow() - 1;
+    const v = zs.getRange(2, 1, n, ZONE_STOCK_HEADERS.length).getValues();
+    const at = {};
+    v.forEach((r, i) => { if (barcodeKey(r[2]) === realK) at[r[0] + '|' + r[1]] = i; });
+    v.forEach((r, i) => {
+      if (barcodeKey(r[2]) !== oldK) return;
+      const key = r[0] + '|' + r[1];
+      if (at[key] !== undefined) {
+        const t = v[at[key]];
+        t[ZS_COL_COUNTED - 1] = (Number(t[ZS_COL_COUNTED - 1]) || 0) + (Number(r[ZS_COL_COUNTED - 1]) || 0);
+        t[ZS_COL_ONHAND - 1] = (Number(t[ZS_COL_ONHAND - 1]) || 0) + (Number(r[ZS_COL_ONHAND - 1]) || 0);
+        r[ZS_COL_COUNTED - 1] = 0; r[ZS_COL_ONHAND - 1] = 0;
+      } else {
+        r[2] = realBc; r[3] = realName; at[key] = i;
+      }
+    });
+    zs.getRange(2, ZS_COL_BARCODE, n, 1).setNumberFormat('@');
+    zs.getRange(2, 1, n, ZONE_STOCK_HEADERS.length).setValues(v);
+  }
+  const sp = ensureSpotStockTab();
+  if (sp.getLastRow() >= 2) {
+    const n = sp.getLastRow() - 1;
+    const v = sp.getRange(2, 1, n, SPOT_STOCK_HEADERS.length).getValues();
+    let changed = false;
+    v.forEach(r => { if (barcodeKey(r[3]) === oldK) { r[3] = realBc; r[4] = realName; changed = true; } });
+    if (changed) {
+      sp.getRange(2, 4, n, 1).setNumberFormat('@');
+      sp.getRange(2, 1, n, SPOT_STOCK_HEADERS.length).setValues(v);
+    }
   }
 }

@@ -1373,7 +1373,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1560,6 +1560,17 @@ input,select{font-family:inherit}
           <button class="btn-sm btn-outline" id="nc-process-btn" onclick="ncProcess()">⚙️ Traiter les codes scannés</button>
           <button class="btn-sm" style="background:#0f766e;color:#fff;border:none" onclick="openNewCodes()">✍️ Valider les noms</button>
         </div>
+      </div>
+
+      <!-- Made-up codes replaced by real barcodes (inventory sheet tab) -->
+      <div class="admin-card" id="repl-card">
+        <div class="admin-card-title">🔁 Codes maison → codes réels</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
+          Cochez « Remplacer par le code réel » dans l'onglet « Codes maison → codes réels » du Sheet d'inventaire, puis appliquez ici.
+          Le vrai code-barres devient le code du produit ; l'ancien reste valable pour les étiquettes déjà collées.
+        </div>
+        <button class="btn-sm btn-outline" id="repl-btn" onclick="applyCodeReplacements()">🔁 Appliquer les remplacements cochés</button>
+        <div class="dlv-dim" id="repl-msg" style="margin-top:6px"></div>
       </div>
 
       <!-- Price labels (Xprinter XP-237B, 40 × 30 mm) -->
@@ -2978,10 +2989,11 @@ function getNoBarcodeNames(limit){
 
 function processScan() {
   const input = document.getElementById("scan-input");
-  const raw = input.value.trim();
+  let raw = input.value.trim();
   input.value = ""; input.focus();
   if(!raw) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
+  raw = resolveAlias(raw);
   if(isNoBarcodeCode(raw)){
     setFeedback("error","🏷",
       lang==="fr"?"Produit sans code-barres — nom et prix requis":"No-barcode product — enter name and price",
@@ -3361,10 +3373,11 @@ function commitLogScan(barcode, product, isManual, price, qty) {
 function processHoldScan() {
   const input = document.getElementById("hold-scan-input");
   if(!input) return;
-  const raw = input.value.trim();
+  let raw = input.value.trim();
   input.value = ""; input.focus();
   if(!raw) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
+  raw = resolveAlias(raw);
   if(isNoBarcodeCode(raw)){ doLogScan(raw, noBarcodeProduct(), false); return; }
   const product = lookupBarcode(raw);
   if(!product) {
@@ -4271,6 +4284,20 @@ function _ncCard(){
   const c = _ncCounts();
   el.innerHTML = '<span>📥 ' + (_nc.sum.pasted || 0) + ' scans collés</span><span>✍️ ' + c.todo + ' à valider</span><span>🔎 ' + c.wait + ' en recherche</span><span>✅ ' + c.added + ' ajoutés</span><span>📦 ' + c.known + ' déjà connus</span>';
 }
+async function applyCodeReplacements(){
+  const msg = document.getElementById('repl-msg'), b = document.getElementById('repl-btn');
+  if(!productSyncUrl || !writeKey){ msg.textContent = '❌ Lien produits ou clé manquant sur cet ordinateur.'; return; }
+  b.disabled = true; msg.textContent = '⏳ En cours…';
+  try {
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: writeKey, action: 'applyCodeReplacements' }) });
+    const d = await r.json();
+    if(d && d.success){
+      msg.textContent = d.applied ? '✅ ' + d.applied + ' remplacement(s) : ' + d.details.join(' · ') : 'Rien de nouveau à appliquer.';
+      if(d.applied) syncProducts(false);
+    } else msg.textContent = '❌ ' + ((d && d.error) || 'Le script d’inventaire n’est pas à jour (collez la nouvelle version et redéployez).');
+  } catch(e){ msg.textContent = '📴 Pas de connexion.'; }
+  b.disabled = false;
+}
 async function ncProcess(){
   if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
   const b = document.getElementById('nc-process-btn'); if(b){ b.disabled = true; b.textContent = '⏳ Traitement…'; }
@@ -4969,6 +4996,15 @@ function clearUnknown(){
 let productSyncUrl = localStorage.getItem("bc_psync_url") || "";
 let _lastPriceChanges = [];
 // Barcodes exactly as stored in Product Master (from the last product sync).
+// Second codes (26 Oct): an old made-up code that now points to the product's
+// real barcode. Sent by the inventory script with the product feed; a scan of
+// the old code is swapped for the real one before anything is recorded.
+let BC_ALIASES = (function(){ try { return JSON.parse(localStorage.getItem('bc_aliases') || '{}'); } catch(e){ return {}; } })();
+function resolveAlias(raw){
+  const s = String(raw || '').trim();
+  const k = s.replace(/^0+/, '') || s;
+  return BC_ALIASES[k] || s;
+}
 let MASTER_KEYS = (function(){ try { return JSON.parse(localStorage.getItem("bc_psync_cache") || "{}"); } catch(e){ return {}; } })();
 let PRODUCT_PRICES = (function(){ try { return JSON.parse(localStorage.getItem("bc_psync_prices") || "{}"); } catch(e){ return {}; } })();
 let productSyncLast = localStorage.getItem("bc_psync_last") || "";
@@ -5066,6 +5102,7 @@ async function syncProducts(manualTrigger){
     // Product Master is the source of truth: replace the price cache wholesale
     // so a price that was never saved (or was removed) can't linger here.
     PRODUCT_PRICES = _newPrices;
+    if(data.aliases && typeof data.aliases === 'object'){ BC_ALIASES = data.aliases; try { localStorage.setItem('bc_aliases', JSON.stringify(BC_ALIASES)); } catch(e){} }
     MASTER_KEYS = fresh;
     Object.assign(BARCODE_DB, fresh);
     localStorage.setItem("bc_psync_cache", JSON.stringify(fresh));
@@ -5603,7 +5640,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
@@ -10620,7 +10657,7 @@ function psPriceFor(code){
 }
 
 function psScan(raw){
-  raw = String(raw || '').trim();
+  raw = resolveAlias(String(raw || '').trim());
   if(!raw || !_psActive) return;
   _psTouch();
   document.getElementById('ps-scan').value = '';
