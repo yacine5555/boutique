@@ -302,12 +302,20 @@ input,select{font-family:inherit}
 .lbl-prev-in{width:calc(40mm * 2);height:calc(30mm * 2);background:#f1f5f9;border-radius:8px;padding:6px;box-sizing:content-box}
 .lbl-prev-in .L{transform:scale(2);transform-origin:0 0;box-shadow:0 0 0 .2mm #94a3b8;border-radius:.6mm}
 .lbl-side{flex:1;min-width:240px}
+.lbl-ph{width:72px;height:72px;flex:none;border-radius:8px;background:#f6f7f9;border:1px solid #e5e7eb;object-fit:contain;cursor:zoom-in;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:#94a3b8;overflow:hidden}
+.lbl-ph img{width:100%;height:100%;object-fit:contain}
+.lbl-res{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:13px}
+.lbl-res:hover{border-color:#0f766e}
+.lbl-zoom{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+.lbl-zoom div{background:#fff;border-radius:12px;padding:14px;max-width:min(92vw,560px);text-align:center}
+.lbl-zoom img{max-width:100%;max-height:70vh;object-fit:contain;display:block;margin:0 auto 8px}
 .lbl-rq{border:1.5px solid #0f766e;border-radius:8px;padding:6px 8px;margin:4px 0 6px;background:#f0fdfa}
 .lbl-rq .h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700;font-size:12.5px;color:#0f766e}
 .lbl-rq .g{font-size:12px;margin-top:6px}
 .lbl-rq .g b{display:block;margin-bottom:2px}
-.lbl-rq .r{display:flex;justify-content:space-between;gap:6px;padding:2px 0;border-top:1px dashed #ccfbf1}
-.lbl-q{max-height:220px;overflow-y:auto;border:1px solid var(--border,#eee);border-radius:8px}
+.lbl-rq .r{display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px dashed #ccfbf1}
+.lbl-rq .r .t{flex:1;min-width:0}
+.lbl-q{max-height:420px;overflow-y:auto;border:1px solid var(--border,#eee);border-radius:8px}
 .lbl-qi{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #f1f1f1;font-size:12.5px}
 .lbl-qi button{border:1px solid #d4d4d8;background:#fff;border-radius:6px;width:26px;height:26px;cursor:pointer;font-weight:700}
 .lbl-qi span{min-width:18px;text-align:center;font-weight:700}
@@ -1365,7 +1373,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3844,7 +3852,7 @@ function _lblFind(q){
 function lblSearch(v){
   const box = document.getElementById('lbl-results'); if(!box) return;
   const res = String(v || '').trim().length >= 2 ? _lblFind(v) : [];
-  box.innerHTML = res.map(p => '<div class="catadm-res" onclick="lblPick(\'' + _lblEsc(p.barcode) + '\')"><span>' + _lblEsc(p.name) + '</span><span class="dlv-dim">' + _lblFmtPrice(lblPriceFor(p.barcode, p.m)) + ' ＋</span></div>').join('');
+  box.innerHTML = res.map(p => '<div class="lbl-res" onclick="lblPick(\'' + _lblEsc(p.barcode) + '\')">' + lblThumb(p.barcode, p.name) + '<span style="flex:1;min-width:0">' + _lblEsc(p.name) + '<div class="dlv-dim">' + _lblEsc(p.barcode) + '</div></span><span class="dlv-dim">' + _lblFmtPrice(lblPriceFor(p.barcode, p.m)) + ' ＋</span></div>').join('');
 }
 function lblPick(bc){
   const src = (_plAll && _plAll.length) ? _plAll : [];
@@ -3896,7 +3904,7 @@ function renderLabelCard(){
       '<div id="lbl-results"></div>' +
       lblRemoteHTML() +
       '<button class="btn-sm btn-outline" style="margin:4px 0" onclick="lblAddTasks()">＋ Étiquettes à changer — ' + (_lblOpt.store === 'Store 2' ? 'Ouaga 2000' : 'Balkuy') + ' (' + nTasks + ')</button>' +
-      '<div class="lbl-q">' + (_lblQ.length ? _lblQ.map((it, i) => '<div class="lbl-qi"><div style="flex:1;min-width:0"><b>' + _lblEsc(it.name) + '</b><div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + _lblFmtPrice(it.price) + ' CFA</div></div>' +
+      '<div class="lbl-q">' + (_lblQ.length ? _lblQ.map((it, i) => '<div class="lbl-qi">' + lblThumb(it.barcode, it.name) + '<div style="flex:1;min-width:0"><b>' + _lblEsc(it.name) + '</b><div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + _lblFmtPrice(it.price) + ' CFA</div></div>' +
         '<button onclick="lblSetQty(' + i + ',-1)">−</button><span>' + (it.qty || 1) + '</span><button onclick="lblSetQty(' + i + ',1)">+</button><button onclick="lblRemove(' + i + ')" title="Retirer">✕</button></div>').join('') : '<div class="dlv-dim" style="padding:6px">Aucune étiquette. Scannez un produit, ou les prix enregistrés sur cet ordinateur s\'ajoutent tout seuls.</div>') + '</div></div></div>' +
     '<div class="lbl-row" style="margin-top:8px"><button class="btn-sm" style="background:#0f766e;color:#fff;border:none;padding:9px 14px" ' + (total ? '' : 'disabled ') + 'onclick="printLabelQueue()">🖨 Imprimer ' + total + ' étiquette(s)</button>' +
       '<button class="btn-sm btn-outline" onclick="lblPrint([{barcode:\'0722776004289\',name:\'Test étiquette — Beauty Empire\',price:12500,qty:1}])">Test</button>' +
@@ -3909,6 +3917,19 @@ function renderLabelCard(){
       '<li><b>USB direct</b> : cliquez « Connecter l\'imprimante », choisissez l\'Xprinter, c\'est tout. Si un message dit que l\'imprimante est occupée par le pilote du Mac : Réglages Système → Imprimantes → supprimez l\'Xprinter (−), débranchez/rebranchez, réessayez.</li>' +
       '<li>Si l\'étiquette sort à cheval sur deux : maintenez FEED 2–3 s (calibrage), ou ajustez « Espace entre étiquettes ».</li>' +
       '<li>Impression directe (sans fenêtre) : imprimante par défaut = Xprinter, taille de papier par défaut = Étiquette 40x30, puis Chrome ouvert avec « Chrome Étiquettes ». La taille vient de l\'imprimante, pas de la page, pour que Chrome n\'envoie pas l\'étiquette couchée.</li></ol></details>';
+}
+// ── Product photo beside each label line (tap = big photo) ──
+function lblThumb(bc, name){
+  const src = (typeof productPhotoFor === 'function') ? productPhotoFor(bc) : '';
+  const ini = _lblEsc(String(name || bc || '?').replace(/[^A-Za-zÀ-ÿ0-9 ]/g, '').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?');
+  const z = src ? ' data-src="' + _lblEsc(src) + '" data-nm="' + _lblEsc(name || '') + '" onclick="event.stopPropagation();lblZoomEl(this)"' : '';
+  return '<div class="lbl-ph"' + z + '>' + (src ? '<img loading="lazy" alt="" src="' + _lblEsc(src) + '" onerror="this.parentNode.textContent=\'' + ini + '\'">' : ini) + '</div>';
+}
+function lblZoomEl(el){
+  const ov = document.createElement('div'); ov.className = 'lbl-zoom';
+  ov.innerHTML = '<div><img alt="" src="' + _lblEsc(el.dataset.src || '') + '"><b>' + _lblEsc(el.dataset.nm || '') + '</b></div>';
+  ov.onclick = () => ov.remove();
+  document.body.appendChild(ov);
 }
 // ── Labels asked for from Stock1981 (moves to a store, box labels) ──
 //  Stock1981 on the phone writes them to "Étiquettes à imprimer" in the
@@ -3950,7 +3971,7 @@ function lblRemoteHTML(){
     keys.map((g, gi) => {
       const items = groups[g], cnt = items.reduce((s, x) => s + (x.kind === 'box' ? 1 : x.qty), 0);
       return '<div class="g"><b>' + _lblEsc(g) + ' · ' + cnt + ' étiquette(s) <button class="btn-sm" style="background:#0f766e;color:#fff;border:none;padding:3px 10px;margin-left:6px" onclick="lblPrintRemote(' + gi + ')">🖨 Imprimer</button></b>' +
-        items.map(x => '<div class="r"><span>' + _lblEsc(x.name || x.barcode) + '</span><span class="dlv-dim">' + (x.kind === 'box' ? 'carton × ' + x.qty : x.qty + ' ét.') + ' · ' + _lblEsc(x.by || '') + '</span></div>').join('') + '</div>';
+        items.map(x => '<div class="r">' + lblThumb(x.barcode, x.name) + '<div class="t">' + _lblEsc(x.name || x.barcode) + '<div class="dlv-dim">' + _lblEsc(x.barcode) + ' · ' + (x.kind === 'box' ? 'carton × ' + x.qty : x.qty + ' ét.') + ' · ' + _lblEsc(x.by || '') + '</div></div></div>').join('') + '</div>';
     }).join('') + '</div>';
 }
 async function lblPrintRemote(gi){
