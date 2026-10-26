@@ -2342,6 +2342,26 @@ function applyZoneMovements(location, movements) {
     const bc = normalizeBarcode(m.barcode);
     const delta = Number(m.delta) || 0;
     if (!bc || !delta) return;
+    // A movement can name its zone (transfers arrive in « Non placé »): the row
+    // is created if that product was never in that zone.
+    if (m.zone) {
+      const zk = location + '||' + m.zone + '||' + barcodeKey(m.barcode);
+      let rn = idx.byLocZoneBarcode[zk], before = 0, prod = String(m.name || '');
+      if (rn) {
+        const rv = sheet.getRange(rn, 1, 1, ZONE_STOCK_HEADERS.length).getValues()[0];
+        before = Number(rv[ZS_COL_ONHAND - 1]) || 0; prod = prod || String(rv[ZS_COL_PRODUCT - 1] || '');
+        sheet.getRange(rn, ZS_COL_ONHAND).setValue(before + delta);
+      } else {
+        rn = sheet.getLastRow() + 1;
+        sheet.getRange(rn, ZS_COL_BARCODE).setNumberFormat('@');
+        sheet.getRange(rn, 1, 1, ZONE_STOCK_HEADERS.length).setValues([[location, m.zone, bc, prod, 0, delta, false]]);
+        idx.byLocZoneBarcode[zk] = rn;
+        const lb = location + '||' + barcodeKey(m.barcode);
+        (idx.byLocBarcode[lb] = idx.byLocBarcode[lb] || []).push(rn);
+      }
+      ledgerRows.push([timestamp, location, bc, prod || bc, m.type || 'adjustment', delta, before + delta, 'Zone ' + m.zone + (m.note ? ' — ' + m.note : '')]);
+      return;
+    }
     const rowNums = idx.byLocBarcode[location + '||' + barcodeKey(m.barcode)];
     if (!rowNums || !rowNums.length) return; // never counted into any zone — nothing to cascade
 

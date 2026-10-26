@@ -1307,14 +1307,14 @@ const TRANSFER_HEADERS = ['UID','Updated','ID','Status','From','To','Barcode','P
 function _transfersSheet() { return _sheet('Transfers', TRANSFER_HEADERS); }
 
 // 'ok' | 'nf' (barcode not in that location's tab, or no barcode) | 'err' (try again later)
-function _stockMove(location, barcode, delta, type, note) {
+function _stockMove(location, barcode, delta, type, note, zone) {
   const bc = String(barcode || '').trim();
   if (!bc || bc === '(manual)') return 'nf';
   try {
     const res = UrlFetchApp.fetch(CONFIG.INVENTORY_SYNC_URL, {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       payload: JSON.stringify({ key: CONFIG.INVENTORY_SYNC_KEY, action: 'applyStockMovements', location: location,
-        movements: [{ barcode: bc, delta: delta, type: type, note: note || '' }] })
+        movements: [{ barcode: bc, delta: delta, type: type, note: note || '', zone: zone || '' }] })
     });
     const data = JSON.parse(res.getContentText());
     if (!data.success) { _logSyncIssue(location, 'Transfert : échec pour ' + bc + ' : ' + (data.error || 'erreur inconnue')); return 'err'; }
@@ -1338,7 +1338,9 @@ function _applyTransferRow(sh, rowNum) {
     if (m !== 'err') out = (m === 'ok') ? 'yes' : 'nf';
   }
   if (status === 'received' && !inn && qtyRecv > 0) {
-    const m = _stockMove(to, bc, qtyRecv, 'transfer-in', label + ' ← ' + from);
+    let zoneIn = '';
+    try { zoneIn = String((r[13] ? JSON.parse(r[13]) : {}).zoneIn || ''); } catch (e) {}
+    const m = _stockMove(to, bc, qtyRecv, 'transfer-in', label + ' ← ' + from, zoneIn);
     if (m !== 'err') inn = (m === 'ok') ? 'yes' : 'nf';
   }
   if (status === 'cancelled' && out) {

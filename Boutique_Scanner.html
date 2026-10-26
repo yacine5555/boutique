@@ -673,6 +673,30 @@ input,select{font-family:inherit}
 .ex-stage.red{border-color:#dc2626}.ex-stage.amber{border-color:#f59e0b}.ex-stage.yellow{border-color:#eab308}.ex-stage.blue{border-color:#3b82f6}
 .ex-stage-h{font-weight:700;font-size:13px;margin-bottom:4px}
 .ex-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px}
+.tx-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tx-tab{border:1.5px solid #0f766e;color:#0f766e;background:#fff;border-radius:20px;padding:7px 13px;font-weight:700;font-size:13px;cursor:pointer}
+.tx-tab.on{background:#0f766e;color:#fff}
+.tx-b{display:inline-block;background:#dc2626;color:#fff;border-radius:999px;padding:0 7px;font-size:11px;margin-left:2px}
+.tx-tab.on .tx-b{background:#fff;color:#dc2626}
+.tx-card{background:#fff;border:1.5px solid var(--border2,#e5e7eb);border-radius:12px;padding:12px;margin-bottom:8px}
+.tx-card.late{border-color:#dc2626;background:#fef2f2}
+.tx-go{font-size:26px;color:#94a3b8}
+.tx-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tx-row2 label{font-size:12px;color:var(--ink3,#64748b);display:flex;flex-direction:column;gap:2px}
+.tx-row2 .dlv-field{margin:0}
+.tx-scanbar{display:flex;gap:6px;align-items:center;margin:8px 0}
+.tx-scanbar .tf-scan-field{flex:1}
+.tx-line{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border2,#e5e7eb);border-radius:10px;margin-bottom:6px;background:#fff}
+.tx-line.ok{background:#f0fdf4;border-color:#86efac}
+.tx-line.warn{background:#fff7ed;border-color:#fdba74}
+.tx-line .nm{flex:1;min-width:0;font-size:13px}
+.tx-line select{font-size:12px;padding:2px 4px;border:1px solid #d4d4d8;border-radius:6px}
+.tx-qty{display:flex;align-items:center;gap:6px}
+.tx-qty button{width:36px;height:36px;border-radius:8px;border:1px solid #d4d4d8;background:#fff;font-size:18px;font-weight:700;cursor:pointer}
+.tx-qty span{min-width:26px;text-align:center;font-weight:700}
+.tx-qty .big{font-size:20px}
+.tx-x{border:none;background:none;color:#b91c1c;font-size:16px;cursor:pointer}
+.tx-stk{color:#0f766e;white-space:nowrap}
 .tf-card-box{border:1.5px solid var(--border2);border-radius:10px;padding:10px;margin-bottom:10px;background:#fff}
 .tf-card-box.in{border-color:#dc2626;background:#fef2f2}
 .tf-card{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border2);border-radius:8px;margin-bottom:6px;background:#fff;font-size:13px}
@@ -1002,7 +1026,7 @@ input,select{font-family:inherit}
       <span id="tab-scan-lbl">📷 Scan</span>
     </button>
     <button class="pos-tab" id="tab-transfer-btn" onclick="switchTab('transfer')">
-      <span id="tab-transfer-lbl">🔄 Transfer</span><span id="tf-tab-badge"></span>
+      <span id="tab-transfer-lbl">🔄 Transferts</span><span id="tf-tab-badge"></span>
     </button>
     <button class="pos-tab" id="tab-dates-btn" onclick="switchTab('dates')">
       <span id="tab-dates-lbl">📅 Dates</span><span id="ex-badge"></span>
@@ -1301,6 +1325,8 @@ input,select{font-family:inherit}
   <!-- ── TRANSFER PANEL ── -->
   <div class="tab-panel" id="tab-transfer">
     <div class="transfer-wrap">
+      <div id="tx-root"></div>
+      <div id="tf-legacy" style="display:none">
       <div id="tf-lists"></div>
       <div class="card">
         <div class="card-title">🔄 <span id="tf-title">Record a Transfer</span></div>
@@ -1362,6 +1388,7 @@ input,select{font-family:inherit}
           <div class="tf-empty" id="tf-empty">No transfers today</div>
         </div>
       </div>
+      </div><!-- /tf-legacy -->
     </div>
   </div>
 </div>
@@ -1373,7 +1400,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2109,7 +2136,7 @@ const T = {
     loginSub:"Point of Sale System", lblName:"Your Name", lblPin:"Your PIN",
     btnLogin:"Start Shift →", lblAdmin:"Admin Access",
     optSelect:"— Select your name —",
-    tabScan:"📷 Scan", tabTransfer:"🔄 Transfer",
+    tabScan:"📷 Scan", tabTransfer:"🔄 Transfers",
     lblSession:"This Shift", lblToday:"Today", lblSales:"Sales",
     saleReady:"Ready — scan first item", saleActive:"Scanning for this customer",
     saleIdle:"No active sale",
@@ -2128,7 +2155,7 @@ const T = {
     loginSub:"Caisse Enregistreuse", lblName:"Votre nom", lblPin:"Votre PIN",
     btnLogin:"Commencer le service →", lblAdmin:"Accès Admin",
     optSelect:"— Sélectionnez votre nom —",
-    tabScan:"📷 Scanner", tabTransfer:"🔄 Transfert",
+    tabScan:"📷 Scanner", tabTransfer:"🔄 Transferts",
     lblSession:"Ce service", lblToday:"Aujourd'hui", lblSales:"Ventes",
     saleReady:"Prêt — scannez le premier article", saleActive:"Scan en cours pour ce client",
     saleIdle:"Aucune vente active",
@@ -2317,7 +2344,7 @@ function switchTab(tab) {
   document.getElementById("tab-"+tab+"-btn").classList.add("active");
   document.getElementById("tab-"+tab).classList.add("active");
   if(tab==="scan") setTimeout(()=>document.getElementById("scan-input").focus(), 80);
-  if(tab==="transfer"){ renderTransferLists(); refreshTransfers(); setTimeout(()=>document.getElementById("tf-barcode").focus(), 80); }
+  if(tab==="transfer"){ renderTx(); refreshTransfers(); _txLoadStock(); }
   if(tab==="dates") initDatesTab();
 }
 
@@ -3465,6 +3492,7 @@ async function openCameraScan(){
 }
 
 function onCameraBarcodeDetected(raw){
+  if(_txCamTarget){ const f = _txCamTarget; _txCamTarget = null; closeCameraScan(); f(String(raw).trim()); return; }
   closeCameraScan();
   if(_psActive){ psScan(String(raw).trim()); return; }
   const input = document.getElementById('scan-input');
@@ -7933,15 +7961,346 @@ function _tfSave(rec){
 function _tfMyLoc(){ try { return _defaultPriceLocation(); } catch(e){ return ''; } }
 
 function updateTfBadge(){
-  const mine = _tfMyLoc();
-  const incoming = allTransfers.filter(t => t.status === 'transit' && t.to === mine).length;
+  const c = (typeof _txCounts === 'function') ? _txCounts() : { pick: 0, recv: 0, late: 0 };
+  const incoming = c.pick + c.recv;
   const b = document.getElementById('tf-today-badge');
-  if(b) b.textContent = incoming ? ' — ' + incoming + ' à recevoir' : '';
+  if(b) b.textContent = incoming ? ' — ' + (c.recv ? c.recv + ' à recevoir' : '') + (c.recv && c.pick ? ', ' : '') + (c.pick ? c.pick + ' à préparer' : '') : '';
+  try { if(document.getElementById('tab-transfer') && document.getElementById('tab-transfer').classList.contains('active')) renderTx(); } catch(e){}
   const tb = document.getElementById('tf-tab-badge');
   if(tb){
     tb.textContent = incoming ? ' ' + incoming : '';
     tb.style.cssText = incoming ? 'background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px' : '';
   }
+}
+
+// ══════════════════════════════════════════
+//  TRANSFERTS v2 (26 Oct) — request → picking → in transit → blind receiving
+//  One transfer (« D-… ») = several products; each product is one record in
+//  allTransfers (same `grp`), saved with _tfSave like before, so the sales
+//  script moves stock exactly as for the old one-product transfers:
+//  sent → leaves the source picked for that line; received → arrives at the
+//  destination, in its « Non placé » zone (zoneIn), to be shelved with Déplacer.
+//  Statuses per line: requested · transit · received · notfound · cancelled.
+// ══════════════════════════════════════════
+const TX_CARRIERS = ['Maman', 'Yacine', 'Amadou', 'Autre'];
+const TX_GAP_REASONS = ['Manquant', 'Abîmé', "Erreur d'envoi", 'Autre'];
+let _tx = { tab: 'pick', open: null, mode: null, draft: null, stock: null, stockAt: 0, q: '' };
+let _txCamTarget = null;
+try { _tx.draft = JSON.parse(localStorage.getItem('bc_tx_draft') || 'null'); } catch(e){}
+
+function _txMine(){ return _tfMyLoc() || 'Store 1'; }
+function _txOther(l){ return l === 'Store 1' ? 'Store 2' : 'Store 1'; }
+function _txLbl(l){ return TF_LABEL[l] || l || '—'; }
+function _txSaveDraft(){ try { localStorage.setItem('bc_tx_draft', JSON.stringify(_tx.draft)); } catch(e){} }
+function _txNewId(){
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return 'D-' + p(d.getDate()) + p(d.getMonth() + 1) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-' + _devTag().slice(0, 2).toUpperCase();
+}
+function _txAge(ts){
+  const h = Math.floor((Date.now() - new Date(ts).getTime()) / 3600000);
+  return h < 1 ? "moins d'1 h" : h < 48 ? h + ' h' : Math.floor(h / 24) + ' j';
+}
+
+// Groups of lines (old one-product transfers become a group of one)
+function _txGroups(){
+  const g = {};
+  allTransfers.forEach(t => {
+    const k = t.grp || t.uid;
+    const o = g[k] || (g[k] = { grp: k, id: t.gid || t.id || k, lines: [], to: t.to, fulfiller: t.fulfiller || t.from, ts: t.reqTs || t.ts, by: t.by || '' });
+    o.lines.push(t);
+    if(t.sentTs){ o.sentTs = t.sentTs; o.carrier = t.carrier; o.boxes = t.boxes; o.sentBy = t.sentBy; }
+    if(t.receivedTs){ o.receivedTs = t.receivedTs; o.receivedBy = t.receivedBy; }
+    if(t.note) o.note = t.note;
+  });
+  return Object.keys(g).map(k => {
+    const o = g[k], st = o.lines.map(l => l.status);
+    o.status = st.includes('requested') ? 'requested' : st.includes('transit') ? 'transit'
+      : st.every(s => s === 'cancelled') ? 'cancelled' : 'received';
+    o.gaps = o.lines.filter(l => l.status === 'received' && l.qtyReceived != null && l.qtyReceived !== l.qty).length + o.lines.filter(l => l.status === 'notfound').length;
+    return o;
+  }).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+}
+function _txCounts(){
+  const mine = _txMine(), gs = _txGroups();
+  return {
+    pick: gs.filter(g => g.status === 'requested' && g.fulfiller === mine).length,
+    recv: gs.filter(g => g.status === 'transit' && g.to === mine).length,
+    late: gs.filter(g => g.status === 'transit' && (Date.now() - new Date(g.sentTs || g.ts).getTime()) > 24 * 3600000).length
+  };
+}
+
+async function _txLoadStock(force){
+  if(!productSyncUrl) return;
+  if(!force && _tx.stock && Date.now() - _tx.stockAt < 10 * 60000) return;
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getStockSummary', { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.stock){ _tx.stock = d.stock; _tx.stockAt = Date.now(); renderTx(); }
+  } catch(e){}
+}
+function _txStockLine(bc){
+  const s = _tx.stock && _tx.stock[String(bc || '').replace(/^0+/, '')];
+  if(!s) return '';
+  const f = v => v == null ? '—' : v;
+  return '<span class="tx-stk">Balkuy ' + f(s.s1) + ' · Ouaga 2000 ' + f(s.s2) + ' · Entrepôt ' + f(s.wh) + '</span>';
+}
+function _txFind(q){
+  q = String(q || '').trim();
+  if(!q) return [];
+  if(/^\d{4,}$/.test(q)){
+    const code = resolveAlias(q), p = lookupBarcode(code);
+    return p ? [{ barcode: canonicalBarcode(code), name: p.name }] : [{ barcode: code, name: '', unknown: true }];
+  }
+  const words = _catNorm(q).split(' ').filter(Boolean);
+  if(!words.length || q.length < 2) return [];
+  const src = (_plAll && _plAll.length) ? _plAll : Object.keys(BARCODE_DB).map(bc => ({ barcode: bc, name: BARCODE_DB[bc].name }));
+  return src.filter(p => p.name && words.every(w => _catNorm(p.name).indexOf(w) >= 0)).slice(0, 10).map(p => ({ barcode: p.barcode, name: p.name }));
+}
+
+// ── Screen ──
+function txTab(t){ _tx.tab = t; _tx.open = null; _tx.mode = null; renderTx(); }
+function renderTx(){
+  const root = document.getElementById('tx-root'); if(!root) return;
+  const c = _txCounts();
+  const tabs = [['new', '📝 Demander', 0], ['pick', '📦 À préparer', c.pick], ['recv', '📥 À recevoir', c.recv], ['log', '📋 Suivi', c.late]];
+  let h = '<div class="tx-tabs">' + tabs.map(t => '<button type="button" class="tx-tab' + (_tx.tab === t[0] ? ' on' : '') + '" onclick="txTab(\'' + t[0] + '\')">' + t[1] +
+    (t[2] ? ' <span class="tx-b' + (t[0] === 'log' ? ' late' : '') + '">' + t[2] + '</span>' : '') + '</button>').join('') +
+    '<button type="button" class="tx-tab" style="margin-left:auto" title="Actualiser" onclick="refreshTransfers();_txLoadStock(true)">🔄</button></div>';
+  if(_tx.mode === 'pick' && _tx.open) h += _txPickHTML();
+  else if(_tx.mode === 'recv' && _tx.open) h += _txRecvHTML();
+  else if(_tx.mode === 'check' && _tx.open) h += _txCheckHTML();
+  else if(_tx.tab === 'new') h += _txNewHTML();
+  else if(_tx.tab === 'pick') h += _txListHTML('pick');
+  else if(_tx.tab === 'recv') h += _txListHTML('recv');
+  else h += _txLogHTML();
+  root.innerHTML = h;
+  const s = document.getElementById('tx-scan'); if(s && !('ontouchstart' in window)) s.focus();
+}
+function _txScanBar(placeholder, fn){
+  return '<div class="tx-scanbar"><input id="tx-scan" class="tf-scan-field" type="text" autocomplete="off" placeholder="' + placeholder + '"' +
+    ' oninput="' + (fn === 'txNewSearch' ? 'txNewSearch(this.value)' : '') + '" onkeydown="if(event.key===\'Enter\'){' + fn + 'Enter(this.value);this.value=\'\'}">' +
+    (cameraScanSupported() ? '<button type="button" class="btn-sm btn-outline" onclick="_txCamTarget=' + fn + 'Enter;openCameraScan()">📷</button>' : '') + '</div>';
+}
+
+// 1. New request
+function _txDraft(){
+  if(!_tx.draft) _tx.draft = { to: _txMine(), fulfiller: _txOther(_txMine()), lines: [], note: '' };
+  return _tx.draft;
+}
+function _txNewHTML(){
+  const d = _txDraft();
+  const opt = (v, sel, list) => list.map(l => '<option value="' + l + '"' + (l === sel ? ' selected' : '') + '>' + _txLbl(l) + '</option>').join('');
+  let h = '<div class="tx-card"><div class="tx-row2"><label>Pour<select class="dlv-field" onchange="_txDraft().to=this.value;_txSaveDraft()">' + opt(0, d.to, ['Store 1', 'Store 2']) + '</select></label>' +
+    '<label>Demandé à<select class="dlv-field" onchange="_txDraft().fulfiller=this.value;_txSaveDraft()">' + opt(0, d.fulfiller, ['Store 1', 'Store 2', 'Warehouse']) + '</select></label></div>' +
+    _txScanBar('Scanner ou chercher un produit…', 'txNewSearch') + '<div id="tx-results"></div>';
+  h += d.lines.length ? d.lines.map((l, i) => '<div class="tx-line"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b><div class="dlv-dim">' + _tfEsc(l.barcode) + ' ' + _txStockLine(l.barcode) + '</div></div>' +
+      '<div class="tx-qty"><button onclick="txDraftQty(' + i + ',-1)">−</button><span>' + l.qty + '</span><button onclick="txDraftQty(' + i + ',1)">+</button></div>' +
+      '<button class="tx-x" title="Retirer" onclick="txDraftDel(' + i + ')">✕</button></div>').join('')
+    : '<div class="dlv-dim" style="padding:10px 2px">Scannez ou cherchez les produits dont le magasin a besoin.</div>';
+  h += '<input class="dlv-field" placeholder="Note (facultatif) : urgent, client qui attend…" value="' + _tfEsc(d.note) + '" oninput="_txDraft().note=this.value;_txSaveDraft()" style="margin-top:8px">' +
+    '<button class="btn-primary" style="margin-top:10px" ' + (d.lines.length ? '' : 'disabled ') + 'onclick="txSendRequest()">📨 Envoyer la demande (' + d.lines.reduce((s, l) => s + l.qty, 0) + ' article(s))</button></div>';
+  return h;
+}
+function txNewSearch(v){
+  const box = document.getElementById('tx-results'); if(!box) return;
+  if(/^\d+$/.test(String(v).trim())){ box.innerHTML = ''; return; }
+  const r = _txFind(v);
+  box.innerHTML = r.map(p => '<div class="catadm-res" onclick="txDraftAdd(\'' + _tfEsc(p.barcode) + '\')"><span>' + _tfEsc(p.name) + '</span><span class="dlv-dim">＋</span></div>').join('');
+}
+function txNewSearchEnter(v){
+  const r = _txFind(v);
+  if(r.length === 1 && !r[0].unknown) txDraftAdd(r[0].barcode);
+  else if(r.length && r[0].unknown) showToast('Code ' + v + ' inconnu : ajoutez d\'abord le produit.', 3500);
+}
+function txDraftAdd(bc){
+  const d = _txDraft(), k = _bcKeyClient(bc);
+  const ex = d.lines.find(l => _bcKeyClient(l.barcode) === k);
+  if(ex) ex.qty++; else d.lines.push({ barcode: bc, name: (lookupBarcode(bc) || {}).name || bc, qty: 1 });
+  _txSaveDraft(); renderTx();
+}
+function txDraftQty(i, n){ const l = _txDraft().lines[i]; if(!l) return; l.qty = Math.max(1, l.qty + n); _txSaveDraft(); renderTx(); }
+function txDraftDel(i){ _txDraft().lines.splice(i, 1); _txSaveDraft(); renderTx(); }
+function txSendRequest(){
+  const d = _txDraft(); if(!d.lines.length) return;
+  if(d.to === d.fulfiller){ showToast('Le magasin qui demande et celui qui envoie sont les mêmes.', 3500); return; }
+  const grp = 'G' + Date.now().toString(36) + _devTag(), gid = _txNewId(), now = new Date();
+  d.lines.forEach((l, i) => _tfSave({ uid: grp + '-' + i, grp: grp, gid: gid, id: gid, ts: now.toISOString(), reqTs: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
+    from: d.fulfiller, to: d.to, fulfiller: d.fulfiller, barcode: l.barcode, name: l.name, qty: l.qty, reqQty: l.qty, notes: d.note, note: d.note,
+    by: currentEmployee || 'Admin', status: 'requested', qtyReceived: null, zoneIn: 'Non placé' }));
+  _tx.draft = null; _txSaveDraft();
+  showToast('📨 Demande ' + gid + ' envoyée à ' + _txLbl(d.fulfiller) + '.', 4000);
+  _tx.tab = 'log'; renderTx(); updateTfBadge();
+}
+
+// Lists
+function _txGroupCard(g, action){
+  const n = g.lines.reduce((s, l) => s + (l.status === 'requested' ? (l.reqQty || l.qty) : l.qty), 0);
+  const late = g.status === 'transit' && (Date.now() - new Date(g.sentTs || g.ts).getTime()) > 24 * 3600000;
+  return '<div class="tx-card' + (late ? ' late' : '') + '" ' + (action ? 'onclick="' + action + '" style="cursor:pointer"' : '') + '><div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+    '<div><b>' + _tfEsc(g.id) + '</b> · ' + _txLbl(g.fulfiller) + ' → ' + _txLbl(g.to) + '<div class="dlv-dim">' + g.lines.length + ' produit(s), ' + n + ' article(s) · ' +
+    (g.status === 'requested' ? 'demandé par ' + _tfEsc(g.by) + ' il y a ' + _txAge(g.ts) : g.status === 'transit' ? 'envoyé il y a ' + _txAge(g.sentTs || g.ts) + (g.carrier ? ' · porté par ' + _tfEsc(g.carrier) : '') + (g.boxes ? ' · ' + g.boxes + ' colis' : '')
+      : g.status === 'received' ? 'reçu par ' + _tfEsc(g.receivedBy || '?') + (g.gaps ? ' · <b style="color:#b45309">' + g.gaps + ' écart(s)</b>' : ' · complet') : 'annulé') +
+    (g.note ? ' · « ' + _tfEsc(g.note) + ' »' : '') + '</div></div>' + (action ? '<span class="tx-go">›</span>' : '') + '</div></div>';
+}
+function _txListHTML(kind){
+  const mine = _txMine(), gs = _txGroups();
+  const st = kind === 'pick' ? 'requested' : 'transit';
+  const forMe = gs.filter(g => g.status === st && (kind === 'pick' ? g.fulfiller === mine : g.to === mine));
+  const others = gs.filter(g => g.status === st && !forMe.includes(g));
+  const fn = kind === 'pick' ? 'txOpenPick' : 'txOpenRecv';
+  let h = kind === 'pick' ? '<button class="btn-sm btn-outline" style="margin:4px 0 10px" onclick="txOpenPick(null)">＋ Envoi sans demande</button>' : '';
+  h += forMe.length ? forMe.map(g => _txGroupCard(g, fn + '(\'' + g.grp + '\')')).join('') : '<div class="dlv-dim" style="padding:8px 2px">' + (kind === 'pick' ? 'Aucune demande à préparer pour ' + _txLbl(mine) + '.' : 'Rien à recevoir à ' + _txLbl(mine) + '.') + '</div>';
+  if(others.length) h += '<div class="dlv-lbl" style="margin-top:10px">Autres magasins</div>' + others.map(g => _txGroupCard(g, fn + '(\'' + g.grp + '\')')).join('');
+  return h;
+}
+function _txLogHTML(){
+  const gs = _txGroups().slice(0, 40);
+  return gs.length ? gs.map(g => _txGroupCard(g, 'txOpenDetail(\'' + g.grp + '\')')).join('') : '<div class="dlv-dim" style="padding:8px 2px">Aucun transfert pour l\'instant.</div>';
+}
+function txOpenDetail(grp){
+  const g = _txGroups().find(x => x.grp === grp); if(!g) return;
+  if(g.status === 'requested') return txOpenPick(grp);
+  if(g.status === 'transit') return txOpenRecv(grp);
+  const rows = g.lines.map(l => '<tr><td>' + _tfEsc(l.name) + '</td><td class="n">' + (l.reqQty != null ? l.reqQty : '—') + '</td><td class="n">' + (l.status === 'notfound' ? '0' : l.qty) + '</td><td class="n">' +
+    (l.qtyReceived == null ? '—' : l.qtyReceived) + '</td><td>' + _tfEsc(l.status === 'notfound' ? 'pas trouvé' : l.gapReason || '') + '</td></tr>').join('');
+  const box = document.createElement('div'); box.className = 'lbl-zoom'; box.onclick = e => { if(e.target === box) box.remove(); };
+  box.innerHTML = '<div style="text-align:left;max-width:min(94vw,720px)"><b>' + _tfEsc(g.id) + '</b> · ' + _txLbl(g.fulfiller) + ' → ' + _txLbl(g.to) +
+    '<div class="sd-tbl" style="margin-top:8px"><table><thead><tr><th>Produit</th><th class="n">Demandé</th><th class="n">Envoyé</th><th class="n">Reçu</th><th>Écart</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<button class="btn-sm btn-outline" style="margin-top:8px" onclick="this.closest(\'.lbl-zoom\').remove()">Fermer</button></div>';
+  document.body.appendChild(box);
+}
+
+// 2. Picking
+function txOpenPick(grp){
+  const mine = _txMine();
+  if(grp){
+    const g = _txGroups().find(x => x.grp === grp); if(!g) return;
+    _tx.open = { grp: grp, gid: g.id, to: g.to, fulfiller: g.fulfiller, carrier: '', boxes: 1,
+      lines: g.lines.map(l => ({ rec: l, barcode: l.barcode, name: l.name, req: l.reqQty || l.qty, picked: 0, src: g.fulfiller })) };
+  } else {
+    _tx.open = { grp: 'G' + Date.now().toString(36) + _devTag(), gid: _txNewId(), to: _txOther(mine), fulfiller: mine, carrier: '', boxes: 1, lines: [], direct: true };
+  }
+  _tx.mode = 'pick'; renderTx(); _txLoadStock();
+}
+function _txPickHTML(){
+  const o = _tx.open;
+  const srcs = ['Store 1', 'Store 2', 'Warehouse'];
+  let h = '<div class="tx-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>' + _tfEsc(o.gid) + '</b> · préparer pour <b>' + _txLbl(o.to) + '</b></div>' +
+    '<button class="btn-sm btn-outline" onclick="_tx.mode=null;_tx.open=null;renderTx()">← Retour</button></div>';
+  if(o.direct) h += '<label style="display:block;margin-top:6px">Envoyer à <select class="dlv-field" style="width:auto" onchange="_tx.open.to=this.value">' + ['Store 1', 'Store 2', 'Warehouse'].map(l => '<option value="' + l + '"' + (l === o.to ? ' selected' : '') + '>' + _txLbl(l) + '</option>').join('') + '</select></label>';
+  h += '<div class="dlv-dim" style="margin:6px 0">Scannez chaque article en le mettant dans le carton.</div>' + _txScanBar('Scanner un article…', 'txPick');
+  h += o.lines.length ? o.lines.map((l, i) => {
+    const done = l.picked >= l.req && l.req > 0, over = l.req && l.picked > l.req;
+    return '<div class="tx-line' + (done ? ' ok' : '') + (over ? ' warn' : '') + '"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b><div class="dlv-dim">' + (l.req ? 'demandé ' + l.req : 'hors demande') + ' ' + _txStockLine(l.barcode) + '</div>' +
+      '<label class="dlv-dim">Pris à <select onchange="_tx.open.lines[' + i + '].src=this.value">' + srcs.map(s => '<option value="' + s + '"' + (s === l.src ? ' selected' : '') + '>' + _txLbl(s) + '</option>').join('') + '</select></label></div>' +
+      '<div class="tx-qty"><button onclick="txPickQty(' + i + ',-1)">−</button><span class="big">' + l.picked + '</span><button onclick="txPickQty(' + i + ',1)">+</button></div></div>';
+  }).join('') : '<div class="dlv-dim" style="padding:8px 2px">Scannez les articles à envoyer.</div>';
+  const missing = o.lines.filter(l => l.req && l.picked === 0).length;
+  h += '<div class="tx-row2" style="margin-top:10px"><label>Porté par<select class="dlv-field" onchange="_tx.open.carrier=this.value"><option value="">— choisir —</option>' +
+    TX_CARRIERS.map(c => '<option' + (c === o.carrier ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></label>' +
+    '<label>Colis<input class="dlv-field" type="number" min="1" value="' + o.boxes + '" onchange="_tx.open.boxes=Math.max(1,parseInt(this.value,10)||1)"></label></div>' +
+    (missing ? '<div class="dlv-dim" style="color:#b45309;margin-top:6px">' + missing + ' produit(s) à 0 seront marqués « pas trouvé ».</div>' : '') +
+    '<div style="display:flex;gap:8px;margin-top:10px">' + (o.direct ? '' : '<button class="btn-sm btn-outline" onclick="txCancelGroup()">Annuler la demande</button>') +
+    '<button class="btn-primary" style="flex:1" onclick="txSendPick()">🚚 Envoyer (' + o.lines.reduce((s, l) => s + l.picked, 0) + ' article(s))</button></div></div>';
+  return h;
+}
+function txPickEnter(v){
+  const code = resolveAlias(String(v || '').trim()); if(!code) return;
+  if(!/^\d+$/.test(code)){ rejectDirtyBarcode(code); return; }
+  const o = _tx.open, k = _bcKeyClient(code);
+  let l = o.lines.find(x => _bcKeyClient(x.barcode) === k);
+  if(!l){
+    const p = lookupBarcode(code);
+    if(!p){ showToast('❓ Code ' + code + ' inconnu.', 3000); try { playErrorBeep && playErrorBeep(); } catch(e){} return; }
+    l = { rec: null, barcode: canonicalBarcode(code), name: p.name, req: 0, picked: 0, src: o.fulfiller };
+    o.lines.push(l);
+  }
+  l.picked++;
+  if(l.req && l.picked > l.req) showToast('⚠ Plus que demandé : ' + l.picked + ' / ' + l.req, 2500);
+  renderTx();
+}
+function txPickQty(i, n){ const l = _tx.open.lines[i]; if(!l) return; l.picked = Math.max(0, l.picked + n); renderTx(); }
+function txSendPick(){
+  const o = _tx.open;
+  if(!o.lines.some(l => l.picked > 0)){ showToast('Aucun article scanné.', 3000); return; }
+  if(!o.carrier){ showToast('Choisissez qui porte le colis.', 3000); return; }
+  if(o.to === o.fulfiller && o.direct){ showToast('Choisissez le magasin de destination.', 3000); return; }
+  const now = new Date(), who = currentEmployee || 'Admin';
+  o.lines.forEach((l, i) => {
+    const base = l.rec ? Object.assign({}, l.rec) : { uid: o.grp + '-x' + i, grp: o.grp, gid: o.gid, id: o.gid, ts: now.toISOString(), reqTs: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
+      to: o.to, fulfiller: o.fulfiller, barcode: l.barcode, name: l.name, reqQty: 0, by: who, qtyReceived: null, zoneIn: 'Non placé', extra: !o.direct };
+    Object.assign(base, { from: l.src, qty: l.picked, status: l.picked > 0 ? 'transit' : 'notfound', sentTs: now.toISOString(), sentBy: who, carrier: o.carrier, boxes: o.boxes, pickedBy: who });
+    _tfSave(base);
+  });
+  showToast('🚚 ' + o.gid + ' envoyé à ' + _txLbl(o.to) + ' — en transit.', 4000);
+  _tx.open = null; _tx.mode = null; _tx.tab = 'log'; renderTx(); updateTfBadge();
+}
+function txCancelGroup(){
+  const o = _tx.open; if(!o || !confirm('Annuler la demande ' + o.gid + ' ?')) return;
+  o.lines.forEach(l => { if(l.rec){ const r = Object.assign({}, l.rec, { status: 'cancelled' }); _tfSave(r); } });
+  _tx.open = null; _tx.mode = null; renderTx(); updateTfBadge();
+}
+
+// 3. Blind receiving
+function txOpenRecv(grp){
+  const g = _txGroups().find(x => x.grp === grp); if(!g) return;
+  _tx.open = { grp: grp, gid: g.id, to: g.to, fulfiller: g.fulfiller, carrier: g.carrier, boxes: g.boxes,
+    lines: g.lines.filter(l => l.status === 'transit').map(l => ({ rec: l, barcode: l.barcode, name: l.name, got: 0, reason: '' })), extras: [] };
+  _tx.mode = 'recv'; renderTx();
+}
+function _txRecvHTML(){
+  const o = _tx.open;
+  let h = '<div class="tx-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>' + _tfEsc(o.gid) + '</b> · de ' + _txLbl(o.fulfiller) +
+    (o.carrier ? ' · porté par ' + _tfEsc(o.carrier) : '') + (o.boxes ? ' · ' + o.boxes + ' colis' : '') + '</div><button class="btn-sm btn-outline" onclick="_tx.mode=null;_tx.open=null;renderTx()">← Retour</button></div>' +
+    '<div class="dlv-dim" style="margin:6px 0">Scannez chaque article en le sortant du carton. Les quantités envoyées restent cachées : comptez ce qui est vraiment là.</div>' + _txScanBar('Scanner un article…', 'txRecv');
+  const all = o.lines.concat(o.extras);
+  h += all.map((l, i) => '<div class="tx-line' + (l.got ? ' ok' : '') + '"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b>' + (l.extra ? '<div class="dlv-dim" style="color:#b45309">pas dans la liste</div>' : '') + '</div>' +
+    '<div class="tx-qty"><button onclick="txRecvQty(' + i + ',-1)">−</button><span class="big">' + l.got + '</span><button onclick="txRecvQty(' + i + ',1)">+</button></div></div>').join('');
+  h += '<button class="btn-primary" style="margin-top:10px" onclick="_tx.mode=\'check\';renderTx()">✔ Terminer et comparer</button></div>';
+  return h;
+}
+function txRecvEnter(v){
+  const code = resolveAlias(String(v || '').trim()); if(!code) return;
+  if(!/^\d+$/.test(code)){ rejectDirtyBarcode(code); return; }
+  const o = _tx.open, k = _bcKeyClient(code);
+  let l = o.lines.find(x => _bcKeyClient(x.barcode) === k) || o.extras.find(x => _bcKeyClient(x.barcode) === k);
+  if(!l){
+    const p = lookupBarcode(code);
+    l = { rec: null, barcode: p ? canonicalBarcode(code) : code, name: p ? p.name : 'Code ' + code, got: 0, extra: true, reason: '' };
+    o.extras.push(l);
+  }
+  l.got++; renderTx();
+}
+function txRecvQty(i, n){ const o = _tx.open, all = o.lines.concat(o.extras), l = all[i]; if(!l) return; l.got = Math.max(0, l.got + n); renderTx(); }
+function _txCheckHTML(){
+  const o = _tx.open;
+  const gaps = o.lines.filter(l => l.got !== l.rec.qty).concat(o.extras.filter(l => l.got > 0));
+  let h = '<div class="tx-card"><b>' + _tfEsc(o.gid) + '</b> · comparaison avec l\'envoi';
+  h += '<div class="sd-tbl" style="margin-top:8px"><table><thead><tr><th>Produit</th><th class="n">Envoyé</th><th class="n">Reçu</th><th>Écart</th></tr></thead><tbody>' +
+    o.lines.concat(o.extras.filter(l => l.got > 0)).map(l => {
+      const sent = l.rec ? l.rec.qty : 0, gap = l.got !== sent;
+      const idx = o.lines.indexOf(l) >= 0 ? 'l' + o.lines.indexOf(l) : 'e' + o.extras.indexOf(l);
+      return '<tr' + (gap ? ' style="background:#fff7ed"' : '') + '><td>' + _tfEsc(l.name) + '</td><td class="n">' + sent + '</td><td class="n"><b>' + l.got + '</b></td><td>' +
+        (gap ? '<select onchange="txGapReason(\'' + idx + '\',this.value)"><option value="">— raison —</option>' + TX_GAP_REASONS.map(r => '<option' + (r === l.reason ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>' : '✓') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  h += gaps.length ? '<div class="dlv-dim" style="color:#b45309;margin-top:6px">' + gaps.length + ' écart(s) : choisissez une raison pour chacun. Vous serez prévenu à l\'admin.</div>' : '<div style="color:#15803d;margin-top:6px;font-weight:700">✓ Tout est là.</div>';
+  h += '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn-sm btn-outline" onclick="_tx.mode=\'recv\';renderTx()">← Recompter</button>' +
+    '<button class="btn-primary" style="flex:1" onclick="txConfirmRecv()">📥 Confirmer la réception</button></div>' +
+    '<div class="dlv-dim" style="margin-top:6px">Le stock reçu arrive dans la zone « Non placé » du magasin : rangez-le ensuite avec Déplacer (Stock1981).</div></div>';
+  return h;
+}
+function txGapReason(idx, v){ const o = _tx.open; const l = idx[0] === 'l' ? o.lines[+idx.slice(1)] : o.extras[+idx.slice(1)]; if(l) l.reason = v; }
+function txConfirmRecv(){
+  const o = _tx.open;
+  const gaps = o.lines.filter(l => l.got !== l.rec.qty).concat(o.extras.filter(l => l.got > 0));
+  if(gaps.some(l => !l.reason)){ showToast('Choisissez une raison pour chaque écart.', 3500); return; }
+  const now = new Date(), who = currentEmployee || '';
+  o.lines.forEach(l => _tfSave(Object.assign({}, l.rec, { status: 'received', qtyReceived: l.got, receivedBy: who, receivedTs: now.toISOString(), gapReason: l.got !== l.rec.qty ? l.reason : '' })));
+  o.extras.filter(l => l.got > 0).forEach((l, i) => _tfSave({ uid: o.grp + '-r' + Date.now().toString(36) + i, grp: o.grp, gid: o.gid, id: o.gid, ts: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
+    from: o.fulfiller, to: o.to, fulfiller: o.fulfiller, barcode: l.barcode, name: l.name, qty: 0, reqQty: 0, status: 'received', qtyReceived: l.got,
+    receivedBy: who, receivedTs: now.toISOString(), by: who, extra: true, gapReason: l.reason, zoneIn: 'Non placé' }));
+  showToast(gaps.length ? '📥 Reçu avec ' + gaps.length + ' écart(s) signalé(s).' : '📥 ' + o.gid + ' reçu, complet.', 4500);
+  _tx.open = null; _tx.mode = null; _tx.tab = 'log'; renderTx(); updateTfBadge();
 }
 
 async function refreshTransfers(){
