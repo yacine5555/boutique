@@ -214,7 +214,7 @@ function doGet(e) {
       return handleGetZoneStock(e.parameter.location);
     }
     if (e.parameter && e.parameter.action === 'getPriceList') {
-      return handleGetPriceList();
+      return handleGetPriceList(e.parameter.key === WRITE_KEY);
     }
     if (e.parameter && e.parameter.action === 'getPriceTasks') {
       return handleGetPriceTasks(e.parameter.location || '');
@@ -375,6 +375,9 @@ function doPost(e) {
     }
     if (body.action === "stock1981Labels") {
       return handleStock1981Labels(body);
+    }
+    if (body.action === "updateCost") {
+      return handleUpdateCost(body);
     }
     if (body.action === "applyCodeReplacements") {
       return jsonResponse(applyCodeReplacements());
@@ -1142,12 +1145,17 @@ function _effectivePrice(loc, master, sp) {
 }
 
 /** getPriceList — for the Admin list and the price session. */
-function handleGetPriceList() {
+function handleGetPriceList(withCost) {
   const mm = _masterMap(), sp = _spMap(_spSheet());
+  const aliases = loadAliasMap_();
+  const cost = withCost ? _costMap_() : {};
   const products = [];
   Object.keys(mm).forEach(k => {
+    if (aliases[k]) return; // old made-up code, replaced by its real barcode
     const m = mm[k], s = sp[k];
-    products.push({ barcode: m.barcode, name: m.name, category: m.category, m: m.price, s1: s ? s.s1 : null, s2: s ? s.s2 : null });
+    const p = { barcode: m.barcode, name: m.name, category: m.category, m: m.price, s1: s ? s.s1 : null, s2: s ? s.s2 : null };
+    if (withCost) p.cost = cost[k] != null ? cost[k] : null;
+    products.push(p);
   });
   products.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   return jsonResponse({ success: true, products: products, generatedAt: new Date().toISOString() });
@@ -3911,4 +3919,47 @@ function _moveZoneRows_(oldK, realBc, realName) {
       sp.getRange(2, 1, n, SPOT_STOCK_HEADERS.length).setValues(v);
     }
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  COST PRICE (USD) — added 26 Oct 2026
+//  Product Master column I « Cost (USD) ». Read with getPriceList when the
+//  write key is given (the Scanner's Admin list); written with POST
+//  {action:"updateCost", barcode, cost, by}. Logged in "Cost Edits".
+// ══════════════════════════════════════════════════════════════════════════
+const COST_COL = 9; // I
+function _costMap_() {
+  const pm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const out = {};
+  if (!pm || pm.getLastRow() < FIRST_DATA_ROW) return out;
+  pm.getRange(FIRST_DATA_ROW, 8, pm.getLastRow() - FIRST_DATA_ROW + 1, 2).getValues().forEach(r => {
+    if (!r[0]) return;
+    const k = barcodeKey(r[0]);
+    const v = Number(String(r[1]).replace(',', '.'));
+    if (r[1] !== '' && r[1] !== null && isFinite(v) && out[k] == null) out[k] = v;
+  });
+  return out;
+}
+function handleUpdateCost(body) {
+  const k = barcodeKey(resolveAlias_(body.barcode));
+  const cost = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(String(body.cost).replace(',', '.'));
+  if (!k || (cost !== '' && (!isFinite(cost) || cost < 0 || cost > 100000))) return jsonResponse({ success: false, error: "Code ou coût invalide" }, 400);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pm = ss.getSheetByName(SHEET_NAME);
+  const n = pm.getLastRow() - FIRST_DATA_ROW + 1;
+  const vals = pm.getRange(FIRST_DATA_ROW, 1, n, 9).getValues();
+  let hit = 0, name = '', old = '';
+  vals.forEach((r, i) => {
+    if (r[7] && barcodeKey(r[7]) === k) {
+      if (!hit) { name = String(r[1] || ''); old = r[8]; }
+      pm.getRange(FIRST_DATA_ROW + i, COST_COL).setValue(cost);
+      hit++;
+    }
+  });
+  if (!hit) return jsonResponse({ success: false, error: "Produit introuvable dans Product Master" }, 404);
+  let log = ss.getSheetByName('Cost Edits');
+  if (!log) { log = ss.insertSheet('Cost Edits'); log.appendRow(['Timestamp', 'Barcode', 'Product', 'Old Cost (USD)', 'New Cost (USD)', 'By']); log.setFrozenRows(1); log.getRange('B:B').setNumberFormat('@'); }
+  log.appendRow([Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), normalizeBarcode(body.barcode), name, old, cost, String(body.by || '')]);
+  return jsonResponse({ success: true, cost: cost, rows: hit });
 }

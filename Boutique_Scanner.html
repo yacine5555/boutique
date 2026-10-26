@@ -1373,7 +1373,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-c</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -7512,7 +7512,7 @@ function _plIndex(){ _plMap = {}; (_plAll || []).forEach(p => { _plMap[_bcKeyCli
 async function loadPriceList(silent){
   if(!productSyncUrl) return false;
   try {
-    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPriceList', { cache: 'no-store' });
+    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPriceList' + (writeKey ? '&key=' + encodeURIComponent(writeKey) : ''), { cache: 'no-store' });
     const d = await r.json();
     if(d && Array.isArray(d.products)){ _plAll = d.products; _plTs = Date.now(); _plIndex(); renderPriceAdmin(); return true; }
     if(!silent) showToast('❌ Liste des prix : réponse inattendue (redéployez Code_updated.gs).', 5000);
@@ -7550,6 +7550,7 @@ function _plRows(){
     if(_plFilter === 'diff') return p.s1 != null && p.s2 != null && p.s1 !== p.s2;
     if(_plFilter === 'fixed') return p.s1 != null || p.s2 != null;
     if(_plFilter === 'best') return _plBestRank()[_bcKeyClient(p.barcode)] != null;
+    if(_plFilter === 'nocost') return p.cost == null;
     return true;
   }).sort((a, b) => {
     if(_plFilter !== 'best') return 0;
@@ -7572,14 +7573,15 @@ function renderPriceAdmin(){
     '<button class="dlv-tab' + (_plFilter === 'missing' ? ' on' : '') + '" onclick="setPlFilter(\'missing\')">Prix manquant (' + nMiss + ')</button>' +
     '<button class="dlv-tab' + (_plFilter === 'diff' ? ' on' : '') + '" onclick="setPlFilter(\'diff\')">Prix différents (' + nDiff + ')</button>' +
     '<button class="dlv-tab' + (_plFilter === 'fixed' ? ' on' : '') + '" onclick="setPlFilter(\'fixed\')">✅ Prix déjà fixés (' + _plAll.filter(p => p.s1 != null || p.s2 != null).length + ')</button>' +
-    '<button class="dlv-tab' + (_plFilter === 'best' ? ' on' : '') + '" onclick="setPlFilter(\'best\')" title="Les 60 plus vendus sur 30 jours (données du Top 25)">🏆 Meilleures ventes</button></div>' +
+    '<button class="dlv-tab' + (_plFilter === 'best' ? ' on' : '') + '" onclick="setPlFilter(\'best\')" title="Les 60 plus vendus sur 30 jours (données du Top 25)">🏆 Meilleures ventes</button>' +
+    (_plAll.some(p => 'cost' in p) ? '<button class="dlv-tab' + (_plFilter === 'nocost' ? ' on' : '') + '" onclick="setPlFilter(\'nocost\')">💲 Sans prix d\'achat (' + _plAll.filter(p => p.cost == null).length + ')</button>' : '') + '</div>' +
     (_plFilter === 'best' && !(_top25 && _top25.items && _top25.items.length) ? '<div class="dlv-dim">Chargez d\'abord le Top 25 (onglet Ventes → Actualiser).</div>' : '');
   h += '<input class="dlv-field" id="pl-search" type="search" placeholder="Rechercher un produit ou un code…" value="' + _psEsc(_plQuery) + '" oninput="_plQuery=this.value;renderPriceAdmin(true)" onkeydown="plSearchKey(event)" style="margin:6px 0"/>';
-  h += '<div class="ex-row" style="font-size:11px;color:var(--ink3)"><div style="flex:1">Produit</div><div style="width:64px;text-align:right">Principal</div><div style="width:64px;text-align:right">Balkuy</div><div style="width:64px;text-align:right">Ouaga 2000</div></div>';
+  h += '<div class="ex-row" style="font-size:11px;color:var(--ink3)"><div style="flex:1">Produit</div><div style="width:64px;text-align:right">Principal</div><div style="width:64px;text-align:right">Balkuy</div><div style="width:64px;text-align:right">Ouaga 2000</div><div style="width:58px;text-align:right">Achat $</div></div>';
   h += '<div class="pl-scroll">' + rows.slice(0, 60).map(p => {
     const diff = p.s1 != null && p.s2 != null && p.s1 !== p.s2;
     return '<div class="ex-row" style="cursor:pointer" onclick="openPlEdit(\'' + _psEsc(p.barcode) + '\')"><div style="flex:1"><b>' + _psEsc(p.name) + '</b><div class="dlv-dim">' + _psEsc(p.barcode) + (diff ? ' · ⚠ prix différents' : '') + '</div></div>' +
-      '<div style="width:64px;text-align:right;font-size:12px">' + _plFmt(p.m) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s1 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s1) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s2 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s2) + '</div></div>';
+      '<div style="width:64px;text-align:right;font-size:12px">' + _plFmt(p.m) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s1 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s1) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s2 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s2) + '</div><div style="width:58px;text-align:right;font-size:12px;color:' + (p.cost == null ? '#94a3b8' : '#0f172a') + '">' + (p.cost == null ? '—' : '$' + Number(p.cost).toLocaleString('fr-FR', { maximumFractionDigits: 2 })) + '</div></div>';
   }).join('');
   h += '</div>';
   if(rows.length > 60) h += '<div class="dlv-dim" style="padding:6px">… ' + (rows.length - 60) + ' autre(s) : affinez la recherche.</div>';
@@ -7595,10 +7597,40 @@ function openPlEdit(bc){
   document.getElementById('pl-e-name').textContent = p.name;
   document.getElementById('pl-e-sub').innerHTML = _psEsc(p.barcode) + ' · Principal : <b>' + _plFmt(p.m) + '</b> · Balkuy : <b>' + _plFmt(p.s1) + '</b> · Ouaga 2000 : <b>' + _plFmt(p.s2) + '</b>';
   document.getElementById('pl-e-price').value = '';
+  document.getElementById('pl-e-cost').value = p.cost != null ? p.cost : '';
+  plCostInfo();
   document.getElementById('pl-e-s1').checked = true; document.getElementById('pl-e-s2').checked = true;
   document.getElementById('pl-e-err').textContent = '';
   document.getElementById('pl-modal').classList.add('open');
   setTimeout(() => document.getElementById('pl-e-price').focus(), 80);
+}
+// Cost price (USD, Product Master col. I). Rule of thumb from 1981:
+// selling price = (US price × 600) × 2.
+const PL_USD_CFA = 600;
+function plCostInfo(){
+  const el = document.getElementById('pl-e-cost-info'); if(!el) return;
+  const p = _plMap[_bcKeyClient(_plEditBc)] || {};
+  const c = Number(document.getElementById('pl-e-cost').value);
+  if(!(c > 0)){ el.textContent = 'Prix payé aux États-Unis, en dollars, par unité.'; return; }
+  const buy = Math.round(c * PL_USD_CFA), sugg = Math.round(buy * 2 / 500) * 500;
+  const sell = p.s1 != null ? p.s1 : (p.m != null ? p.m : null);
+  el.innerHTML = '≈ <b>' + formatCFA(buy) + '</b> d\'achat · prix conseillé (×600×2) : <b>' + formatCFA(sugg) + '</b>' +
+    (sell ? ' · prix actuel ' + formatCFA(sell) + ' = <b style="color:' + (sell >= sugg ? '#15803d' : '#b45309') + '">×' + (sell / buy).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + '</b> le coût' : '');
+}
+async function savePlCost(){
+  const p = _plMap[_bcKeyClient(_plEditBc)]; if(!p) return;
+  const err = document.getElementById('pl-e-err'); err.textContent = '';
+  const raw = String(document.getElementById('pl-e-cost').value).trim().replace(',', '.');
+  const v = raw === '' ? '' : Number(raw);
+  if(v !== '' && (!isFinite(v) || v < 0)){ err.textContent = 'Coût invalide.'; return; }
+  if(!productSyncUrl || !writeKey){ err.textContent = 'Lien produits ou clé manquant.'; return; }
+  try {
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: writeKey, action: 'updateCost', barcode: p.barcode, cost: v, by: currentEmployee || 'Admin' }) });
+    const d = await r.json();
+    if(d && d.success){ p.cost = v === '' ? null : v; showToast('💲 Prix d\'achat enregistré', 2500); renderPriceAdmin(); plCostInfo(); }
+    else err.textContent = (d && d.error) || 'Le script d\'inventaire n\'est pas à jour.';
+  } catch(e){ err.textContent = 'Pas de connexion.'; }
 }
 function closePlEdit(){ document.getElementById('pl-modal').classList.remove('open'); }
 async function savePlEdit(){
@@ -11231,6 +11263,9 @@ closeSale = function(){
     <div class="dlv-lbl">Nouveau prix (CFA)</div>
     <input class="dlv-field" id="pl-e-price" type="number" min="0" inputmode="numeric" style="font-size:22px;text-align:center" onkeydown="if(event.key==='Enter')savePlEdit()"/>
     <div style="margin-top:8px;font-size:14px"><label><input type="checkbox" id="pl-e-s1" checked/> Balkuy</label> &nbsp; <label><input type="checkbox" id="pl-e-s2" checked/> Ouaga 2000</label></div>
+    <div class="dlv-lbl" style="margin-top:12px">Prix d'achat (USD, par unité)</div>
+    <div style="display:flex;gap:6px;align-items:center"><input class="dlv-field" id="pl-e-cost" type="number" min="0" step="0.01" inputmode="decimal" style="margin:0;flex:1" oninput="plCostInfo()" onkeydown="if(event.key==='Enter')savePlCost()"/><button class="btn-sm btn-outline" onclick="savePlCost()">💲 Enregistrer le coût</button></div>
+    <div class="dlv-dim" id="pl-e-cost-info" style="margin-top:4px"></div>
     <div class="dlv-dim" style="margin-top:6px">Une tâche « changer l'étiquette » est envoyée aux magasins dont le prix change.</div>
     <div class="pin-err" id="pl-e-err" style="margin-top:8px"></div>
     <button class="btn-sm btn-outline" style="margin-top:8px" onclick="(function(){const p=_plMap[_bcKeyClient(_plEditBc)];if(p)labelQueueAdd(p.barcode,p.name,lblPriceFor(p.barcode,p.m),1);})()">🏷 Ajouter aux étiquettes à imprimer</button>
