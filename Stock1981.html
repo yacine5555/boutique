@@ -400,7 +400,7 @@ function shapeSpots(zone, shape){
   if(!out.length) out.push({ code: zone, label: 'Toute la zone' });
   return out;
 }
-function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg` : ''; }
+function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1027` : ''; }
 function locName(id){ const L = LOCS.find(l => l.id === id); return L ? L.name : id; }
 function ago(iso){
   if(!iso) return '';
