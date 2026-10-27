@@ -1400,7 +1400,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v26-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v27-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1630,6 +1630,20 @@ input,select{font-family:inherit}
         <div class="admin-card-title">🗑 Pertes (jeté / perdu)</div>
         <button class="btn-sm btn-blue" onclick="loadLosses(false)">🔄 Actualiser</button>
         <div id="loss-admin-body" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Mouvements: every Déplacer from Stock1981 + what waits in « Non placé » (27 Oct 2026) -->
+      <div class="admin-card" style="grid-column:1/-1" id="mv-card">
+        <div class="admin-card-title">📦 Mouvements de stock</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">Chaque « Déplacer » fait dans Stock1981 (qui, quoi, d'où, vers où), et le stock qui attend dans « Non placé ». En rouge : en attente depuis plus de 24 h.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button class="btn-sm btn-blue" onclick="loadMovements(false)">🔄 Actualiser</button>
+          <select id="mv-loc" class="btn-sm btn-outline" onchange="renderMovements()" aria-label="Magasin"><option value="">Tous les lieux</option><option value="Store 1">Balkuy</option><option value="Store 2">Ouaga 2000</option><option value="Warehouse">Entrepôt</option></select>
+          <select id="mv-by" class="btn-sm btn-outline" onchange="renderMovements()" aria-label="Personne"><option value="">Tout le monde</option></select>
+          <select id="mv-days" class="btn-sm btn-outline" onchange="loadMovements(false)" aria-label="Période"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select>
+          <input id="mv-q" class="btn-sm btn-outline" style="flex:1;min-width:140px" placeholder="Produit, code ou zone…" oninput="renderMovements()">
+        </div>
+        <div id="mv-body" style="margin-top:8px"></div>
       </div>
 
       <!-- Sales dashboard (full screen) -->
@@ -5668,7 +5682,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
@@ -5728,7 +5742,7 @@ function adminTab(t){
   document.querySelectorAll('#screen-admin .admin-pane').forEach(p => p.classList.toggle('on', p.dataset.tab === t));
   document.querySelectorAll('#admin-tabs .admin-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   try { localStorage.setItem('bc_admin_tab', t); } catch(e){}
-  if(t === 'prix'){ try { loadPhotoReview(false); } catch(e){} try { renderLabelCard(); } catch(e){} try { loadNewCodes(false); } catch(e){} }
+  if(t === 'prix'){ try { loadPhotoReview(false); } catch(e){} try { renderLabelCard(); } catch(e){} try { loadNewCodes(false); } catch(e){} try { if(!_mv || Date.now() - _mv.ts > 10 * 60 * 1000) loadMovements(true); } catch(e){} }
   const w = document.querySelector('#screen-admin .admin-wrap'); if(w) w.scrollTop = 0;
   window.scrollTo(0, 0);
   _adminTabBadges();
@@ -7515,6 +7529,79 @@ function renderLosses(){
   h += '<div class="dlv-dim" style="margin-top:6px">' + Object.keys(byR).map(k => _exEsc(k) + ' : ' + formatCFA(byR[k])).join(' · ') + '</div>';
   h += '<div class="dlv-lbl" style="margin-top:10px">Dernières pertes</div>' + mine.slice(-8).reverse().map(x =>
     '<div class="dlv-dim">' + _exEsc(x.date) + ' · ' + _exEsc(x.name) + ' ×' + x.qty + ' · ' + _exEsc(x.reason) + (x.by ? ' · ' + _exEsc(x.by) : '') + (x.value != null ? ' · ' + formatCFA(x.value) : '') + '</div>').join('');
+  el.innerHTML = h;
+}
+
+// ── Mouvements (Admin): Déplacer from Stock1981 + stock waiting in « Non placé » ──
+let _mv = null, _mvShow = 60;
+const MV_LOC = { 'Store 1': 'Balkuy', 'Store 2': 'Ouaga 2000', 'Warehouse': 'Entrepôt' };
+async function loadMovements(silent){
+  const el = document.getElementById('mv-body');
+  if(!productSyncUrl || !writeKey){ if(el && !silent) el.innerHTML = '<div class="dlv-dim">Lien du Sheet d\'inventaire ou clé manquant (Réglages → Product Sync).</div>'; return; }
+  const days = (document.getElementById('mv-days') || {}).value || '30';
+  if(el && !_mv) el.innerHTML = '<div class="dlv-dim">Chargement…</div>';
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getMovements&days=' + encodeURIComponent(days) + '&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && Array.isArray(d.moves)){ _mv = { moves: d.moves, unplaced: d.unplaced || [], ts: Date.now() }; _mvShow = 60; _mvFillBy(); renderMovements(); }
+    else if(el) el.innerHTML = '<div class="dlv-dim">❌ Réponse inattendue : collez et déployez Code_updated_Stock1981_v7.gs (Nouvelle version).</div>';
+  } catch(e){ if(el && !silent) el.innerHTML = '<div class="dlv-dim">❌ Connexion impossible.</div>'; }
+}
+function _mvFillBy(){
+  const sel = document.getElementById('mv-by'); if(!sel || !_mv) return;
+  const cur = sel.value;
+  const names = Array.from(new Set(_mv.moves.map(m => m.by).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">Tout le monde</option>' + names.map(n => '<option value="' + _exEsc(n) + '"' + (n === cur ? ' selected' : '') + '>' + _exEsc(n) + '</option>').join('');
+}
+function _mvWhere(loc, zone){ return loc ? _exEsc(MV_LOC[loc] || loc) + (zone ? ' · ' + _exEsc(zone) : '') : '?'; }
+function _mvAgeH(iso){ if(!iso) return null; const t = new Date(iso).getTime(); return isNaN(t) ? null : (Date.now() - t) / 3600000; }
+function _mvDay(iso){
+  const d = String(iso).slice(0, 10), today = new Date(), y = new Date(Date.now() - 86400000);
+  const k = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+  if(d === k(today)) return "Aujourd'hui";
+  if(d === k(y)) return 'Hier';
+  const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d;
+}
+function renderMovements(){
+  const el = document.getElementById('mv-body'); if(!el) return;
+  if(!_mv){ el.innerHTML = '<div class="dlv-dim">Appuyez sur « Actualiser ».</div>'; return; }
+  const loc = (document.getElementById('mv-loc') || {}).value || '';
+  const by = (document.getElementById('mv-by') || {}).value || '';
+  const q = String((document.getElementById('mv-q') || {}).value || '').trim().toLowerCase();
+  const hit = (...xs) => !q || xs.some(x => String(x || '').toLowerCase().indexOf(q) >= 0);
+  let h = '';
+  // 1) waiting in « Non placé »
+  const wait = _mv.unplaced.filter(u => (!loc || u.loc === loc) && hit(u.name, u.bc, 'non placé'))
+    .map(u => Object.assign({ age: _mvAgeH(u.since) }, u))
+    .sort((a, b) => (b.age == null ? 1e9 : b.age) - (a.age == null ? 1e9 : a.age));
+  const late = wait.filter(u => u.age == null || u.age > 24);
+  h += '<div class="dlv-lbl">À ranger (dans « Non placé ») : ' + wait.reduce((s, u) => s + u.qty, 0) + ' unité(s), ' + wait.length + ' produit(s)' +
+    (late.length ? ' · <span style="color:#dc2626">' + late.length + ' depuis plus de 24 h</span>' : '') + '</div>';
+  if(!wait.length) h += '<div class="dlv-dim" style="margin-bottom:8px">Rien en attente.</div>';
+  else h += wait.slice(0, 30).map(u => {
+    const red = u.age == null || u.age > 24;
+    const since = u.age == null ? 'arrivée inconnue' : (u.age < 1 ? 'il y a moins d\'1 h' : (u.age < 48 ? 'depuis ' + Math.round(u.age) + ' h' : 'depuis ' + Math.round(u.age / 24) + ' j'));
+    return '<div class="ex-row"' + (red ? ' style="color:#dc2626"' : '') + '><div style="flex:1"><b>' + _exEsc(u.name || u.bc) + '</b><div class="dlv-dim">' + _exEsc(MV_LOC[u.loc] || u.loc) + ' · ' + _exEsc(u.bc) + '</div></div><div class="tp-n">' + u.qty + ' u.<div class="dlv-dim"' + (red ? ' style="color:#dc2626"' : '') + '>' + since + '</div></div></div>';
+  }).join('') + (wait.length > 30 ? '<div class="dlv-dim">… et ' + (wait.length - 30) + ' autre(s)</div>' : '');
+  // 2) Déplacer list
+  const list = _mv.moves.filter(m => (!loc || m.fromLoc === loc || m.toLoc === loc) && (!by || m.by === by) &&
+    hit(m.name, m.bc, m.fromZone, m.toZone, MV_LOC[m.fromLoc], MV_LOC[m.toLoc], m.by));
+  const units = list.reduce((s, m) => s + m.qty, 0);
+  h += '<div class="dlv-lbl" style="margin-top:12px">Déplacements : ' + list.length + ' (' + units + ' unité(s)) sur ' + ((document.getElementById('mv-days') || {}).value || 30) + ' jours</div>';
+  if(!list.length) h += '<div class="dlv-dim">Aucun déplacement.</div>';
+  let day = '';
+  list.slice(0, _mvShow).forEach(m => {
+    const dd = _mvDay(m.at);
+    if(dd !== day){ day = dd; h += '<div class="dlv-dim" style="margin-top:8px;font-weight:600">' + _exEsc(dd) + '</div>'; }
+    const store = m.fromLoc && m.toLoc && m.fromLoc !== m.toLoc;
+    h += '<div class="ex-row"><div style="flex:1"><b>' + _exEsc(m.name || m.bc) + '</b>' +
+      '<div class="dlv-dim">' + _mvWhere(m.fromLoc, m.fromZone) + ' → ' + (store ? '<b>' : '') + _mvWhere(m.toLoc, m.toZone) + (store ? '</b>' : '') + '</div>' +
+      (m.half ? '<div class="dlv-dim" style="color:#b45309">⚠ une seule moitié enregistrée' + (m.note ? ' (' + _exEsc(m.note) + ')' : '') + '</div>' : '') +
+      '</div><div class="tp-n">×' + m.qty + '<div class="dlv-dim">' + _exEsc(String(m.at).slice(11, 16)) + (m.by ? ' · ' + _exEsc(m.by) : '') + '</div></div></div>';
+  });
+  if(list.length > _mvShow) h += '<button class="btn-sm btn-outline" style="margin-top:8px" onclick="_mvShow += 100; renderMovements()">Afficher plus (' + (list.length - _mvShow) + ')</button>';
+  const age = Math.round((Date.now() - _mv.ts) / 60000);
+  h += '<div class="dlv-dim" style="margin-top:8px">Mis à jour ' + (age < 1 ? "à l'instant" : 'il y a ' + age + ' min') + '</div>';
   el.innerHTML = h;
 }
 
