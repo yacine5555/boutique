@@ -220,6 +220,28 @@ select.t{appearance:auto}
 .cam .frame{position:absolute;left:12%;right:12%;top:35%;height:22%;border:3px solid #ff8cc0;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 .setrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .setrow small{color:var(--muted);display:block;overflow-wrap:anywhere}
+.xb{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--ok-soft);color:var(--ok);margin-top:3px}
+.xb.later{background:var(--warn-soft);color:var(--warn)}
+.xb.orange,.xb.far{background:var(--warn-soft);color:var(--warn)}
+.xb.red,.xb.past{background:var(--bad-soft);color:var(--bad)}
+.xopts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 4px}
+.xopts button{border:1px solid var(--line);background:var(--sunk);border-radius:14px;padding:12px 8px;font-size:22px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.xopts button span{font-size:14px;font-weight:700}
+.xdisp{font:800 38px var(--display);text-align:center;letter-spacing:.08em;padding:8px;border-radius:14px;background:var(--sunk)}
+.xdisp.red,.xdisp.past{color:var(--bad);background:var(--bad-soft)}
+.xdisp.orange,.xdisp.far{color:var(--warn);background:var(--warn-soft)}
+.xhint{text-align:center;color:var(--muted);font-size:13px;margin:6px 0}
+.xwarn{text-align:center;font-weight:700;border-radius:10px;padding:8px;margin:6px 0}
+.xwarn.red{background:var(--bad-soft);color:var(--bad)}
+.xwarn.orange{background:var(--warn-soft);color:var(--warn)}
+.sheet .xpad{margin-top:10px}
+.sheet .xpad button{background:var(--sunk);color:var(--ink);height:56px}
+.sheet .xpad button[data-k="OK"]{background:var(--brand);color:var(--brand-ink)}
+.sheet .xpad button:disabled{opacity:.35}
+.recvbtn{display:flex;align-items:center;gap:12px;width:100%;margin-top:14px;border:1.5px solid var(--brand);background:var(--brand-soft);color:var(--ink);border-radius:16px;padding:14px;cursor:pointer;text-align:left}
+.recvbtn b{font:800 18px var(--display)}
+.recvbtn small{display:block;color:var(--muted);font-size:13px}
+.recvbtn .ic{font-size:26px}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:0}}}
 </style>
 </head>
@@ -319,6 +341,16 @@ async function flushQueue(){
       const d = await post({ action:'stock1981Labels', by: first.by, userHash: first.hash, labels: first.labels });
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
       else if(d && d.error){ toast(d.error); if(/Utilisateur|code|Aucune/i.test(d.error)){ QUEUE.shift(); progress = true; } }
+    } else if(RECV_ACTIONS[first.kind]){
+      const d = await post(Object.assign({ action: RECV_ACTIONS[first.kind], by: first.by, userHash: first.hash }, first.body));
+      if(d && d.success){ QUEUE.shift(); progress = true; online = true; if(first.kind !== 'recvarr') setTimeout(loadArrivals, 500); }
+      else if(d && /Missing name or barcode/.test(d.error || '')){
+        // script not updated yet: keep it, but let counts and moves behind it go through
+        toast('Réception gardée sur le téléphone : collez Code_updated_Stock1981_v8.gs et redéployez.');
+        QUEUE.push(QUEUE.shift());
+        if(QUEUE.some(o => !RECV_ACTIONS[o.kind])) progress = true;
+      }
+      else if(d && d.error){ toast(d.error); if(/Utilisateur|code/i.test(d.error)){ QUEUE.shift(); progress = true; } }
     } else if(first.kind === 'count'){
       const d = await post(Object.assign({ action:'stock1981Count', by: first.by, userHash: first.hash }, first.body));
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
@@ -368,7 +400,7 @@ function applyLocal(op){
   r[4] = op.mode === 'set' ? op.qty : r[4] + op.qty;
   if(op.name && !r[3]) r[3] = op.name;
 }
-function reapplyQueue(){ QUEUE.forEach(o => o.kind === 'count' ? applyCountLocal(o.body) : o.kind === 'labels' ? null : applyLocal(o.op)); }
+function reapplyQueue(){ QUEUE.forEach(o => o.kind === 'count' ? applyCountLocal(o.body) : o.kind === 'recvunit' ? applyRecvStock(o.body) : o.kind ? null : applyLocal(o.op)); }
 function applyCountLocal(c){
   if(!DATA) DATA = { zones:[], spots:[], prices:{}, names:{} };
   const touched = new Set(DATA.spots.filter(r => r[0] === c.location && r[2] === c.spot).map(r => bkey(r[3])));
@@ -427,9 +459,14 @@ function render(){
   if(v.screen === 'home') t.innerHTML = 'Stock<b>1981</b><small>Beauty Empire · ' + (DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : 'pas encore chargé') + '</small>';
   else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
   else if(v.screen === 'count') t.innerHTML = 'Comptage ' + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
+  else if(v.screen === 'recv') t.innerHTML = 'Réception<small>Arrivages → Entrepôt</small>';
+  else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
+  else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
   else t.innerHTML = 'Zone ' + esc(v.zone) + '<small>' + esc(locName(v.loc)) + '</small>';
   const m = $('#main');
   if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
+  if(v.screen === 'unit'){ m.innerHTML = banner() + unitHTML(); bindUnit(); return; }
+  if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
   bindMain();
 }
@@ -451,6 +488,7 @@ function homeHTML(){
       ${un ? `<span class="badge">${un} non placé${un > 1 ? 's' : ''}</span>` : ''}
       <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} articles · ${fmt(t.products)} produits${t.value ? ' · ' + fmt(t.value) + ' F' : ''}</p></div></button>`;
   }).join('') + '</div>';
+  h += `<button class="recvbtn" data-act="recv"><span class="ic">📦</span><span><b>Réception d’arrivage</b><small>${R ? 'Glacière / carton ' + esc(R.unit) + ' en cours' : 'Vider les glacières et cartons d’un conteneur'}</small></span></button>`;
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
   return h;
 }
@@ -530,6 +568,7 @@ function bindMain(){
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const q = $('#q');
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; renderResults(); }
 }
@@ -605,6 +644,7 @@ function beep(ok){
 }
 function aliasOf(raw){ const s = String(raw || '').trim(); const a = DATA && DATA.aliases ? DATA.aliases[bkey(s)] : null; return a || s; }
 function addScan(raw){
+  if(VIEW.screen === 'unit') return recvScan(raw);
   const code = aliasOf(raw);
   if(!code) return;
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
@@ -671,6 +711,377 @@ function closeCamera(){
   if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   const b = $('#cam'); if(b) b.remove();
   const inp = $('#scan'); if(inp) inp.focus({ preventScroll: true });
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  📦 RÉCEPTION D'UN ARRIVAGE (28 Oct 2026)
+//  An arrival is emptied one cooler / box at a time, blind (nothing
+//  expected is shown). Every scan adds 1. The first time a product shows
+//  up in an arrival, the phone asks for its expiry date once (month +
+//  year, day optional), « ne périme pas » (never asked again) or « plus
+//  tard » (goes on the « Dates à relever » list). A cooler in progress
+//  lives in localStorage (s1981_recv) so a power cut loses nothing; a
+//  finished cooler waits in the normal queue until it is sent
+//  (action recvUnit). Stock lands in Entrepôt.
+// ══════════════════════════════════════════════════════════════════
+const RECV_LOC = 'Warehouse', RECV_ZONE = 'Entrepôt';
+let R = lsj('s1981_recv', null);                 // cooler in progress
+let ARR = lsj('s1981_arrivals', null);           // {arrivals:[...], noExpiry:[bkey], generatedAt}
+let RDATES = lsj('s1981_recv_dates', {});        // arrivalId -> { bkey: {mode, expiry, solde} }
+let NOEXP = new Set(lsj('s1981_noexp', []));     // products never asked again
+let arrLoading = false, arrErr = '';
+function saveRecv(){ ls('s1981_recv', R ? JSON.stringify(R) : null); }
+function saveDates(){ ls('s1981_recv_dates', JSON.stringify(RDATES)); ls('s1981_noexp', JSON.stringify([...NOEXP])); }
+function rid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+async function loadArrivals(){
+  if(!URL_ || !KEY || arrLoading) return;
+  arrLoading = true; arrErr = ''; if(/^(recv|arrival)$/.test(VIEW.screen)) render();
+  try {
+    const d = await api({ action:'getArrivals' });
+    if(!d || !d.success || !Array.isArray(d.arrivals)) throw new Error('v8');
+    ARR = { arrivals: d.arrivals, noExpiry: d.noExpiry || [], generatedAt: d.generatedAt };
+    (d.noExpiry || []).forEach(k => NOEXP.add(k));
+    reapplyRecvQueue();
+    ls('s1981_arrivals', JSON.stringify(ARR)); saveDates();
+  } catch(e){
+    arrErr = e.message === 'v8' ? 'Le Sheet ne connaît pas encore la réception : collez Code_updated_Stock1981_v8.gs et redéployez (Nouvelle version).' : 'Pas de connexion : arrivages enregistrés sur ce téléphone.';
+  }
+  arrLoading = false; if(/^(recv|arrival)$/.test(VIEW.screen)) render();
+}
+function arrival(id){ return ARR && ARR.arrivals ? ARR.arrivals.find(a => a.id === id) : null; }
+// Pending (not yet sent) arrivals / coolers / dates are shown at once.
+function applyRecvLocal(o){
+  if(!ARR) ARR = { arrivals: [], noExpiry: [] };
+  const b = o.body;
+  if(o.kind === 'recvarr'){
+    if(!arrival(b.id)) ARR.arrivals.unshift({ id: b.id, name: b.name, created: new Date().toLocaleDateString('fr-FR'), status:'open', by: o.by, units: [], lines: [], pending: true });
+    return;
+  }
+  if(o.kind === 'recvunit'){
+    let a = arrival(b.arrivalId);
+    if(!a){ a = { id: b.arrivalId, name: b.arrivalName, created:'', status:'open', by: o.by, units: [], lines: [] }; ARR.arrivals.unshift(a); }
+    if(a.units.some(u => u.opId === b.opId)) return;
+    const units = b.lines.reduce((s, l) => s + l.qty, 0);
+    a.units.push({ unit: b.unit, kind: b.kind, cooler: b.cooler ? (b.cooler.name || b.cooler.barcode) : '', products: new Set(b.lines.map(l => bkey(l.barcode))).size, units, by: o.by, at: 'en attente', opId: b.opId, pending: true });
+    b.lines.forEach(l => a.lines.push([l.lineId, b.unit, l.barcode, l.name, l.qty, l.mode, l.expiry || '', l.solde ? 1 : 0, priceOf(l.barcode)]));
+    return;
+  }
+  if(o.kind === 'recvdate'){
+    (ARR.arrivals || []).forEach(a => a.lines.forEach(l => { if(l[0] === b.lineId && l[5] === 'later'){ l[5] = b.mode; l[6] = b.expiry || ''; } }));
+  }
+}
+function reapplyRecvQueue(){ QUEUE.filter(o => /^recv/.test(o.kind || '')).forEach(applyRecvLocal); }
+// Stock in Entrepôt moves at once on the phone, like any other change.
+function applyRecvStock(b){
+  b.lines.forEach(l => applyLocal({ location: RECV_LOC, zone: RECV_ZONE, barcode: l.barcode, name: l.name, mode:'delta', qty: l.qty }));
+  if(b.cooler) applyLocal({ location: RECV_LOC, zone: RECV_ZONE, barcode: b.cooler.barcode, name: b.cooler.name, mode:'delta', qty: 1 });
+}
+function queueRecv(kind, body, msg){
+  if(!user){ lock(); return; }
+  const o = { kind, body, by: user.name, hash: user.hash };
+  QUEUE.push(o);
+  applyRecvLocal(o);
+  if(kind === 'recvunit') applyRecvStock(body);
+  ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA)); ls('s1981_arrivals', JSON.stringify(ARR));
+  if(msg) toast(online ? msg : 'Enregistré sur le téléphone, envoi au retour de la connexion');
+  flushQueue();
+}
+const RECV_ACTIONS = { recvarr:'recvArrival', recvunit:'recvUnit', recvdate:'recvSetDate' };
+
+// ── dates ───────────────────────────────────────────────
+// "0327" → 31/03/2027 (end of month) · "150327" → 15/03/2027
+function parseExp(digits){
+  const d = String(digits || '');
+  let day = null, m, y;
+  if(d.length === 4){ m = +d.slice(0, 2); y = 2000 + +d.slice(2); }
+  else if(d.length === 6){ day = +d.slice(0, 2); m = +d.slice(2, 4); y = 2000 + +d.slice(4); }
+  else return null;
+  if(m < 1 || m > 12) return null;
+  const last = new Date(y, m, 0).getDate();
+  if(day != null && (day < 1 || day > last)) return null;
+  const dd = day == null ? last : day;
+  return { date: new Date(y, m - 1, dd), str: String(dd).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y, short: (day == null ? '' : String(dd).padStart(2, '0') + '/') + String(m).padStart(2, '0') + '/' + String(y).slice(2) };
+}
+function expDate(str){ const m = String(str || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; }
+function monthsLeft(d){ return (d - new Date()) / (30.44 * 864e5); }
+function expLevel(str){
+  const d = expDate(str); if(!d) return '';
+  const ml = monthsLeft(d);
+  return ml < 0 ? 'past' : ml <= 3 ? 'red' : ml <= 6 ? 'orange' : ml > 60 ? 'far' : 'ok';
+}
+function expBadge(l){
+  if(l.mode === 'none') return '<span class="xb">∞ ne périme pas</span>';
+  if(l.mode === 'later' || !l.expiry) return '<span class="xb later">⏭ date plus tard</span>';
+  const lv = expLevel(l.expiry);
+  return `<span class="xb ${lv}">📅 ${esc(l.expiry.slice(3))}${lv === 'past' ? ' · périmé' : lv === 'red' ? ' · < 3 mois' : lv === 'orange' ? ' · < 6 mois' : ''}${l.solde ? ' · solde' : ''}</span>`;
+}
+// The date panel. cb({mode, expiry, solde}) — on-screen keys only, so a
+// scanner gun can't type into it by mistake.
+function openDatePanel(name, bc, cur, cb, opts){
+  let digits = '', solde = cur && cur.solde ? true : null, mode = 'date';
+  const draw = () => {
+    const p = parseExp(digits);
+    const lv = p ? expLevel(p.str) : '';
+    if(solde === null && (lv === 'past' || lv === 'red')) solde = true;
+    const shown = digits.length <= 4 ? (digits.padEnd(4, '·').replace(/^(..)(..)$/, '$1 / $2')) : digits.padEnd(6, '·').replace(/^(..)(..)(..)$/, '$1 / $2 / $3');
+    const warn = !p ? (digits.length === 4 || digits.length === 6 ? '<div class="err">Date impossible : vérifiez le mois' + (digits.length === 6 ? ' et le jour' : '') + '.</div>' : '')
+      : lv === 'past' ? '<div class="xwarn red">⚠ Déjà périmé !</div>'
+      : lv === 'red' ? '<div class="xwarn red">⚠ Périme dans moins de 3 mois</div>'
+      : lv === 'orange' ? '<div class="xwarn orange">Périme dans moins de 6 mois</div>'
+      : lv === 'far' ? '<div class="xwarn orange">Plus de 5 ans : vérifiez l’année</div>' : '';
+    openSheet(`<h3>${esc(name || 'Produit inconnu')}</h3><div class="sub num">${esc(bc)}${opts && opts.sub ? ' · ' + esc(opts.sub) : ''}</div>
+      <div class="xopts"><button data-xm="none">∞<span>Ne périme pas</span></button><button data-xm="later">⏭<span>Plus tard</span></button></div>
+      <label class="f">Date de péremption : mois + année${digits.length > 4 ? ' (avec le jour)' : ''}</label>
+      <div class="xdisp num ${lv}">${shown}</div>
+      <div class="xhint">${p ? '= ' + esc(p.str) + (digits.length === 4 ? ' (fin du mois)' : '') : 'Ex. 0 3 2 7 = mars 2027 · avec le jour : 1 5 0 3 2 7'}</div>
+      ${warn}
+      ${p && (lv === 'past' || lv === 'red' || lv === 'orange') ? `<label class="chk"><input type="checkbox" id="xsol" ${solde ? 'checked' : ''}> À mettre en solde (vendre en priorité)</label>` : ''}
+      <div class="pad xpad">${['1','2','3','4','5','6','7','8','9','⌫','0','OK'].map(k => `<button data-k="${k}" ${k === 'OK' && !p ? 'disabled' : ''}>${k}</button>`).join('')}</div>
+      ${opts && opts.cancel ? '<button class="ghost" id="xcancel">Annuler</button>' : ''}`);
+    const sh = $('#sheet');
+    sh.querySelectorAll('[data-k]').forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      if(k === '⌫') digits = digits.slice(0, -1);
+      else if(k === 'OK'){ const q = parseExp(digits); if(!q) return; const lv2 = expLevel(q.str); closeSheet(); cb({ mode:'date', expiry: q.str, solde: (lv2 === 'past' || lv2 === 'red' || lv2 === 'orange') && !!solde }); return; }
+      else if(digits.length < 6) digits += k;
+      draw();
+    });
+    sh.querySelectorAll('[data-xm]').forEach(b => b.onclick = () => { closeSheet(); cb({ mode: b.dataset.xm, expiry:'', solde:false }); });
+    const so = $('#xsol'); if(so) so.onchange = e => { solde = e.target.checked; };
+    const xc = $('#xcancel'); if(xc) xc.onclick = closeSheet;
+  };
+  draw();
+}
+
+// ── screens ─────────────────────────────────────────────
+function recvHTML(){
+  let h = '';
+  if(arrErr) h += `<div class="notice">${esc(arrErr)}<button data-act="arrreload">Réessayer</button></div>`;
+  if(R) h += `<button class="zrow unplaced" data-act="resume" style="margin-bottom:12px"><span class="code">${esc(R.kind)} ${esc(R.unit)}</span><span class="nm">En cours · ${esc(R.aname)} · ${R.lines.length} produit(s)</span><span class="u">Reprendre</span></button>`;
+  h += `<button class="addbtn" data-act="newarr">＋ Nouvel arrivage (conteneur, livraison)</button>`;
+  const list = ARR && ARR.arrivals ? ARR.arrivals : [];
+  if(!list.length) h += `<p class="empty">${arrLoading ? 'Chargement…' : 'Aucun arrivage pour l’instant.'}</p>`;
+  else h += '<div class="sect">Arrivages</div><div class="list">' + list.map(a => {
+    const units = a.lines.reduce((s, l) => s + l[4], 0);
+    const later = a.lines.filter(l => l[5] === 'later').length;
+    return `<button class="row" data-arr="${esc(a.id)}"><div class="nm"><strong>${esc(a.name)}</strong><small>${esc(a.created || '')} · ${a.units.length} glacière(s)/carton(s) vidé(s)${later ? ' · <b style="color:var(--warn)">' + later + ' date(s) à relever</b>' : ''}${a.pending ? ' · en attente d’envoi' : ''}</small></div><div class="qty num">${fmt(units)}</div></button>`;
+  }).join('') + '</div>';
+  return h;
+}
+function arrivalHTML(id){
+  const a = arrival(id);
+  if(!a) return '<p class="empty">Arrivage introuvable.</p>';
+  const units = a.lines.reduce((s, l) => s + l[4], 0);
+  const value = a.lines.reduce((s, l) => s + (l[8] ? l[8] * l[4] : 0), 0);
+  const prods = {};
+  a.lines.forEach(l => { const k = bkey(l[2]); const p = prods[k] || (prods[k] = { bc: l[2], name: l[3], qty: 0, dates: {}, noprice: l[8] == null }); p.qty += l[4]; const dk = l[5] === 'date' ? l[6] : l[5]; p.dates[dk] = (p.dates[dk] || 0) + l[4]; });
+  const plist = Object.values(prods).sort((x, y) => y.qty - x.qty);
+  const later = a.lines.filter(l => l[5] === 'later');
+  const solde = a.lines.filter(l => l[7]);
+  const noprice = plist.filter(p => p.noprice);
+  let h = `<div class="zhead"><h2>${esc(a.name)}</h2><p>${esc(a.created || '')}${a.by ? ' · ' + esc(a.by) : ''}</p></div>
+    <div class="stats"><div class="stat"><b class="num">${a.units.length}</b><span>vidé(e)s</span></div><div class="stat"><b class="num">${fmt(units)}</b><span>articles</span></div><div class="stat"><b class="num">${plist.length}</b><span>produits</span></div>${value ? `<div class="stat"><b class="num">${fmt(value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
+  h += `<button class="go" data-act="openunit">📦 Vider une glacière / un carton</button>`;
+  if(later.length) h += '<div class="sect">Dates à relever (' + later.length + ')</div><div class="list">' + later.map(l =>
+    `<button class="row" data-later="${esc(l[0])}"><div class="nm"><strong>${esc(l[3] || l[2])}</strong><small>n° ${esc(l[1])} · ${fmt(l[4])} article(s)</small></div><span class="cbtn">Saisir</span></button>`).join('') + '</div>';
+  if(solde.length) h += '<div class="sect">À mettre en solde (' + solde.length + ')</div><div class="list">' + solde.map(l =>
+    `<div class="row" style="cursor:default"><div class="nm"><strong>${esc(l[3] || l[2])}</strong><small>n° ${esc(l[1])} · ${expBadge({ mode: l[5], expiry: l[6] })}</small></div><div class="qty num">${fmt(l[4])}</div></div>`).join('') + '</div>';
+  if(a.units.length) h += '<div class="sect">Glacières et cartons vidés</div><div class="list">' + a.units.slice().reverse().map(u =>
+    `<div class="row" style="cursor:default"><div class="nm"><strong>${esc(u.kind)} ${esc(u.unit)}</strong><small>${fmt(u.products)} produit(s) · ${esc(u.by || '')} · ${esc(u.at || '')}${u.cooler ? ' · glacière à vendre : ' + esc(u.cooler) : ''}</small></div><div class="qty num">${fmt(u.units)}</div></div>`).join('') + '</div>';
+  if(plist.length) h += '<div class="sect">Produits reçus' + (noprice.length ? ' · ' + noprice.length + ' sans prix' : '') + '</div><div class="list">' + plist.map(p =>
+    `<div class="row" style="cursor:default"><div class="nm"><strong>${esc(p.name || p.bc)}</strong><small class="num">${esc(p.bc)}${p.noprice ? ' · <b style="color:var(--warn)">sans prix</b>' : ''} · ${Object.keys(p.dates).map(k => k === 'none' ? '∞' : k === 'later' ? '⏭ ' + p.dates[k] : esc(k.slice(3)) + (Object.keys(p.dates).length > 1 ? ' (' + p.dates[k] + ')' : '')).join(' · ')}</small></div><div class="qty num">${fmt(p.qty)}</div></div>`).join('') + '</div>';
+  if(noprice.length) h += '<p class="sub" style="color:var(--muted);font-size:13px;margin-top:10px">Les produits sans prix sont dans la liste des prix de l’Admin du Scanner.</p>';
+  return h;
+}
+function unitHTML(){
+  if(!R) return '<p class="empty">Aucune glacière en cours.</p>';
+  const n = R.lines.reduce((a, l) => a + l.qty, 0);
+  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez un article" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo">📷</button></div>
+    <div class="hint">Chaque scan ajoute 1. Touchez un produit pour changer sa date.</div></div>
+    <div class="sect" style="margin-top:6px">${R.lines.length} ligne(s) · ${fmt(n)} article(s)</div>
+    <div class="list">${R.lines.length ? R.lines.map((l, i) => `<div class="citem ${i === 0 && R.flash ? 'flash' : ''}"><div class="nm" data-line="${i}" role="button" tabindex="0"><strong>${esc(l.name || 'Produit inconnu')}</strong><small class="num">${esc(l.barcode)}</small> ${expBadge(l)}${l.name ? '' : `<input data-rname="${i}" placeholder="Nom du produit (obligatoire)" value="${esc(l.pendingName || '')}">`}</div>
+      <button data-rdec="${i}" aria-label="Moins">−</button><span class="c num">${l.qty}</span><button data-rinc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier article.</p>'}</div>
+    <div class="cfoot"><button class="ghost" id="rquit">Annuler</button><button class="go" id="rsend">Terminer la ${esc(R.kind.toLowerCase())}</button></div>`;
+}
+function bindRecv(){
+  document.querySelectorAll('[data-arr]').forEach(b => b.onclick = () => go({ screen:'arrival', aid: b.dataset.arr }));
+  const na = document.querySelector('[data-act="newarr"]'); if(na) na.onclick = newArrival;
+  const rs = document.querySelector('[data-act="resume"]'); if(rs) rs.onclick = () => go({ screen:'unit' });
+  const ar = document.querySelector('[data-act="arrreload"]'); if(ar) ar.onclick = loadArrivals;
+  const ou = document.querySelector('[data-act="openunit"]'); if(ou) ou.onclick = () => openUnitSheet(VIEW.aid);
+  document.querySelectorAll('[data-later]').forEach(b => b.onclick = () => {
+    const a = arrival(VIEW.aid); const l = a && a.lines.find(x => x[0] === b.dataset.later); if(!l) return;
+    openDatePanel(l[3], l[2], null, r => {
+      if(r.mode === 'later') return;
+      if(r.mode === 'none') NOEXP.add(bkey(l[2]));
+      (RDATES[a.id] = RDATES[a.id] || {})[bkey(l[2])] = r; saveDates();
+      queueRecv('recvdate', { lineId: l[0], mode: r.mode, expiry: r.expiry }, 'Date enregistrée');
+      render();
+    }, { cancel: true, sub: l[1] + ' · ' + l[4] + ' article(s)' });
+  });
+}
+function newArrival(){
+  const d = new Date();
+  const def = 'Conteneur ' + d.toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+  openSheet(`<h3>Nouvel arrivage</h3><div class="sub">Le stock reçu va dans l’Entrepôt. Les dates sont enregistrées sous ce nom.</div>
+    <label class="f" for="an">Nom</label><input class="t" id="an" value="${esc(def)}" autocomplete="off">
+    <div class="err" id="aerr"></div><button class="go" id="ago">Créer</button><button class="ghost" id="ax">Annuler</button>`);
+  $('#ax').onclick = closeSheet;
+  $('#ago').onclick = () => {
+    const name = $('#an').value.trim();
+    if(!name){ $('#aerr').textContent = 'Donnez un nom.'; return; }
+    const id = 'A' + d.toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+    closeSheet();
+    queueRecv('recvarr', { id, name }, 'Arrivage créé');
+    go({ screen:'arrival', aid: id });
+  };
+}
+function openUnitSheet(aid){
+  const a = arrival(aid); if(!a) return;
+  if(R && R.lines.length){
+    openSheet(`<h3>Une ${esc(R.kind.toLowerCase())} est en cours</h3><div class="sub">${esc(R.aname)} · ${esc(R.kind)} ${esc(R.unit)} · ${R.lines.length} produit(s)</div>
+      <button class="go" id="ures">Reprendre</button><button class="ghost" id="udrop">L’abandonner</button>`);
+    $('#ures').onclick = () => { closeSheet(); go({ screen:'unit' }); };
+    $('#udrop').onclick = () => { R = null; saveRecv(); closeSheet(); openUnitSheet(aid); };
+    return;
+  }
+  let kind = ls('s1981_recv_kind') || 'Glacière';
+  const draw = () => {
+    openSheet(`<h3>Vider une glacière ou un carton</h3><div class="sub">${esc(a.name)}</div>
+      <div class="seg">${['Glacière', 'Carton'].map(k => `<button data-kind="${k}" aria-pressed="${kind === k}">${k}</button>`).join('')}</div>
+      <label class="f" for="un">Numéro écrit dessus</label><input class="t num" id="un" inputmode="numeric" autocomplete="off" placeholder="ex. 7">
+      <div class="err" id="uerr"></div><button class="go" id="ugo">Commencer</button><button class="ghost" id="ux">Annuler</button>`);
+    document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { kind = b.dataset.kind; ls('s1981_recv_kind', kind); const v = $('#un').value; draw(); $('#un').value = v; });
+    $('#ux').onclick = closeSheet;
+    $('#un').focus();
+    const start = () => {
+      const unit = $('#un').value.trim();
+      if(!unit){ $('#uerr').textContent = 'Écrivez le numéro de la ' + kind.toLowerCase() + '.'; return; }
+      const done = a.units.find(u => u.kind === kind && String(u.unit) === unit);
+      if(done && !$('#uerr').dataset.ok){ $('#uerr').textContent = kind + ' ' + unit + ' a déjà été vidée (' + (done.by || '') + '). Touchez encore « Commencer » si c’en est une autre.'; $('#uerr').dataset.ok = '1'; return; }
+      R = { aid: a.id, aname: a.name, unit, kind, lines: [], startedAt: new Date().toISOString() };
+      saveRecv(); closeSheet(); go({ screen:'unit' });
+    };
+    $('#ugo').onclick = start;
+    $('#un').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); start(); } };
+  };
+  draw();
+}
+function knownDate(k){
+  const m = RDATES[R.aid] && RDATES[R.aid][k];
+  if(m) return m;
+  if(NOEXP.has(k)) return { mode:'none', expiry:'', solde:false };
+  const a = arrival(R.aid);
+  const l = a && a.lines.find(x => bkey(x[2]) === k && x[5] !== 'later');
+  return l ? { mode: l[5], expiry: l[6], solde: !!l[7] } : null;
+}
+function setLineDate(i, r, forProduct){
+  const l = R.lines[i]; if(!l) return;
+  Object.assign(l, { mode: r.mode, expiry: r.expiry, solde: r.solde });
+  if(r.mode === 'none') NOEXP.add(bkey(l.barcode));
+  if(forProduct !== false) (RDATES[R.aid] = RDATES[R.aid] || {})[bkey(l.barcode)] = r;
+  saveDates(); saveRecv(); render();
+}
+function recvScan(raw){
+  if(!R) return;
+  const code = aliasOf(raw);
+  if(!code) return;
+  if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
+  if(!$('#sheet').hidden){ beep(false); toast('Répondez d’abord à la date du produit précédent.'); return; }
+  const k = bkey(code);
+  let i = R.lines.findIndex(l => bkey(l.barcode) === k && l.active);
+  if(i >= 0){ const l = R.lines.splice(i, 1)[0]; l.qty++; R.lines.unshift(l); R.flash = true; beep(true); saveRecv(); render(); return; }
+  const kd = knownDate(k);
+  const l = { barcode: code, name: productName(code), qty: 1, mode: kd ? kd.mode : 'later', expiry: kd ? kd.expiry : '', solde: kd ? !!kd.solde : false, active: true };
+  R.lines.unshift(l); R.flash = true; beep(true); saveRecv(); render();
+  if(!kd) openDatePanel(l.name, code, null, r => setLineDate(R.lines.indexOf(l), r));
+}
+function bindUnit(){
+  const inp = $('#scan'); if(!inp) return;
+  R.flash = false;
+  const focus = () => { if(!document.querySelector('[data-rname]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
+  inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); recvScan(inp.value); inp.value = ''; } };
+  $('#camb').onclick = openCamera;
+  document.querySelectorAll('[data-rinc]').forEach(b => b.onclick = () => { R.lines[+b.dataset.rinc].qty++; saveRecv(); render(); });
+  document.querySelectorAll('[data-rdec]').forEach(b => b.onclick = () => { const l = R.lines[+b.dataset.rdec]; l.qty--; if(l.qty <= 0) R.lines.splice(+b.dataset.rdec, 1); saveRecv(); render(); });
+  document.querySelectorAll('[data-rname]').forEach(x => {
+    x.onclick = e => e.stopPropagation();
+    x.oninput = () => { R.lines[+x.dataset.rname].pendingName = x.value; saveRecv(); };
+    const done = () => { const v = x.value.trim(); if(!v) return; const k = bkey(R.lines[+x.dataset.rname].barcode); R.lines.forEach(l => { if(bkey(l.barcode) === k){ l.name = v; delete l.pendingName; } }); saveRecv(); render(); };
+    x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); done(); } };
+    x.onblur = done;
+  });
+  document.querySelectorAll('[data-line]').forEach(el => el.onclick = () => openLineSheet(+el.dataset.line));
+  $('#rquit').onclick = () => {
+    if(!R.lines.length){ R = null; saveRecv(); history.back(); return; }
+    openSheet(`<h3>Annuler cette ${esc(R.kind.toLowerCase())} ?</h3><div class="sub">${R.lines.length} ligne(s) scannée(s) seront perdues.</div><button class="go" id="rq1" style="background:var(--bad)">Oui, annuler</button><button class="ghost" id="rq0">Continuer</button>`);
+    $('#rq1').onclick = () => { R = null; saveRecv(); closeSheet(); history.back(); };
+    $('#rq0').onclick = closeSheet;
+  };
+  $('#rsend').onclick = finishUnit;
+  setTimeout(focus, 30);
+}
+function openLineSheet(i){
+  const l = R.lines[i]; if(!l) return;
+  openSheet(`<h3>${esc(l.name || 'Produit inconnu')}</h3><div class="sub num">${esc(l.barcode)} · ${l.qty} article(s)</div><div style="margin:10px 0">${expBadge(l)}</div>
+    <button class="go" id="lchg">Changer la date de cette ligne</button>
+    <button class="go" id="lsplit" style="background:var(--ink);color:var(--bg)">Autre date pour les prochains scans</button>
+    <div class="sub" style="margin-top:6px">« Autre date » : les articles déjà scannés gardent leur date ; les suivants iront sur une nouvelle ligne avec l’autre date.</div>
+    <button class="ghost" id="lx">Fermer</button>`);
+  $('#lx').onclick = closeSheet;
+  $('#lchg').onclick = () => { closeSheet(); openDatePanel(l.name, l.barcode, l, r => setLineDate(R.lines.indexOf(l), r), { cancel: true }); };
+  $('#lsplit').onclick = () => {
+    closeSheet();
+    openDatePanel(l.name, l.barcode, null, r => {
+      const k = bkey(l.barcode);
+      R.lines.forEach(x => { if(bkey(x.barcode) === k) x.active = false; });
+      const nl = { barcode: l.barcode, name: l.name, qty: 0, mode: r.mode, expiry: r.expiry, solde: r.solde, active: true };
+      R.lines.unshift(nl); saveRecv(); render(); toast('Scannez maintenant les articles avec cette date');
+    }, { cancel: true, sub: 'nouvelle date' });
+  };
+}
+function finishUnit(){
+  R.lines = R.lines.filter(l => l.qty > 0);
+  R.lines.forEach(l => { if(!l.name && l.pendingName && l.pendingName.trim()){ l.name = l.pendingName.trim(); delete l.pendingName; } });
+  if(R.lines.some(l => !l.name)){ toast('Donnez un nom à chaque produit inconnu avant de terminer.'); render(); const x = document.querySelector('[data-rname]'); if(x) x.focus(); return; }
+  const n = R.lines.reduce((a, l) => a + l.qty, 0);
+  const prods = new Set(R.lines.map(l => bkey(l.barcode))).size;
+  const c = { date: 0, none: 0, later: 0 };
+  R.lines.forEach(l => { c[l.mode === 'date' && l.expiry ? 'date' : l.mode === 'none' ? 'none' : 'later']++; });
+  const isCooler = R.kind === 'Glacière';
+  let sell = isCooler, cbc = '', cname = '';
+  const draw = err => {
+    openSheet(`<h3>Terminer ${esc(R.kind.toLowerCase())} ${esc(R.unit)} ?</h3><div class="sub">${esc(R.aname)}</div>
+      <div class="where"><div class="here"><span>${prods} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div>
+      <div><span>📅 avec date</span><b>${c.date}</b></div><div><span>∞ ne périme pas</span><b>${c.none}</b></div><div><span>⏭ date plus tard</span><b>${c.later}</b></div></div>
+      ${isCooler ? `<label class="chk"><input type="checkbox" id="fsell" ${sell ? 'checked' : ''}> La glacière vide est à vendre (elle entre dans le stock de l’Entrepôt)</label>
+      ${sell ? `<label class="f" for="fcb">Code-barres de la glacière</label><input class="t num" id="fcb" inputmode="numeric" autocomplete="off" value="${esc(cbc)}" placeholder="Scannez le code de la glacière">
+      ${cbc && !productName(cbc) ? `<label class="f" for="fcn">Nom de cette glacière (nouveau produit)</label><input class="t" id="fcn" value="${esc(cname)}" placeholder="ex. Glacière Igloo 48 L">` : cbc ? `<div class="sub">${esc(productName(cbc))}</div>` : '<div class="sub">Sans code-barres ? Laissez vide : ajoutez-la plus tard avec ＋ dans l’Entrepôt une fois l’étiquette imprimée.</div>'}` : ''}` : ''}
+      ${err ? `<div class="err">${esc(err)}</div>` : ''}
+      <button class="go" id="fok">Envoyer</button><button class="ghost" id="fno">Revenir</button>`);
+    $('#fno').onclick = closeSheet;
+    const fs = $('#fsell'); if(fs) fs.onchange = e => { sell = e.target.checked; draw(); };
+    const fb = $('#fcb'); if(fb){ fb.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); cbc = aliasOf(fb.value.trim()); draw(); } }; fb.onchange = () => { cbc = aliasOf(fb.value.trim()); draw(); }; if(!cbc) fb.focus(); }
+    const fn = $('#fcn'); if(fn) fn.oninput = () => { cname = fn.value; };
+    $('#fok').onclick = () => {
+      if(fb) cbc = aliasOf(fb.value.trim());
+      if(fn) cname = fn.value.trim();
+      if(cbc && !/^\d{4,20}$/.test(cbc)) return draw('Code de glacière illisible (chiffres seulement).');
+      if(sell && cbc && !productName(cbc) && !cname) return draw('Donnez un nom à cette glacière.');
+      if(!user){ closeSheet(); lock(); return; }
+      const opId = rid('r');
+      const body = { opId, arrivalId: R.aid, arrivalName: R.aname, unit: R.unit, kind: R.kind,
+        cooler: sell && cbc ? { barcode: cbc, name: productName(cbc) || cname } : null,
+        lines: R.lines.map((l, i) => ({ lineId: opId + '-' + i, barcode: l.barcode, name: l.name, qty: l.qty, mode: l.mode === 'date' && !l.expiry ? 'later' : l.mode, expiry: l.expiry || '', solde: !!l.solde })) };
+      const aid = R.aid, label = R.kind + ' ' + R.unit;
+      R = null; saveRecv(); closeSheet();
+      queueRecv('recvunit', body, label + ' enregistrée · ' + fmt(n) + ' article(s) dans l’Entrepôt');
+      VIEW = { screen:'arrival', aid }; history.replaceState(VIEW, ''); render();
+    };
+  };
+  draw();
 }
 
 // ── settings ────────────────────────────────────────────
