@@ -390,6 +390,9 @@ function parseShape(str){
   });
   return o;
 }
+// Zones with no shelves (a pile, a table, stacked coolers, the warehouse) are
+// counted as one block: a single « Toute la zone » spot (28 Oct 2026).
+function zoneSpots(z){ return z && z.s ? shapeSpots(z.c, z.s) : (z ? [{ code: z.c + '-W', label: 'Toute la zone' + (z.k ? ' · ' + z.k : '') }] : []); }
 function shapeSpots(zone, shape){
   const sh = parseShape(shape), out = [];
   for(let s = sh.rows.length; s >= 1; s--){ const n = sh.rows[s-1]; for(let c = 1; c <= n; c++) out.push({ code: n > 1 ? `${zone}-${s}-${c}` : `${zone}-${s}`, label: 'Étagère ' + s + (n > 1 ? ' · case ' + c : '') }); }
@@ -495,7 +498,7 @@ function zoneHTML(loc, zone, tab){
   let h = `<div class="hero">${ph ? `<img src="${ph}" alt="Photo de la zone ${esc(zone)}" onerror="this.remove()">` : ''}<div class="nophoto">${ph ? '' : 'Pas de photo'}</div></div>
     <div class="zhead"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
-  const spots = z.s ? shapeSpots(zone, z.s) : [];
+  const spots = zoneSpots(z);
   h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button></div>`;
   if(tab === 'shelves'){
     const counted = spotsAt(loc, zone);
@@ -545,7 +548,7 @@ function renderResults(){
 // a closed tab doesn't lose it. Blind: what the system expects is not shown.
 let C = lsj('s1981_draft', null);
 function saveDraft(){ ls('s1981_draft', C ? JSON.stringify(C) : null); }
-function spotLabelOf(loc, zone, spot){ const z = zoneList(loc).find(q => q.c === zone); const s = shapeSpots(zone, z && z.s).find(x => x.code === spot); return s ? s.label : spot; }
+function spotLabelOf(loc, zone, spot){ const z = zoneList(loc).find(q => q.c === zone); const s = zoneSpots(z).find(x => x.code === spot); return s ? s.label : spot; }
 function startCount(loc, zone, spot){
   if(C && C.items.length && !(C.loc === loc && C.spot === spot)){
     openSheet(`<h3>Un comptage est en cours</h3><div class="sub">${esc(C.zone)} · ${esc(spotLabelOf(C.loc, C.zone, C.spot))} · ${C.items.length} produit(s) scanné(s)</div>
