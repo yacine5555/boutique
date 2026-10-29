@@ -220,6 +220,12 @@ select.t{appearance:auto}
 .cam .frame{position:absolute;left:12%;right:12%;top:35%;height:22%;border:3px solid #ff8cc0;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 .setrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .setrow small{color:var(--muted);display:block;overflow-wrap:anywhere}
+.trcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.trcard.late{border:1.5px solid var(--bad)}
+.trhead{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.trhead b{font:800 17px var(--display)}
+.trmeta{font-size:13px;color:var(--muted)}
+.trmeta .bad{color:var(--bad);font-weight:700}
 .th{flex:none;width:52px;height:52px;border-radius:12px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
 .th img{width:100%;height:100%;object-fit:contain}
 .th i{font-style:normal;font:800 15px var(--display);color:var(--muted)}
@@ -525,12 +531,14 @@ function render(){
   else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
   else if(v.screen === 'count') t.innerHTML = 'Comptage ' + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
   else if(v.screen === 'recv') t.innerHTML = 'Réception<small>Arrivages → Entrepôt</small>';
+  else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
   else t.innerHTML = 'Zone ' + esc(v.zone) + '<small>' + esc(locName(v.loc)) + '</small>';
   const m = $('#main');
   if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
   if(v.screen === 'unit'){ m.innerHTML = banner() + unitHTML(); bindUnit(); return; }
+  if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
   bindMain();
@@ -553,6 +561,8 @@ function homeHTML(){
       ${un ? `<span class="badge">${un} non placé${un > 1 ? 's' : ''}</span>` : ''}
       <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} articles · ${fmt(t.products)} produits${t.value ? ' · ' + fmt(t.value) + ' F' : ''}</p></div></button>`;
   }).join('') + '</div>';
+  const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
+  h += `<button class="recvbtn" data-act="transit"><span class="ic">🚚</span><span><b>En route</b><small>${TR ? trN + ' envoi(s) sur la route' + (trLate ? ' · <span style="color:var(--bad)">en retard</span>' : '') + ' · ' + (TR.requested.length ? new Set(TR.requested.map(l => l.grp || l.id)).size + ' demande(s) à préparer' : 'aucune demande') : 'Transferts entre l’entrepôt et les magasins'}</small></span></button>`;
   h += `<button class="recvbtn" data-act="recv"><span class="ic">📦</span><span><b>Réception d’arrivage</b><small>${R ? 'Glacière / carton ' + esc(R.unit) + ' en cours' : 'Vider les glacières et cartons d’un conteneur'}</small></span></button>`;
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
   return h;
@@ -633,6 +643,7 @@ function bindMain(){
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   bindPhoto();
   const q = $('#q');
@@ -1352,6 +1363,53 @@ async function loadMaps(){
   try { const d = await api({ action:'getMapLayouts' }); if(d && d.success && d.layouts){ ls('s1981_maps', JSON.stringify(d.layouts)); applySheetMaps(d.layouts); if(VIEW.screen === 'store') render(); } } catch(e){}
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+//  🚚 EN ROUTE (29 Oct 2026) — read-only view of the Scanner's transfers:
+//  what was sent and not yet received (who carries it, since when; red
+//  after 24 h), and the requests still to prepare. Actions stay in the
+//  Scanner (🔄 Transferts). Needs action getTransit (Code GS of 29 Oct).
+// ══════════════════════════════════════════════════════════════════
+let TR = lsj('s1981_transit', null), trLoading = false, trErr = '';
+async function loadTransit(){
+  if(!URL_ || !KEY || trLoading) return;
+  trLoading = true; trErr = ''; if(VIEW.screen === 'transit') render();
+  try {
+    const d = await api({ action:'getTransit' });
+    if(!d || !d.success || !Array.isArray(d.transit)) throw new Error(d && d.error ? d.error : 'old');
+    TR = { transit: d.transit, requested: d.requested || [], at: Date.now() };
+    ls('s1981_transit', JSON.stringify(TR));
+  } catch(e){ trErr = e.message === 'old' ? 'Collez « LATEST - Code GS » et redéployez pour voir les transferts.' : (/Failed to fetch/.test(e.message) ? 'Pas de connexion : dernière liste enregistrée sur ce téléphone.' : e.message); }
+  trLoading = false; render();
+}
+function trHours(iso){ const t = new Date(iso).getTime(); return isNaN(t) ? null : (Date.now() - t) / 36e5; }
+function trAge(h){ return h == null ? '' : h < 1 ? 'il y a moins d’1 h' : h < 48 ? 'depuis ' + Math.round(h) + ' h' : 'depuis ' + Math.round(h / 24) + ' j'; }
+function trGroups(lines, timeKey){
+  const g = {};
+  lines.forEach(l => { const k = l.grp || l.id; (g[k] = g[k] || { k, from: l.from, to: l.to, carrier: l.carrier, boxes: l.boxes, by: l.sentBy || l.by, t: l[timeKey] || l.ts, lines: [] }).lines.push(l); });
+  return Object.values(g).map(x => Object.assign(x, { h: trHours(x.t) })).sort((a, b) => (b.h || 0) - (a.h || 0));
+}
+function transitHTML(){
+  let h = '';
+  if(trErr) h += `<div class="notice">${esc(trErr)}<button data-act="trreload">Réessayer</button></div>`;
+  if(!TR) return h + `<p class="empty">${trLoading ? 'Chargement…' : 'Rien pour l’instant.'}</p>`;
+  const sent = trGroups(TR.transit, 'sentTs'), reqs = trGroups(TR.requested, 'ts');
+  const late = sent.filter(x => x.h != null && x.h > 24).length;
+  h += `<div class="sect">En route · ${sent.length} envoi(s)${late ? ` · <span style="color:var(--bad)">${late} depuis plus de 24 h</span>` : ''}</div>`;
+  h += sent.length ? sent.map(x => {
+    const red = x.h != null && x.h > 24, units = x.lines.reduce((a, l) => a + l.qty, 0);
+    return `<div class="trcard${red ? ' late' : ''}"><div class="trhead"><b>${esc(locName(x.from))} → ${esc(locName(x.to))}</b><span class="num">${fmt(units)} art.</span></div>
+      <div class="trmeta">${x.carrier ? 'Porté par <b>' + esc(x.carrier) + '</b> · ' : ''}${x.boxes ? x.boxes + ' colis · ' : ''}<span class="${red ? 'bad' : ''}">${esc(trAge(x.h))}</span>${x.by ? ' · envoyé par ' + esc(x.by) : ''}</div>
+      <div class="list">${x.lines.map(l => `<div class="row" style="cursor:default">${thumb(l.bc, l.name)}<div class="nm"><strong>${esc(l.name || l.bc)}</strong><small class="num">${esc(l.bc)}</small></div><div class="qty num">${fmt(l.qty)}</div></div>`).join('')}</div></div>`;
+  }).join('') : '<p class="empty" style="padding:12px">Rien sur la route.</p>';
+  h += `<div class="sect">Demandes à préparer · ${reqs.length}</div>`;
+  h += reqs.length ? reqs.map(x => `<div class="trcard"><div class="trhead"><b>Pour ${esc(locName(x.to))}</b><span class="num">${x.lines.length} produit(s)</span></div>
+      <div class="trmeta">Demandé ${esc(trAge(x.h))}${x.by ? ' par ' + esc(x.by) : ''}</div>
+      <div class="list">${x.lines.map(l => `<div class="row" style="cursor:default">${thumb(l.bc, l.name)}<div class="nm"><strong>${esc(l.name || l.bc)}</strong></div><div class="qty num">${fmt(l.qty)}</div></div>`).join('')}</div></div>`).join('') : '<p class="empty" style="padding:12px">Aucune demande en attente.</p>';
+  h += '<p class="sub" style="color:var(--muted);font-size:13px;margin-top:12px">Pour préparer, envoyer ou recevoir : Scanner → 🔄 Transferts.</p>';
+  return h;
+}
+
 // ── settings ────────────────────────────────────────────
 function openSettings(){
   const tail = URL_ ? URL_.replace(/\/exec.*$/, '').slice(-8) : '';
@@ -1628,7 +1686,7 @@ setInterval(() => {
   if(u && Date.now() - a.at < IDLE_MS){ user = { name: u.name, role: u.role, hash: u.hash }; lastActive = a.at; }
   else lock();
   render();
-  if(URL_ && KEY){ refreshUsers(); loadTraces(); loadMaps(); await loadData(); flushQueue(); }
+  if(URL_ && KEY){ refreshUsers(); loadTraces(); loadMaps(); loadTransit(); await loadData(); flushQueue(); }
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
