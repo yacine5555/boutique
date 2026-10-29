@@ -220,6 +220,22 @@ select.t{appearance:auto}
 .cam .frame{position:absolute;left:12%;right:12%;top:35%;height:22%;border:3px solid #ff8cc0;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 .setrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .setrow small{color:var(--muted);display:block;overflow-wrap:anywhere}
+.th{flex:none;width:52px;height:52px;border-radius:12px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
+.th img{width:100%;height:100%;object-fit:contain}
+.th i{font-style:normal;font:800 15px var(--display);color:var(--muted)}
+.th.noimg{background:var(--sunk)}
+.citem .th{width:46px;height:46px}
+.lastcard{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px;margin:4px 0 6px;box-shadow:var(--shadow)}
+.lc-img{grid-column:1/-1;height:min(38vh,340px);background:#fff;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.lc-img img{max-width:100%;max-height:100%;object-fit:contain}
+.lc-img.noimg{background:var(--sunk);flex-direction:column;gap:4px;height:120px;color:var(--muted)}
+.lc-img.noimg i{font:800 34px var(--display);font-style:normal}
+.lc-img.noimg span{font-size:12px}
+.lc-n{font-weight:700;font-size:17px;line-height:1.25;overflow-wrap:anywhere}
+.lc-m{color:var(--muted);font-size:13px;margin-top:2px}
+.lc-c{font:800 40px/1 var(--display);color:var(--brand)}
+.psheet-img{height:min(34vh,300px);background:#fff;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 0 10px;border:1px solid var(--line)}
+.psheet-img img{max-width:100%;max-height:100%;object-fit:contain}
 .pzone{background:var(--sunk);border-radius:20px;padding:8px;display:flex;flex-direction:column;align-items:center}
 .pzone.nophoto{min-height:120px;justify-content:center;color:var(--muted);font-weight:600}
 .pwrap{position:relative;display:inline-block;max-width:100%;line-height:0;touch-action:manipulation}
@@ -352,7 +368,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, generatedAt: d.generatedAt };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt };
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
     online = true;
@@ -426,6 +442,20 @@ function productName(bc){
   const db = lsj('inv_count_product_cache', {});
   for(const b in db){ if(bkey(b) === k) return db[b].name; }
   return '';
+}
+// ── product photos (29 Oct 2026): same photos as the till, from getStock1981 `images` ──
+function imgOf(bc){ const k = bkey(aliasOf(bc)); return DATA && DATA.images ? (DATA.images[k] || '') : ''; }
+function initials(name, bc){ const w = String(name || '').replace(/[^A-Za-zÀ-ÿ0-9 ]/g, ' ').split(/\s+/).filter(Boolean); return w.length ? (w[0][0] + (w[1] ? w[1][0] : '')).toUpperCase() : String(bc || '').slice(-2); }
+function thumb(bc, name, cls){
+  const u = imgOf(bc);
+  return `<span class="th ${cls || ''}">${u ? `<img src="${esc(u)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noimg');this.replaceWith(Object.assign(document.createElement('i'),{textContent:'${esc(initials(name, bc))}'}))">` : `<i>${esc(initials(name, bc))}</i>`}</span>`;
+}
+// The big card for the item just scanned (count / cooler screens).
+function lastCard(bc, name, n, extra){
+  if(!bc) return '';
+  const u = imgOf(bc), p = priceOf(bc);
+  return `<div class="lastcard">${u ? `<div class="lc-img"><img src="${esc(u)}" alt="" onerror="this.parentNode.classList.add('noimg');this.remove()"></div>` : `<div class="lc-img noimg"><i>${esc(initials(name, bc))}</i><span>Pas encore de photo</span></div>`}
+    <div class="lc-b"><div class="lc-n">${esc(name || 'Produit inconnu')}</div><div class="lc-m num">${p ? fmt(p) + ' F · ' : ''}${esc(bc)}${extra || ''}</div></div><div class="lc-c num">×${fmt(n)}</div></div>`;
 }
 function totals(rows){ let u = 0, p = 0, v = 0; rows.forEach(r => { if(r[4] > 0){ u += r[4]; p++; const pr = priceOf(r[2]); if(pr) v += pr * r[4]; } }); return { units:u, products:p, value:v }; }
 function applyLocal(op){
@@ -587,7 +617,7 @@ function zoneHTML(loc, zone, tab){
   } else {
     h += rows.length ? '<div class="list">' + rows.map(r => {
       const p = priceOf(r[2]);
-      return `<button class="row" data-bc="${esc(r[2])}"><div class="nm"><strong>${esc(r[3] || 'Sans nom')}</strong><small class="num">${esc(r[2])}${p ? ' · ' + fmt(p) + ' F' : ''}</small></div><div class="qty num ${r[4] < 0 ? 'neg' : ''}">${fmt(r[4])}</div></button>`;
+      return `<button class="row" data-bc="${esc(r[2])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || 'Sans nom')}</strong><small class="num">${esc(r[2])}${p ? ' · ' + fmt(p) + ' F' : ''}</small></div><div class="qty num ${r[4] < 0 ? 'neg' : ''}">${fmt(r[4])}</div></button>`;
     }).join('') + '</div>' : `<p class="empty">Aucun produit en stock dans cette zone.<br><button class="cbtn" data-tab="shelves" style="margin-top:12px">Compter les étagères</button></p>`;
     if(zone !== UNPLACED) h += `<button class="addbtn" data-act="add">+ Ajouter un produit à ${esc(zone)}</button>`;
   }
@@ -614,7 +644,7 @@ function renderResults(){
   if(q.length < 2){ box.innerHTML = ''; return; }
   if(/^\d{6,}$/.test(q)) q = aliasOf(q);
   const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
-  box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}"><div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
+  box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
   box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
 }
 
@@ -640,8 +670,9 @@ function countHTML(){
   const n = C.items.reduce((a, i) => a + i.count, 0);
   return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez ou tapez un code-barres" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo" title="Appareil photo">📷</button></div>
     <div class="hint">Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d'autre.</div></div>
+    ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}"><div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -936,8 +967,9 @@ function unitHTML(){
   const n = R.lines.reduce((a, l) => a + l.qty, 0);
   return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez un article" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo">📷</button></div>
     <div class="hint">Chaque scan ajoute 1. Touchez un produit pour changer sa date.</div></div>
+    ${R.lines.length ? lastCard(R.lines[0].barcode, R.lines[0].name, R.lines.filter(x => bkey(x.barcode) === bkey(R.lines[0].barcode)).reduce((a, x) => a + x.qty, 0), ' · ' + expBadge(R.lines[0])) : ''}
     <div class="sect" style="margin-top:6px">${R.lines.length} ligne(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${R.lines.length ? R.lines.map((l, i) => `<div class="citem ${i === 0 && R.flash ? 'flash' : ''}"><div class="nm" data-line="${i}" role="button" tabindex="0"><strong>${esc(l.name || 'Produit inconnu')}</strong><small class="num">${esc(l.barcode)}</small> ${expBadge(l)}${l.name ? '' : `<input data-rname="${i}" placeholder="Nom du produit (obligatoire)" value="${esc(l.pendingName || '')}">`}</div>
+    <div class="list">${R.lines.length ? R.lines.map((l, i) => `<div class="citem ${i === 0 && R.flash ? 'flash' : ''}">${thumb(l.barcode, l.name)}<div class="nm" data-line="${i}" role="button" tabindex="0"><strong>${esc(l.name || 'Produit inconnu')}</strong><small class="num">${esc(l.barcode)}</small> ${expBadge(l)}${l.name ? '' : `<input data-rname="${i}" placeholder="Nom du produit (obligatoire)" value="${esc(l.pendingName || '')}">`}</div>
       <button data-rdec="${i}" aria-label="Moins">−</button><span class="c num">${l.qty}</span><button data-rinc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier article.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="rquit">Annuler</button><button class="go" id="rsend">Terminer la ${esc(R.kind.toLowerCase())}</button></div>`;
 }
@@ -1364,7 +1396,8 @@ function drawProduct(){
   const after = S.mode === 'set' ? S.qty : S.mode === 'out' ? S.cur - S.qty : S.cur + S.qty;
   const reasons = REASONS[S.mode];
   if(!reasons.includes(S.reason)) S.reason = reasons.length === 1 ? reasons[0] : null;
-  openSheet(`<h3>${esc(S.name || 'Produit sans nom')}</h3>
+  const pimg = imgOf(S.bc);
+  openSheet(`${pimg ? `<div class="psheet-img"><img src="${esc(pimg)}" alt="" onerror="this.parentNode.remove()"></div>` : ''}<h3>${esc(S.name || 'Produit sans nom')}</h3>
     <div class="sub num">${esc(S.bc)}${p ? ' · ' + fmt(p) + ' F' : ''}</div>
     <div class="where">${all.length ? all.map(r => `<div class="${r[0] === S.loc && r[1] === S.zone ? 'here' : ''}"><span>${esc(locName(r[0]))} · ${esc(r[1])}</span><b class="num">${fmt(r[4])}</b></div>`).join('') : '<div><span>Nulle part en stock</span><b>0</b></div>'}</div>
     <div class="seg" role="group" aria-label="Type de changement">
