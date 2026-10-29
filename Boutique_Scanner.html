@@ -650,8 +650,37 @@ input,select{font-family:inherit}
   transition:all .15s;white-space:nowrap}
 .price-sugg-chip:hover{border-color:var(--green)}
 .price-sugg-label{font-size:11px;color:var(--ink4);width:100%;margin-bottom:2px}
-.cart-mini{margin-top:8px;border:1px solid var(--border2);border-radius:var(--r-sm);
-  max-height:180px;overflow-y:auto;display:none}
+.cart-mini{margin-top:10px;display:none}
+.bag-list{max-height:min(58vh,560px);overflow-y:auto;display:flex;flex-direction:column}
+.bag-row{display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border)}
+.bag-row.newest{grid-template-columns:150px 1fr auto;animation:bagIn .45s ease-out}
+@keyframes bagIn{from{background:#ecfdf5}to{background:transparent}}
+.bag-ph{width:76px;height:76px;border-radius:10px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.bag-row.newest .bag-ph{width:150px;height:150px}
+.bag-ph img{max-width:100%;max-height:100%;object-fit:contain}
+.bag-ph i{font-style:normal;font-weight:800;font-size:18px;color:var(--ink4)}
+.bag-mid{min-width:0;display:flex;flex-direction:column;gap:5px}
+.bag-nm{font-weight:700;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bag-row.newest .bag-nm{font-size:16px}
+.bag-unit{font-size:12px;color:var(--ink4)}
+.bag-qty{display:inline-flex;align-items:center;gap:4px}
+.bag-qty button{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border2);background:var(--paper);font-size:16px;line-height:1;cursor:pointer;padding:0}
+.bag-qty input{width:42px;text-align:center;font-size:14px;font-weight:700;border:1px solid var(--border2);border-radius:6px;padding:3px 0;background:var(--white);color:var(--ink)}
+.bag-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.bag-price{font-size:15px;white-space:nowrap}
+.bag-price.disc{color:#b91c1c}
+.bag-orig{text-decoration:line-through;color:var(--ink4);font-size:12px}
+.bag-more{border:none;background:none;font-size:20px;line-height:1;color:var(--ink3);cursor:pointer;padding:2px 8px;border-radius:8px}
+.bag-more:hover{background:var(--paper)}
+.bag-sum{display:flex;align-items:baseline;justify-content:space-between;padding:12px 4px 2px;border-top:2px solid var(--ink);margin-top:2px;font-size:13px;color:var(--ink3)}
+.bag-sum b{font-size:26px;color:var(--ink);white-space:nowrap;margin-left:10px}
+.bag-disc{color:#b91c1c;font-weight:700}
+.bag-menu{position:fixed;z-index:3000;display:none;width:240px;background:#fff;border:1px solid var(--border2);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px}
+.bag-menu-bc{font-family:'Courier New',monospace;font-size:12px;color:var(--ink4);padding:6px 8px}
+.bag-menu button{display:block;width:100%;text-align:left;border:none;background:none;padding:10px 8px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.bag-menu button:hover{background:var(--paper)}
+.bag-menu button.danger{color:#b91c1c}
+@media (max-width:520px){.bag-row.newest{grid-template-columns:110px 1fr auto}.bag-row.newest .bag-ph{width:110px;height:110px}.bag-row{grid-template-columns:60px 1fr auto}.bag-ph{width:60px;height:60px}}
 .cart-mini.visible{display:block}
 .cart-mini-row{display:flex;align-items:center;gap:8px;padding:7px 10px;
   border-bottom:1px solid var(--border);font-size:12px}
@@ -1447,7 +1476,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v29-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v29-oct-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2703,6 +2732,10 @@ function pushDiscountToSheet(info) {
 // currentTxn.items directly — never the session-wide scan log — so the
 // index passed to openItemDiscountModal always matches currentTxn.items.
 function renderCurrentCart() {
+  // « Sac » view (29 Oct 2026): newest item on top with a large photo, the
+  // others smaller; each line = photo, name, price, quantity. Barcode,
+  // 🏷 Remise and 🗑 Retirer sit behind the ⋯ button. Same indexes as
+  // currentTxn.items, so every action below is unchanged.
   const box = document.getElementById("cart-mini");
   if(!currentTxn || !currentTxn.items.length) {
     box.classList.remove("visible");
@@ -2710,26 +2743,49 @@ function renderCurrentCart() {
     return;
   }
   box.classList.add("visible");
-  box.innerHTML = currentTxn.items.map((it, idx) => {
-    const base = (it.price||0) * (it.qty||1);
-    const qtyTag = (it.qty||1) > 1 ? ' ×'+it.qty : '';
+  const fr = lang === 'fr';
+  const n = currentTxn.items.reduce((a, it) => a + (it.qty || 1), 0);
+  const order = currentTxn.items.map((it, idx) => idx).reverse();
+  const ini = nm => { const w = String(nm || '').replace(/[^A-Za-zÀ-ÿ0-9 ]/g, ' ').split(/\s+/).filter(Boolean); return w.length ? (w[0][0] + (w[1] ? w[1][0] : '')).toUpperCase() : '•'; };
+  const rows = order.map((idx, k) => {
+    const it = currentTxn.items[idx];
+    const q = it.qty || 1, base = (it.price || 0) * q;
+    const ph = (typeof productPhotoFor === 'function') ? productPhotoFor(it.barcode) : '';
     const priceHtml = it.discount
-      ? `<span class="cart-mini-orig">${formatCFA(base)}</span><span class="cart-mini-price discounted">${formatCFA(it.lineTotal)}</span>`
-      : `<span class="cart-mini-price">${formatCFA(it.lineTotal ?? base)}</span>`;
-    return `<div class="cart-mini-row">
-      <span class="cart-mini-name">${it.name}</span>
-      <span class="cart-mini-qty">
-        <button type="button" class="cart-mini-qty-btn" onclick="changeCartQty(${idx},-1)" title="Moins">−</button>
-        <input type="number" class="cart-mini-qty-in" min="1" max="999" inputmode="numeric" value="${it.qty||1}"
-          onfocus="this.select()" onchange="setCartQty(${idx},this.value)"
-          onkeydown="if(event.key==='Enter'){this.blur();}"/>
-        <button type="button" class="cart-mini-qty-btn" onclick="changeCartQty(${idx},1)" title="Plus">+</button>
-      </span>
-      ${priceHtml}
-      <button class="cart-mini-tag-btn" onclick="openItemDiscountModal(${idx})">🏷️</button>
-      <button class="cart-mini-remove-btn" onclick="removeCartItem(${idx})" title="${lang==='fr'?'Retirer cet article':'Remove this item'}">🗑️</button>
+      ? `<span class="bag-orig">${formatCFA(base)}</span><b class="bag-price disc">${formatCFA(it.lineTotal)}</b>`
+      : `<b class="bag-price">${formatCFA(it.lineTotal ?? base)}</b>`;
+    return `<div class="bag-row${k === 0 ? ' newest' : ''}">
+      <div class="bag-ph">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<i>${ini(it.name)}</i>'">` : `<i>${ini(it.name)}</i>`}</div>
+      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}
+        <span class="bag-qty">
+          <button type="button" onclick="changeCartQty(${idx},-1);_bagFocus()" title="${fr ? 'Moins' : 'Less'}">−</button>
+          <input type="number" min="1" max="999" inputmode="numeric" value="${q}" onfocus="this.select()" onchange="setCartQty(${idx},this.value)" onkeydown="if(event.key==='Enter'){this.blur();_bagFocus();}"/>
+          <button type="button" onclick="changeCartQty(${idx},1);_bagFocus()" title="${fr ? 'Plus' : 'More'}">+</button>
+        </span></div>
+      <div class="bag-right">${priceHtml}<button type="button" class="bag-more" onclick="_bagMenu(event,${idx})" title="${fr ? 'Options' : 'Options'}">⋯</button></div>
     </div>`;
-  }).join("");
+  }).join('');
+  const total = getSaleTotal(currentTxn);
+  const gross = currentTxn.items.reduce((a, it) => a + (it.price || 0) * (it.qty || 1), 0);
+  const disc = gross - total;
+  box.innerHTML = `<div class="bag-list">${rows}</div>
+    <div class="bag-sum"><span>${n} ${fr ? 'article(s)' : 'item(s)'}${disc > 0 ? ` · <span class="bag-disc">${fr ? 'remise' : 'discount'} −${formatCFA(disc)}</span>` : disc < 0 ? ` · ${fr ? 'majoration' : 'surcharge'} +${formatCFA(-disc)}` : ''}</span><b>${formatCFA(total)}</b></div>`;
+}
+// Back to the scan field after a tap in the bag, so the scanner gun keeps working.
+function _bagFocus(){ setTimeout(() => { const a = document.activeElement; if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'scan-input') return; const s = document.getElementById('scan-input'); if(s) s.focus({ preventScroll: true }); }, 30); }
+function _bagMenu(ev, idx){
+  ev.stopPropagation();
+  const it = currentTxn && currentTxn.items[idx]; if(!it) return;
+  let m = document.getElementById('bag-menu');
+  if(!m){ m = document.createElement('div'); m.id = 'bag-menu'; m.className = 'bag-menu'; document.body.appendChild(m); document.addEventListener('click', e => { if(!e.target.closest('#bag-menu')) m.style.display = 'none'; }); }
+  const fr = lang === 'fr';
+  m.innerHTML = `<div class="bag-menu-bc">${it.barcode ? (fr ? 'Code : ' : 'Code: ') + it.barcode : (fr ? 'Sans code-barres' : 'No barcode')}</div>
+    <button type="button" onclick="document.getElementById('bag-menu').style.display='none';openItemDiscountModal(${idx})">🏷️ ${fr ? 'Remise sur cet article' : 'Discount this item'}</button>
+    <button type="button" class="danger" onclick="document.getElementById('bag-menu').style.display='none';removeCartItem(${idx});_bagFocus()">🗑️ ${fr ? 'Retirer de la vente' : 'Remove from sale'}</button>`;
+  const r = ev.currentTarget.getBoundingClientRect();
+  m.style.display = 'block';
+  m.style.top = Math.min(window.innerHeight - 140, r.bottom + 4) + 'px';
+  m.style.left = Math.max(8, Math.min(window.innerWidth - 248, r.right - 240)) + 'px';
 }
 
 // Removes one scanned item from the current (not-yet-closed) sale — the
