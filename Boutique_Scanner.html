@@ -1328,6 +1328,7 @@ input,select{font-family:inherit}
             <button class="pos-tile" style="--c:#7a4a00" onclick="openExpenseModal()"><span class="i">💸</span><span class="l">Sortie de caisse</span></button>
             <button class="pos-tile" style="--c:#1d4ed8" onclick="openPinModal('pricesession')"><span class="i">💲</span><span class="l">Prix</span></button>
             <button class="pos-tile" style="--c:#374151" onclick="openPinModal('cashcheck')"><span class="i">💰</span><span class="l">Caisse du soir</span></button>
+            <button class="pos-tile" style="--c:#a3165f" onclick="openCustomerDisplay()"><span class="i">🖥</span><span class="l">Écran client</span></button>
           </div>
         </div>
       </div>
@@ -1478,7 +1479,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v29-oct-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v29-oct-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -11960,7 +11961,75 @@ function confirmReturn(){
 // can't open, the sale is left OPEN (nothing is recorded) and the cashier
 // sees an error toast instead — there is no path left that finalizes a
 // sale without a real payment method actually being picked.
+
+// ══════════════════════════════════════════
+//  🖥 ÉCRAN CLIENT (29 Oct 2026) — Customer_Display.html in a second window,
+//  dragged onto the screen facing the customer. Same computer, no internet:
+//  the till sends its state through BroadcastChannel « be-customer » and
+//  localStorage (be_customer_state). Phases: sale (last item big + bag +
+//  total), pay (amount + Orange Money / Wave numbers set on that screen),
+//  thanks (change given), idle (logo + product photos loop).
+// ══════════════════════════════════════════
+let _cdChan = null, _cdLast = '', _cdThanks = null, _cdIdle = null;
+try { _cdChan = new BroadcastChannel('be-customer'); } catch(e){}
+function openCustomerDisplay(){
+  const w = window.open('Customer_Display.html', 'be_customer', 'popup,width=1280,height=800');
+  if(!w) showToast('⚠ Le navigateur a bloqué la fenêtre : autorisez les fenêtres pop-up pour ce site.', 6000);
+  else { _cdLast = ''; setTimeout(_cdPublish, 600); }
+}
+function _cdIdleList(){
+  if(_cdIdle && Date.now() - _cdIdle.t < 30 * 60000) return _cdIdle.list;
+  const out = [];
+  try {
+    const keys = Object.keys(PROD_IMAGES || {});
+    for(let i = keys.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+    for(const k of keys){
+      const p = BARCODE_DB[k] || BARCODE_DB['0' + k] || BARCODE_DB['00' + k] || lookupBarcode(k);
+      if(p && p.name && p.price) out.push({ name: p.name, price: p.price, photo: PROD_IMAGES[k] });
+      if(out.length >= 24) break;
+    }
+  } catch(e){}
+  _cdIdle = { t: Date.now(), list: out };
+  return out;
+}
+function _cdState(){
+  if(_cdThanks && Date.now() - _cdThanks.at < 9000) return { phase:'thanks', change: _cdThanks.change || 0, idle: _cdIdleList() };
+  const payOpen = document.getElementById('pay-method-modal') && document.getElementById('pay-method-modal').classList.contains('open');
+  if(currentTxn && currentTxn.items.length){
+    const total = getSaleTotal(currentTxn);
+    if(payOpen) return { phase:'pay', total };
+    const items = currentTxn.items.slice().reverse().map(it => {
+      const q = it.qty || 1, base = (it.price || 0) * q, lt = it.lineTotal ?? base;
+      return { name: it.name, barcode: it.barcode || '', price: it.price || 0, qty: q, lineTotal: lt, orig: lt < base ? base : 0, photo: productPhotoFor(it.barcode) || '' };
+    });
+    const gross = currentTxn.items.reduce((a, it) => a + (it.price || 0) * (it.qty || 1), 0);
+    return { phase:'sale', items, n: currentTxn.items.reduce((a, it) => a + (it.qty || 1), 0), total, disc: Math.max(0, gross - total) };
+  }
+  let store = ''; try { store = (typeof storeBranding === 'object' && storeBranding && storeBranding.name) || ''; } catch(e){}
+  return { phase:'idle', store, idle: _cdIdleList() };
+}
+function _cdPublish(){
+  try {
+    const st = _cdState(), str = JSON.stringify(st);
+    if(str === _cdLast) return;
+    _cdLast = str;
+    if(_cdChan) _cdChan.postMessage(st);
+    try { localStorage.setItem('be_customer_state', str); } catch(e){}
+  } catch(e){}
+}
+setInterval(_cdPublish, 700);
+
 const _origCloseSale = closeSale;
+// Customer screen « Merci » after payment (change given when paid cash).
+if(typeof selectPayMethod === 'function'){
+  const _cdOrigSelect = selectPayMethod;
+  selectPayMethod = function(method, extra){
+    const r = _cdOrigSelect.apply(this, arguments);
+    _cdThanks = { at: Date.now(), change: (extra && Number(extra.changeGiven)) || 0 };
+    _cdPublish();
+    return r;
+  };
+}
 closeSale = function(){
   if(!currentTxn || currentTxn.items.length === 0) return;
   try {

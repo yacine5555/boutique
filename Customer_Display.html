@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beauty Empire — Écran client</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Customer-facing screen. Layout: left = the item just scanned, big; right = the bag + total.
+   Between sales: logo + slow loop of product photos. At payment: amount + mobile-money numbers.
+   Driven by the Scanner on the same computer (BroadcastChannel « be-customer » + localStorage). */
+:root{
+  --bg:#faf6f8; --surface:#ffffff; --ink:#2a1022; --muted:#7c6573; --line:#eadde5;
+  --brand:#c2186b; --brand-soft:#fbe1ee; --plum:#2a1022; --ok:#17784a;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Figtree",ui-sans-serif,system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;cursor:none}
+.num{font-variant-numeric:tabular-nums}
+.screen{position:absolute;inset:0;display:none}
+.screen.on{display:flex}
+/* sale */
+#sale{gap:3vw;padding:3vw}
+.hero{flex:1.25;display:flex;flex-direction:column;gap:2vh;min-width:0}
+.hero-img{flex:1;background:#fff;border-radius:28px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 2px 30px rgba(42,16,34,.08)}
+.hero-img img{max-width:92%;max-height:92%;object-fit:contain}
+.hero-img i{font:800 12vh var(--display);font-style:normal;color:var(--line)}
+.hero-name{font:700 3.6vh/1.2 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hero-price{font:800 6vh var(--display);color:var(--brand)}
+.hero-price small{font:600 2.6vh var(--body);color:var(--muted);margin-left:1vw}
+.bag{flex:1;display:flex;flex-direction:column;background:var(--surface);border-radius:28px;padding:2.5vh 2vw;min-width:0;box-shadow:0 2px 30px rgba(42,16,34,.06)}
+.bag h2{margin:0 0 1.5vh;font:800 3vh var(--display);display:flex;justify-content:space-between}
+.bag h2 span{color:var(--muted);font:600 2.4vh var(--body)}
+.lines{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:1.2vh}
+.line{display:grid;grid-template-columns:7vh 1fr auto;gap:1.2vw;align-items:center}
+.line .ph{width:7vh;height:7vh;border-radius:12px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.line .ph img{max-width:100%;max-height:100%;object-fit:contain}
+.line .ph i{font:800 2.4vh var(--display);font-style:normal;color:var(--muted)}
+.line .nm{font:600 2.2vh/1.25 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.line .nm small{display:block;color:var(--muted);font-weight:500}
+.line .pr{font:700 2.4vh var(--body);white-space:nowrap}
+.line .pr s{display:block;color:var(--muted);font-weight:500;font-size:1.8vh;text-align:right}
+.more{color:var(--muted);font-size:2vh;text-align:center}
+.total{border-top:3px solid var(--ink);padding-top:2vh;margin-top:1.5vh;display:flex;justify-content:space-between;align-items:baseline}
+.total span{font:600 2.6vh var(--body);color:var(--muted)}
+.total b{font:800 8vh var(--display)}
+.disc{color:var(--brand);font:700 2.2vh var(--body);text-align:right}
+/* pay */
+#pay{flex-direction:column;align-items:center;justify-content:center;gap:3vh;background:var(--plum);color:#fbeaf3;text-align:center}
+#pay .lbl{font:600 3vh var(--body);opacity:.75;letter-spacing:.06em;text-transform:uppercase}
+#pay .amt{font:800 16vh/1 var(--display)}
+.mm{display:flex;gap:3vw;margin-top:3vh;flex-wrap:wrap;justify-content:center}
+.mm div{background:rgba(255,255,255,.08);border-radius:24px;padding:2.5vh 3vw;min-width:28vw}
+.mm b{display:block;font:800 5vh var(--display);letter-spacing:.04em}
+.mm span{font:600 2.4vh var(--body);opacity:.8}
+.mm .om b{color:#ff9a3c}.mm .wv b{color:#61c3ff}
+/* idle / thanks */
+#idle,#thanks{flex-direction:column;align-items:center;justify-content:center;gap:4vh;text-align:center}
+.logo{font:800 11vh/1 var(--display);letter-spacing:-.02em}
+.logo b{color:var(--brand)}
+.crown{font-size:7vh;line-height:1;color:var(--brand)}
+.loop{display:flex;align-items:center;gap:4vw;height:38vh}
+.loop .card{width:30vh;height:36vh;background:#fff;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2vh;gap:1.5vh;box-shadow:0 2px 30px rgba(42,16,34,.08);animation:fade 1s ease}
+.loop .card img{max-width:100%;max-height:24vh;object-fit:contain}
+.loop .card div{font:600 1.9vh/1.25 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.loop .card b{font:800 2.6vh var(--display);color:var(--brand)}
+.tag{font:500 3vh var(--body);color:var(--muted)}
+#thanks .logo{font-size:9vh}
+#thanks .tag b{color:var(--ink)}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}}
+@keyframes pop{from{transform:scale(.97);opacity:.4}}
+.pop{animation:pop .35s ease-out}
+/* setup (only shown until the first message from the till, or with the S key) */
+.setup{position:absolute;right:2vw;bottom:2vh;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;width:min(420px,90vw);display:none;cursor:auto;box-shadow:0 10px 40px rgba(0,0,0,.15);font-size:15px}
+.setup.on{display:block}
+.setup h3{margin:0 0 6px;font:800 18px var(--display)}
+.setup label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.setup input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:16px var(--body)}
+.setup button{margin-top:12px;border:0;background:var(--brand);color:#fff;font:700 15px var(--body);padding:11px 16px;border-radius:10px;cursor:pointer}
+.setup p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<section class="screen" id="idle">
+  <div class="crown">♛</div>
+  <div class="logo">Beauty <b>Empire</b></div>
+  <div class="loop" id="loop"></div>
+  <div class="tag" id="idle-tag">Bienvenue</div>
+</section>
+<section class="screen" id="sale">
+  <div class="hero"><div class="hero-img" id="h-img"></div><div class="hero-name" id="h-name"></div><div class="hero-price num" id="h-price"></div></div>
+  <div class="bag"><h2>Votre panier <span id="b-n"></span></h2><div class="lines" id="b-lines"></div><div class="disc" id="b-disc"></div><div class="total"><span>Total</span><b class="num" id="b-total"></b></div></div>
+</section>
+<section class="screen" id="pay">
+  <div class="lbl">À payer</div>
+  <div class="amt num" id="p-amt"></div>
+  <div class="mm" id="p-mm"></div>
+</section>
+<section class="screen" id="thanks">
+  <div class="crown">♛</div>
+  <div class="logo">Merci&nbsp;!</div>
+  <div class="tag" id="t-tag"></div>
+</section>
+<div class="setup" id="setup">
+  <h3>Écran client</h3>
+  <p>Glissez cette fenêtre sur l’écran tourné vers le client, puis passez-la en plein écran (touche F11). Elle suit la caisse toute seule.</p>
+  <label for="s-om">Numéro Orange Money (affiché au paiement)</label><input id="s-om" inputmode="tel" autocomplete="off">
+  <label for="s-wv">Numéro Wave</label><input id="s-wv" inputmode="tel" autocomplete="off">
+  <button id="s-save">Enregistrer</button>
+  <p>Touche S pour rouvrir ce réglage.</p>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const F = n => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' F';
+function ls(k, v){ try { if(v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
+const ini = nm => { const w = String(nm || '').replace(/[^A-Za-zÀ-ÿ0-9 ]/g, ' ').split(/\s+/).filter(Boolean); return w.length ? (w[0][0] + (w[1] ? w[1][0] : '')).toUpperCase() : '•'; };
+let loopSig = '', S = null, last = '', lastTop = '', loopTimer = null, loopI = 0, thanksTimer = null;
+
+function show(id){ document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+function img(url, name, cls){ return url ? `<img src="${esc(url)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('i'),{textContent:'${esc(ini(name))}'}))">` : `<i>${esc(ini(name))}</i>`; }
+
+function render(){
+  const st = S || { phase:'idle' };
+  if(st.phase === 'sale' && st.items && st.items.length){
+    clearInterval(loopTimer); loopTimer = null;
+    show('sale');
+    const top = st.items[0];
+    const topKey = top.barcode + '|' + top.qty + '|' + st.items.length;
+    $('#h-img').innerHTML = img(top.photo, top.name);
+    $('#h-name').textContent = top.name;
+    $('#h-price').innerHTML = F(top.lineTotal) + (top.qty > 1 ? `<small>${esc(F(top.price))} × ${top.qty}</small>` : '');
+    if(topKey !== lastTop){ const h = $('.hero'); h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop'); lastTop = topKey; }
+    const max = 6;
+    $('#b-lines').innerHTML = st.items.slice(0, max).map(it => `<div class="line"><div class="ph">${img(it.photo, it.name)}</div><div class="nm">${esc(it.name)}${it.qty > 1 ? `<small>${esc(F(it.price))} × ${it.qty}</small>` : ''}</div><div class="pr num">${it.orig ? `<s>${esc(F(it.orig))}</s>` : ''}${esc(F(it.lineTotal))}</div></div>`).join('') +
+      (st.items.length > max ? `<div class="more">+ ${st.items.length - max} autre(s) article(s)</div>` : '');
+    $('#b-n').textContent = st.n + ' article' + (st.n > 1 ? 's' : '');
+    $('#b-disc').textContent = st.disc > 0 ? 'Remise −' + F(st.disc) : '';
+    $('#b-total').textContent = F(st.total);
+  } else if(st.phase === 'pay'){
+    clearInterval(loopTimer); loopTimer = null;
+    show('pay');
+    $('#p-amt').textContent = F(st.total);
+    const om = ls('cd_om') || '', wv = ls('cd_wave') || '';
+    $('#p-mm').innerHTML = (om ? `<div class="om"><span>Orange Money</span><b class="num">${esc(om)}</b></div>` : '') + (wv ? `<div class="wv"><span>Wave</span><b class="num">${esc(wv)}</b></div>` : '');
+  } else if(st.phase === 'thanks'){
+    clearInterval(loopTimer); loopTimer = null;
+    show('thanks');
+    $('#t-tag').innerHTML = st.change > 0 ? 'Monnaie rendue : <b>' + esc(F(st.change)) + '</b>' : 'À bientôt chez Beauty Empire';
+  } else {
+    show('idle');
+    $('#idle-tag').textContent = st.store ? st.store : 'Bienvenue';
+    const sig = JSON.stringify((st.idle || []).map(x => x.photo));
+    if(!loopTimer || sig !== loopSig){ clearInterval(loopTimer); loopTimer = null; loopSig = sig; startLoop(); }
+  }
+}
+function startLoop(){
+  const pool = (S && S.idle) || [];
+  const box = $('#loop');
+  const step = () => {
+    if(!pool.length){ box.innerHTML = ''; return; }
+    const pick = [0, 1, 2].map(k => pool[(loopI + k) % pool.length]).filter((x, i, a) => a.indexOf(x) === i);
+    box.innerHTML = pick.map(p => `<div class="card">${img(p.photo, p.name)}<div>${esc(p.name)}</div>${p.price ? `<b class="num">${esc(F(p.price))}</b>` : ''}</div>`).join('');
+    loopI = (loopI + 3) % Math.max(1, pool.length);
+  };
+  step(); loopTimer = setInterval(step, 7000);
+}
+function receive(data){
+  if(!data) return;
+  const str = JSON.stringify(data);
+  if(str === last) return;
+  last = str;
+  const prevPhase = S && S.phase;
+  S = data;
+  $('#setup').classList.remove('on');
+  if(data.phase === 'thanks'){ clearTimeout(thanksTimer); thanksTimer = setTimeout(() => { if(S && S.phase === 'thanks'){ S = Object.assign({}, S, { phase:'idle' }); render(); } }, 9000); }
+  render();
+}
+try { const bc = new BroadcastChannel('be-customer'); bc.onmessage = e => receive(e.data); } catch(e){}
+window.addEventListener('storage', e => { if(e.key === 'be_customer_state' && e.newValue){ try { receive(JSON.parse(e.newValue)); } catch(_){} } });
+try { const s0 = localStorage.getItem('be_customer_state'); if(s0) receive(JSON.parse(s0)); } catch(e){}
+render();
+// setup
+$('#s-om').value = ls('cd_om') || ''; $('#s-wv').value = ls('cd_wave') || '';
+if(!S || (!ls('cd_om') && !ls('cd_wave'))) $('#setup').classList.add('on');
+$('#s-save').onclick = () => { ls('cd_om', $('#s-om').value.trim()); ls('cd_wave', $('#s-wv').value.trim()); $('#setup').classList.remove('on'); render(); };
+document.addEventListener('keydown', e => { if((e.key === 's' || e.key === 'S') && document.activeElement.tagName !== 'INPUT') $('#setup').classList.toggle('on'); });
+document.addEventListener('mousemove', () => { document.body.style.cursor = 'auto'; clearTimeout(window._ct); window._ct = setTimeout(() => document.body.style.cursor = 'none', 2500); });
+</script>
+</body>
+</html>
