@@ -220,6 +220,41 @@ select.t{appearance:auto}
 .cam .frame{position:absolute;left:12%;right:12%;top:35%;height:22%;border:3px solid #ff8cc0;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 .setrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .setrow small{color:var(--muted);display:block;overflow-wrap:anywhere}
+.pzone{background:var(--sunk);border-radius:20px;padding:8px;display:flex;flex-direction:column;align-items:center}
+.pzone.nophoto{min-height:120px;justify-content:center;color:var(--muted);font-weight:600}
+.pwrap{position:relative;display:inline-block;max-width:100%;line-height:0;touch-action:manipulation}
+.pzone .pwrap img{display:block;max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:12px;cursor:zoom-in}
+.pbox{position:absolute;padding:0;margin:0;border:2px dashed #ffb24d;background:rgba(255,160,40,.12);border-radius:6px;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.45);line-height:1}
+.pbox.ok{border:2px solid #3fd18a;background:rgba(40,190,110,.18)}
+.pbox:focus-visible{outline:3px solid #fff}
+.pbox .pt{position:absolute;left:2px;top:2px;font:800 11px var(--body);color:#fff;background:rgba(0,0,0,.6);padding:1px 4px;border-radius:4px}
+.pbox .pn{position:absolute;right:2px;bottom:2px;font:800 12px var(--body);color:#fff;background:rgba(23,120,74,.9);padding:1px 5px;border-radius:4px}
+.pwrap.nofit .pbox{display:none}
+.pfull{position:absolute;right:8px;top:8px;width:38px;height:38px;border-radius:12px;border:0;background:rgba(20,6,15,.7);color:#fff;font-size:20px;cursor:pointer;line-height:1}
+.plegend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:12px;color:var(--muted);margin-top:8px}
+.plegend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:2px dashed #ffb24d}
+.plegend i.ok{border:2px solid #3fd18a;background:rgba(40,190,110,.18)}
+.pviewer{position:fixed;inset:0;z-index:50;background:#0d0609;color:#fff;display:flex;flex-direction:column}
+.pvbar{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px))}
+.pvbar b{font:800 20px var(--display)}
+.pvbar span{flex:1;min-width:0;font-size:13px;opacity:.75}
+.pvbar button{width:42px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:20px;font-weight:700;cursor:pointer}
+.pvscroll{flex:1;overflow:auto;display:flex;padding:8px}
+.pvwrap{max-width:none;margin:auto;flex:none}
+.pvwrap img{display:block;width:100%;height:auto;border-radius:8px;user-select:none;-webkit-user-select:none}
+.pvwrap.editing .pbox{border:2px solid #fff;background:rgba(255,255,255,.12);touch-action:none;cursor:move}
+.pvwrap.editing .pbox.sel{border-color:#ff8cc0;background:rgba(255,140,192,.25)}
+.pbox .hdl{position:absolute;right:-9px;bottom:-9px;width:22px;height:22px;border-radius:50%;background:#ff8cc0;border:2px solid #fff;cursor:nwse-resize;touch-action:none}
+.pvfoot{padding:8px max(12px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:8px}
+.pvchips,.pvhint{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.pvchips button,.pvhint button{border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:99px;padding:6px 10px;font-weight:700;cursor:pointer}
+.pvchips button.miss{border-style:dashed;opacity:.8}
+.pvchips button[aria-pressed="true"]{background:#ff8cc0;color:#2a1022;border-color:#ff8cc0}
+.pvrow{display:flex;gap:8px;flex-wrap:wrap}
+.pvrow button{flex:1;min-width:120px;border:0;border-radius:12px;padding:12px;font-weight:700;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+.pvrow button.pri{background:#ff8cc0;color:#2a1022}
+.pvrow button:disabled{opacity:.4}
+.pvmsg{font-size:13px;min-height:16px;color:#ffb0c8}
 .xb{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--ok-soft);color:var(--ok);margin-top:3px}
 .xb.later{background:var(--warn-soft);color:var(--warn)}
 .xb.orange,.xb.far{background:var(--warn-soft);color:var(--warn)}
@@ -533,7 +568,7 @@ function zoneHTML(loc, zone, tab){
   const rows = rowsAt(loc, zone).filter(r => r[4] !== 0).sort((a, b) => b[4] - a[4]);
   const t = totals(rows);
   const ph = zone === UNPLACED ? '' : photoFor(loc, zone);
-  let h = `<div class="hero">${ph ? `<img src="${ph}" alt="Photo de la zone ${esc(zone)}" onerror="this.remove()">` : ''}<div class="nophoto">${ph ? '' : 'Pas de photo'}</div></div>
+  let h = (zone === UNPLACED ? '' : photoHTML(loc, zone, z)) + `
     <div class="zhead"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
@@ -569,6 +604,7 @@ function bindMain(){
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
+  bindPhoto();
   const q = $('#q');
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; renderResults(); }
 }
@@ -1084,6 +1120,206 @@ function finishUnit(){
   draw();
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+//  ZONE PHOTOS WITH SHELF BOXES (29 Oct 2026)
+//  The zone photo is shown whole (no crop). Each shelf is a box on it, in %
+//  of the photo [x, y, w, h]; tapping a box opens that shelf (what was
+//  counted, Compter). Green = counted, orange dashed = never counted.
+//  Where the boxes come from, first match wins:
+//   1. the Sheet's « Zone Photos » tab (getZonePhotos; same tab the Comptage
+//      app writes) — for the Balkuy photos replaced on 26 Oct, only boxes
+//      saved after TRACE_NEW_AT count, older ones were drawn on the old photos;
+//   2. the boxes built in here (TRACES_BUILTIN: Balkuy placed on the new
+//      photos 29 Oct, the rest = Comptage's first tracing).
+//  Boxes are only drawn if the photo still has the shape it was traced on.
+//  An Admin can move / resize boxes (✏️ Ajuster les cases) and save them to
+//  the Sheet (setZonePhotoTraces), for everyone.
+// ══════════════════════════════════════════════════════════════════
+const TRACES_BUILTIN = {"Store 1":{"1A":{"pw":563,"ph":1000,"spots":{"1A-4":[33,9,35,21],"1A-3":[33,39,35,17],"1A-2":[33,57,35,16],"1A-1":[33,74,35,16]}},"1B":{"pw":1000,"ph":563,"spots":{"1B-5-1":[14,18,18.5,12],"1B-5-2":[33,18,18.5,12],"1B-5-3":[52,18,18,12],"1B-5-4":[70.5,18,15.5,12],"1B-4-1":[14,30,18.5,13],"1B-4-2":[33,30,18.5,13],"1B-4-3":[52,30,18,13],"1B-4-4":[70.5,30,15.5,13],"1B-3-1":[14,43,18.5,14],"1B-3-2":[33,43,18.5,14],"1B-3-3":[52,43,18,14],"1B-3-4":[70.5,43,15.5,14],"1B-2-1":[14,57,18.5,13],"1B-2-2":[33,57,18.5,13],"1B-2-3":[52,57,18,13],"1B-2-4":[70.5,57,15.5,13],"1B-1-1":[14,70,18.5,14],"1B-1-2":[33,70,18.5,14],"1B-1-3":[52,70,18,14],"1B-1-4":[70.5,70,15.5,14],"1B-T1":[14,85,18.5,12],"1B-T2":[33,85,18.5,12],"1B-T3":[52,85,18,12],"1B-T4":[70.5,85,15.5,12]}},"1C":{"pw":563,"ph":1000,"spots":{"1C-4":[34,16,35,17],"1C-3":[34,40,35,14],"1C-2":[34,55,35,13],"1C-1":[34,69,35,12]}},"1D":{"pw":1000,"ph":938,"spots":{"1D-4-1":[2,20,34,15],"1D-4-2":[37,20,29,15],"1D-4-3":[67,20,27,15],"1D-3-1":[2,35,34,17],"1D-3-2":[37,35,29,17],"1D-3-3":[67,35,27,17],"1D-2-1":[2,53,34,16],"1D-2-2":[37,53,29,16],"1D-2-3":[67,53,27,16],"1D-1-1":[2,70,34,16],"1D-1-2":[37,70,29,16],"1D-1-3":[67,70,27,16],"1D-T1":[2,87,34,11],"1D-T2":[37,87,29,11],"1D-T3":[67,87,27,11]}},"1E":{"pw":563,"ph":1000,"spots":{"1E-4":[21,9,46,21],"1E-3":[21,40,46,16],"1E-2":[21,57,46,16],"1E-1":[21,74,46,17]}},"1F":{"pw":1000,"ph":563,"spots":{"1F-4-1":[10,17,26,14],"1F-4-2":[36,17,30,14],"1F-4-3":[66,17,25,14],"1F-3-1":[10,32,19,18],"1F-3-2":[29,32,15,18],"1F-3-3":[44,32,16,18],"1F-3-4":[60,32,15,18],"1F-3-5":[75,32,16,18],"1F-2-1":[10,51,19,16],"1F-2-2":[29,51,15,16],"1F-2-3":[44,51,16,16],"1F-2-4":[60,51,15,16],"1F-2-5":[75,51,16,16],"1F-1-1":[10,68,28,16],"1F-1-2":[38,68,25,16],"1F-1-3":[63,68,28,16],"1F-T1":[13,85,25,12],"1F-T2":[38,85,25,12],"1F-T3":[63,85,26,12]}},"1G":{"pw":563,"ph":1000,"spots":{"1G-4":[25,7,35,20],"1G-3":[25,35,35,17],"1G-2":[25,53,35,16],"1G-1":[25,70,35,16]}},"1H":{"pw":563,"ph":1000,"spots":{"1H-4-1":[11,30,49,15],"1H-4-2":[60,30,33,13],"1H-3-1":[11,45,35,13],"1H-3-2":[47,45,24,12],"1H-3-3":[71,44,22,12],"1H-2-1":[11,58,34,13],"1H-2-2":[46,57,24,12],"1H-2-3":[70,56,23,11],"1H-1-1":[11,71,34,13],"1H-1-2":[45,69,25,12],"1H-1-3":[70,67,23,11],"1H-T1":[11,84,47,12],"1H-T2":[58,81,34,11]}},"1O":{"pw":563,"ph":1000,"spots":{"1O-7":[57,17,40,10],"1O-6":[57,27,40,9],"1O-5":[57,36,40,10],"1O-4":[57,46,40,10],"1O-3":[57,56,40,10],"1O-2":[57,66,40,11],"1O-1":[57,77,40,15]}},"2A":{"pw":563,"ph":1000,"spots":{"2A-5":[56,15,40,13],"2A-4":[56,28,40,12],"2A-3":[56,40,40,12],"2A-2":[56,51,40,12],"2A-1":[57,62,38,12],"2A-T1":[57,74,38,13],"2A-C6":[25,8,30,13],"2A-C5":[25,21,30,14],"2A-C4":[25,35,30,15],"2A-C3":[25,50,30,13],"2A-C2":[25,63,30,12],"2A-C1":[25,75,30,15]}},"2B":{"pw":563,"ph":1000,"spots":{"2B-5":[3,17,42,14],"2B-4":[3,29,42,13],"2B-3":[3,40,42,13],"2B-2":[3,50,42,13],"2B-1":[3,60,42,14],"2B-T1":[3,72,42,16],"2B-C6":[46,5,34,15],"2B-C5":[46,20,34,17],"2B-C4":[46,37,34,16],"2B-C3":[46,53,34,15],"2B-C2":[46,68,34,14],"2B-C1":[46,82,34,14]}},"2C":{"pw":1000,"ph":563,"spots":{"2C-3":[22,20,51,21],"2C-2":[22,41,51,25],"2C-1":[22,66,51,24],"2C-G5":[14,18,9,12],"2C-G4":[14,30,9,16],"2C-G3":[14,46,9,14],"2C-G2":[14,60,9,12],"2C-G1":[14,72,9,15],"2C-D5":[73,26,13,10],"2C-D4":[73,36,13,12],"2C-D3":[73,48,13,10],"2C-D2":[73,58,13,12],"2C-D1":[73,70,13,12]}},"2D":{"pw":563,"ph":1000,"spots":{"2D-4":[5,27,90,14],"2D-3":[6,41,88,15],"2D-2":[8,56,85,16],"2D-1":[10,72,80,14],"2D-T1":[12,86,38,13],"2D-T2":[50,78,40,13]}},"3A":{"pw":563,"ph":1000,"spots":{"3A-5-1":[6,36,34,10],"3A-4-1":[6,46,34,10],"3A-3-1":[6,56,34,10],"3A-2-1":[6,66,34,9],"3A-1-1":[6,75,34,9],"3A-T1":[6,84,34,11],"3A-5-2":[42,37,29,9],"3A-4-2":[42,46,29,9],"3A-3-2":[42,55,29,9],"3A-2-2":[42,64,29,8],"3A-1-2":[42,72,29,9],"3A-T2":[42,81,29,10],"3A-5-3":[72,37,25,8],"3A-4-3":[72,45,25,8],"3A-3-3":[72,53,25,9],"3A-2-3":[72,62,25,8],"3A-1-3":[72,70,25,8],"3A-T3":[72,78,25,10]}},"M2":{"pw":563,"ph":1000,"spots":{"M2-6":[16,12,64,13],"M2-5":[16,25,64,12],"M2-4":[16,37,64,12],"M2-3":[16,49,64,11],"M2-2":[16,60,64,11],"M2-1":[16,71,64,11]}},"V1":{"pw":563,"ph":1000,"spots":{"V1-3":[3,33,85,27],"V1-2":[4,60,82,7],"V1-1":[4,66,82,8],"V1-T1":[4,74,20,12],"V1-T2":[24,75,30,15],"V1-T3":[55,78,32,15]}},"V2":{"pw":563,"ph":1000,"spots":{"V2-3":[4,42,90,26],"V2-2":[5,67,88,6],"V2-1":[5,72,88,9],"V2-T1":[5,74,22,10],"V2-T2":[27,76,28,12],"V2-T3":[57,80,34,14]}},"F1":{"pw":562,"ph":1000,"spots":{"F1-5":[4,18,88,13],"F1-4":[4,31,88,13],"F1-3":[4,44,88,14],"F1-2":[4,58,88,12],"F1-1":[4,70,88,18]}},"F2":{"pw":563,"ph":1000,"spots":{"F2-5":[12,3,86,14],"F2-4":[12,17,86,16],"F2-3":[12,33,86,19],"F2-2":[14,52,84,16],"F2-1":[14,67,84,26]}},"F3a":{"pw":562,"ph":1000,"spots":{"F3a-5":[2,10,70,18],"F3a-4":[5,27,85,13],"F3a-3":[5,40,85,16],"F3a-2":[5,55,80,14],"F3a-1":[5,68,75,25]}},"F4a":{"pw":562,"ph":1000,"spots":{"F4a-5":[30,12,40,12],"F4a-4":[30,24,40,12],"F4a-3":[30,36,40,14],"F4a-2":[30,50,40,13],"F4a-1":[30,63,40,20]}},"F4b":{"pw":562,"ph":1000,"spots":{"F4b-5":[25,3,60,15],"F4b-4":[18,18,65,15],"F4b-3":[15,33,60,15],"F4b-2":[15,47,50,19],"F4b-1":[18,65,50,25]}},"F5":{"pw":562,"ph":1000,"spots":{"F5-5":[5,3,40,17],"F5-4":[5,20,80,18],"F5-3":[5,38,80,12],"F5-2":[5,50,80,13],"F5-1":[5,62,75,30]}},"F6":{"pw":562,"ph":1000,"spots":{"F6-5":[10,12,75,12],"F6-4":[10,24,75,12],"F6-3":[10,36,75,16],"F6-2":[10,52,75,16],"F6-1":[10,68,75,25]}},"F7a":{"pw":562,"ph":1000,"spots":{"F7a-5":[0,3,45,12],"F7a-4":[0,15,45,18],"F7a-3":[0,33,45,17],"F7a-2":[0,50,45,14],"F7a-1":[0,64,45,30]}},"F7b":{"pw":563,"ph":1000,"spots":{"F7b-5":[5,10,85,14],"F7b-4":[5,24,85,14],"F7b-3":[5,38,85,12],"F7b-2":[5,50,80,16],"F7b-1":[5,66,70,30]}},"F8a":{"pw":562,"ph":1000,"spots":{"F8a-5":[5,8,75,13],"F8a-4":[5,21,75,16],"F8a-3":[5,37,75,21],"F8a-2":[10,58,70,14],"F8a-1":[10,72,70,22]}},"F8b":{"pw":562,"ph":1000,"spots":{"F8b-5":[5,12,90,12],"F8b-4":[5,25,90,10],"F8b-3":[5,35,90,15],"F8b-2":[5,50,90,12],"F8b-1":[5,62,90,33]}},"F9":{"pw":562,"ph":1000,"spots":{"F9-5":[22,18,55,14],"F9-4":[22,32,55,10],"F9-3":[22,42,55,13],"F9-2":[22,55,50,13],"F9-1":[22,68,45,25]}},"F10":{"pw":562,"ph":1000,"spots":{"F10-5":[70,25,28,12],"F10-4":[70,38,28,12],"F10-3":[70,50,28,12],"F10-2":[70,62,28,14],"F10-1":[70,76,28,16]}},"F11a":{"pw":562,"ph":1000,"spots":{"F11a-5":[25,8,60,12],"F11a-4":[25,20,60,14],"F11a-3":[25,35,60,14],"F11a-2":[25,49,60,15],"F11a-1":[25,64,60,24]}},"F11b":{"pw":562,"ph":1000,"spots":{"F11b-5":[0,18,60,12],"F11b-4":[0,30,60,12],"F11b-3":[0,42,60,13],"F11b-2":[0,55,60,13],"F11b-1":[0,68,60,25]}},"F13":{"pw":563,"ph":1000,"spots":{"F13-5":[2,10,78,13],"F13-4":[2,24,78,13],"F13-3":[2,37,78,13],"F13-2":[2,50,75,14],"F13-1":[2,64,70,30]}},"Rice":{"pw":562,"ph":1000,"spots":{"Rice-W":[5,32,95,62]}},"PT":{"pw":562,"ph":1000,"spots":{"PT-W":[0,26,100,52]}},"GLV":{"pw":562,"ph":1000,"spots":{"GLV-W":[5,22,93,60]}},"M1":{"pw":504,"ph":1000,"spots":{"M1-6":[18.0,13.0,70.0,11.0],"M1-5":[18.0,25.0,70.0,11.5],"M1-4":[18.0,37.5,70.0,11.0],"M1-3":[18.0,49.5,70.0,11.0],"M1-2":[19.0,61.5,69.0,10.0],"M1-1":[19.0,72.5,69.0,10.5]}},"F3b":{"pw":563,"ph":1000,"spots":{"F3b-5":[14.0,9.0,73.0,12.5],"F3b-4":[15.0,22.5,71.0,12.5],"F3b-3":[16.0,36.0,68.0,15.5],"F3b-2":[17.0,53.0,65.0,11.0],"F3b-1":[18.0,65.0,63.0,12.0]}},"2O":{"pw":563,"ph":1000,"spots":{"2O-7":[10,5,73,10.5],"2O-6":[12,17,69,12.5],"2O-5":[13,31,67,12],"2O-4":[13,44,66,12],"2O-3":[14,57.5,64,10.5],"2O-2":[15,69.5,63,10.5],"2O-1":[15,81.5,62,10]}},"3O":{"pw":562,"ph":1000,"spots":{"3O-7":[17.0,7.0,66.0,12.0],"3O-6":[19.0,21.0,62.0,11.5],"3O-5":[20.0,33.5,60.0,11.5],"3O-4":[21.0,45.5,58.0,12.0],"3O-3":[22.0,57.0,56.0,12.5],"3O-2":[23.0,68.0,55.0,12.5],"3O-1":[24.0,79.0,54.0,13.5]}},"4O":{"pw":562,"ph":1000,"spots":{"4O-7":[15.0,8.0,62.0,12.5],"4O-6":[16.0,22.0,59.0,12.0],"4O-5":[17.0,35.0,57.0,12.0],"4O-4":[18.0,47.5,55.0,11.0],"4O-3":[19.0,59.0,54.0,10.5],"4O-2":[20.0,70.0,52.0,10.5],"4O-1":[20.0,80.5,52.0,13.0]}},"5O":{"pw":563,"ph":1000,"spots":{"5O-7":[18.0,4.0,70.0,11.0],"5O-6":[18.0,16.5,68.0,13.5],"5O-5":[18.0,31.5,66.0,12.5],"5O-4":[18.0,45.0,65.0,12.0],"5O-3":[18.0,58.5,63.0,11.0],"5O-2":[18.0,70.5,62.0,10.5],"5O-1":[17.0,81.5,62.0,11.0]}},"6O":{"pw":562,"ph":1000,"spots":{"6O-7":[10.0,8.0,70.0,10.5],"6O-6":[11.0,20.5,68.0,12.0],"6O-5":[12.0,34.0,66.0,11.5],"6O-4":[13.0,47.0,64.0,11.0],"6O-3":[14.0,59.0,61.0,10.5],"6O-2":[15.0,70.5,59.0,9.5],"6O-1":[15.0,81.0,59.0,10.0]}},"1S":{"pw":1000,"ph":563,"spots":{"1S-5":[11.0,0.5,83.0,13.5],"1S-4":[12.0,14.5,82.0,18.0],"1S-3":[13.0,33.0,80.0,23.0],"1S-2":[14.0,57.0,78.0,17.5],"1S-1":[15.0,75.5,76.0,21.5]}},"2S":{"pw":1000,"ph":563,"spots":{"2S-5":[2.0,0.5,79.0,15.5],"2S-4":[2.0,17.0,79.0,15.0],"2S-3":[2.0,33.0,78.0,22.0],"2S-2":[2.0,55.5,78.0,18.0],"2S-1":[2.0,74.0,78.0,19.0]}},"3S":{"pw":562,"ph":1000,"spots":{"3S-5":[0.5,17.0,99.0,11.5],"3S-4":[0.5,29.5,99.0,13.0],"3S-3":[0.5,43.5,99.0,19.5],"3S-2":[0.5,64.0,99.0,13.5],"3S-1":[0.5,78.0,99.0,14.0]}}},"Store 2":{"A1":{"pw":563,"ph":1000,"spots":{"A1-5":[19.0,6.0,59.0,13.0],"A1-4":[19.0,21.0,59.0,12.5],"A1-3":[19.0,34.0,59.0,11.5],"A1-2":[19.0,46.0,59.0,11.5],"A1-1":[19.0,58.0,59.0,11.5],"A1-T1":[19.0,71.0,58.0,15.0]}},"A2":{"pw":563,"ph":1000,"spots":{"A2-5":[21.0,5.0,64.0,12.0],"A2-4":[21.0,22.0,64.0,12.0],"A2-3":[21.0,35.5,64.0,12.0],"A2-2":[21.0,48.5,64.0,12.0],"A2-1":[21.0,61.5,64.0,12.0],"A2-T1":[21.0,76.5,63.0,17.5]}},"A3":{"pw":563,"ph":1000,"spots":{"A3-5":[25.0,10.0,60.0,11.5],"A3-4":[25.0,26.0,60.0,11.5],"A3-3":[25.0,38.5,60.0,11.0],"A3-2":[25.0,50.5,60.0,11.5],"A3-1":[25.0,63.0,60.0,11.5],"A3-T1":[24.5,77.0,60.0,17.0]}},"A4":{"pw":563,"ph":1000,"spots":{"A4-4":[3.0,8.0,77.0,15.5],"A4-3":[4.0,25.0,76.0,14.5],"A4-2":[4.0,41.0,76.0,14.0],"A4-1":[5.0,56.0,75.0,15.0],"A4-T1":[6.0,72.5,74.0,21.0]}},"A5":{"pw":563,"ph":1000,"spots":{"A5-5":[53.0,6.5,43.0,12.0],"A5-4":[53.0,21.0,43.0,13.0],"A5-3":[53.0,35.5,43.0,11.0],"A5-2":[53.0,48.0,43.0,11.0],"A5-1":[53.0,60.5,43.0,11.0],"A5-T1":[54.0,74.0,41.0,15.5]}},"A6":{"pw":563,"ph":1000,"spots":{"A6-5":[51.0,6.0,44.0,12.5],"A6-4":[51.0,20.5,44.0,14.0],"A6-3":[52.0,36.0,43.0,11.5],"A6-2":[52.0,49.0,43.0,11.0],"A6-1":[52.0,62.0,43.0,12.0],"A6-T1":[53.0,76.5,42.0,17.5]}},"A7":{"pw":563,"ph":1000,"spots":{"A7-5":[4.0,7.0,44.0,12.5],"A7-4":[4.0,22.0,44.0,13.5],"A7-3":[5.0,37.0,43.0,12.0],"A7-2":[5.0,50.0,43.0,11.5],"A7-1":[5.0,63.0,43.0,12.0],"A7-T1":[6.0,78.0,42.0,17.5]}},"A8":{"pw":563,"ph":1000,"spots":{"A8-5":[27.0,6.0,42.0,12.0],"A8-4":[27.0,21.0,42.0,13.0],"A8-3":[27.0,35.0,42.0,11.0],"A8-2":[27.0,47.0,42.0,11.5],"A8-1":[28.0,59.5,41.0,10.5],"A8-T1":[28.0,72.0,41.0,15.0]}},"B1":{"pw":562,"ph":1000,"spots":{"B1-5-1":[18.0,18.0,69.0,13.0],"B1-4-1":[18.0,31.0,70.0,8.5],"B1-3-1":[18.0,40.0,69.0,14.5],"B1-2-1":[18.0,55.0,69.0,14.5],"B1-1-1":[19.0,70.0,67.0,14.0],"B1-4-3":[3.0,31.0,13.0,8.0],"B1-3-3":[3.0,40.0,13.0,14.0],"B1-2-3":[4.0,55.0,12.0,13.0],"B1-1-3":[5.0,69.0,12.0,9.0]}},"B2":{"pw":563,"ph":1000,"spots":{"B2-5":[12.0,16.0,77.0,11.5],"B2-4":[12.0,28.0,76.0,13.0],"B2-3":[12.0,41.5,75.0,12.5],"B2-2":[13.0,54.5,73.0,12.0],"B2-1":[14.0,66.5,71.0,11.5],"B2-T1":[14.0,78.0,34.0,7.5],"B2-T2":[49.0,78.0,37.0,7.5]}},"B10":{"pw":563,"ph":1000,"spots":{"B10-4-1":[20.0,25.0,66.0,19.0],"B10-3-1":[21.0,45.0,63.0,13.0],"B10-2-1":[22.0,59.0,61.0,12.0],"B10-1-1":[22.0,72.0,59.0,11.0],"B10-4-3":[9.0,30.0,11.0,14.0],"B10-3-3":[9.0,45.0,12.0,13.0],"B10-2-3":[12.0,59.0,10.0,12.0],"B10-1-3":[13.0,72.0,9.0,11.0]}},"B4":{"pw":563,"ph":1000,"spots":{"B4-7":[11.0,1.5,68.0,10.5],"B4-6":[11.0,13.0,68.0,12.5],"B4-5":[12.0,27.0,67.0,11.5],"B4-4":[12.0,40.0,66.0,11.5],"B4-3":[13.0,52.5,65.0,10.5],"B4-2":[13.0,64.0,64.0,11.0],"B4-1":[13.0,76.0,64.0,15.5]}},"B5":{"pw":563,"ph":1000,"spots":{"B5-7":[7.0,2.0,69.0,10.5],"B5-6":[9.0,13.5,67.0,13.0],"B5-5":[11.0,28.0,64.0,12.0],"B5-4":[12.0,41.5,62.0,10.5],"B5-3":[13.0,53.0,61.0,10.0],"B5-2":[15.0,64.0,59.0,10.0],"B5-1":[15.0,75.0,58.0,12.0]}},"B8":{"pw":563,"ph":1000,"spots":{"B8-7":[20.0,1.0,59.0,14.5],"B8-6":[19.0,17.0,62.0,12.5],"B8-5":[19.0,31.0,62.0,11.5],"B8-4":[18.0,43.5,63.0,11.0],"B8-3":[18.0,55.5,62.0,11.0],"B8-2":[18.0,67.5,60.0,10.0],"B8-1":[17.0,78.5,61.0,15.0]}},"B11":{"pw":563,"ph":1000,"spots":{"B11-7":[22.0,8.0,62.0,10.5],"B11-6":[23.0,20.0,61.0,10.5],"B11-5":[24.0,32.0,59.0,10.5],"B11-4":[25.0,44.0,57.0,9.5],"B11-3":[25.0,55.0,57.0,9.5],"B11-2":[26.0,66.0,56.0,9.5],"B11-1":[26.0,76.5,56.0,12.0]}},"B12":{"pw":563,"ph":1000,"spots":{"B12-7":[14.0,9.5,64.0,11.0],"B12-6":[15.0,22.5,63.0,10.5],"B12-5":[15.0,34.5,62.0,10.5],"B12-4":[16.0,46.0,60.0,10.0],"B12-3":[16.0,57.0,59.0,10.0],"B12-2":[17.0,68.0,57.0,10.0],"B12-1":[17.0,79.0,57.0,12.5]}},"B13":{"pw":563,"ph":1000,"spots":{"B13-7":[18.0,9.0,56.0,12.0],"B13-6":[18.0,23.0,57.0,10.0],"B13-5":[18.0,34.5,57.0,9.5],"B13-4":[19.0,45.5,56.0,9.0],"B13-3":[20.0,56.0,55.0,9.0],"B13-2":[20.0,66.5,54.0,9.0],"B13-1":[20.0,77.0,54.0,11.0]}},"B9":{"pw":1000,"ph":563,"spots":{"B9-5":[5.0,3.0,76.0,14.0],"B9-4":[5.0,19.0,75.0,20.0],"B9-3":[6.0,40.0,73.0,18.0],"B9-2":[7.0,59.0,70.0,16.0],"B9-1":[8.0,76.0,68.0,16.0]}},"m2":{"pw":563,"ph":1000,"spots":{"m2-6":[9.0,14.0,82.0,14.0],"m2-5":[10.0,29.0,80.0,13.0],"m2-4":[11.0,43.0,79.0,12.0],"m2-3":[12.0,55.5,78.0,11.0],"m2-2":[13.0,67.0,77.0,11.0],"m2-1":[13.0,78.5,76.0,12.0]}},"B14":{"pw":563,"ph":1000,"spots":{"B14-7":[9.0,17.0,71.0,12.0],"B14-6":[10.0,30.0,70.0,11.0],"B14-5":[11.0,42.0,69.0,11.5],"B14-4":[12.0,54.0,67.0,10.5],"B14-3":[13.0,65.0,66.0,10.0],"B14-2":[14.0,75.0,64.0,9.5],"B14-1":[15.0,85.0,63.0,9.5]}},"P1":{"pw":563,"ph":1000,"spots":{"P1-6":[29.0,23.0,34.0,6.5],"P1-5":[29.0,30.0,33.0,7.0],"P1-4":[29.0,37.5,33.0,7.5],"P1-3":[28.0,45.5,33.0,7.0],"P1-2":[28.0,53.0,33.0,7.0],"P1-1":[28.0,60.5,32.0,8.5]}},"m3":{"pw":1000,"ph":563,"spots":{"m3-3":[4.0,18.0,90.0,19.0],"m3-2":[5.0,40.0,85.0,18.0],"m3-1":[5.0,59.0,84.0,18.0]}},"D1":{"pw":563,"ph":1000,"spots":{"D1-7":[38.0,3.0,21.0,13.5],"D1-6":[38.0,17.0,20.0,13.5],"D1-5":[38.0,31.0,20.0,12.0],"D1-4":[38.0,43.5,20.0,11.5],"D1-3":[38.0,55.5,20.0,11.0],"D1-2":[38.0,67.0,20.0,11.0],"D1-1":[38.0,78.5,20.0,12.5]}}}};
+const TRACE_NEW_AT = '2026-10-29';
+const TRACE_NEW_ZONES = ["1A", "1B", "1C", "1D", "1E", "1F", "1G", "1H", "1O", "2A", "2B", "2C", "2D", "3A", "M2", "V1", "V2"];
+let SHEET_TRACES = lsj('s1981_traces', {});
+async function loadTraces(){
+  if(!URL_ || !KEY) return;
+  try { const d = await api({ action:'getZonePhotos' }); if(d && d.success && d.traces){ SHEET_TRACES = d.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); if(VIEW.screen === 'zone') render(); } } catch(e){}
+}
+function traceFor(loc, zone){
+  const s = SHEET_TRACES[loc] && SHEET_TRACES[loc][zone];
+  const isNew = loc === 'Store 1' && TRACE_NEW_ZONES.includes(zone);
+  if(s && s.spots && Object.keys(s.spots).length && (!isNew || String(s.at || '') >= TRACE_NEW_AT)) return Object.assign({ src:'sheet' }, s);
+  const b = TRACES_BUILTIN[loc] && TRACES_BUILTIN[loc][zone];
+  return b ? Object.assign({ src:'builtin' }, b) : null;
+}
+function spotState(loc, zone, code){
+  const items = spotsAt(loc, zone).filter(r => r[2] === code);
+  const last = items.reduce((a, r) => r[6] > a ? r[6] : a, '');
+  return { items, last, by: (items.find(r => r[6] === last) || [])[7] || '', units: items.reduce((a, r) => a + (Number(r[5]) || 0), 0), counted: items.length > 0 };
+}
+function boxesHTML(loc, zone, t, spots){
+  if(!t) return '';
+  return spots.filter(s => t.spots[s.code]).map(s => {
+    const [x, y, w, h] = t.spots[s.code];
+    const st = spotState(loc, zone, s.code);
+    return `<button class="pbox ${st.counted ? 'ok' : 'todo'}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
+  }).join('');
+}
+function photoHTML(loc, zone, z){
+  const src = photoFor(loc, zone);
+  if(!src) return '<div class="pzone nophoto">Pas de photo</div>';
+  const t = traceFor(loc, zone);
+  const spots = zoneSpots(z);
+  return `<div class="pzone"><div class="pwrap" id="pwrap" data-pw="${t ? t.pw : ''}" data-ph="${t ? t.ph : ''}">
+      <img src="${src}" alt="Photo de la zone ${esc(zone)}" onload="photoLoaded(this)" onerror="this.closest('.pzone').classList.add('nophoto');this.closest('.pzone').textContent='Pas de photo'">
+      ${boxesHTML(loc, zone, t, spots)}
+      <button class="pfull" data-act="pfull" aria-label="Agrandir la photo">⤢</button>
+    </div>${t ? '<div class="plegend"><span><i class="ok"></i>comptée</span><span><i class="todo"></i>jamais comptée</span><span>Touchez une étagère sur la photo.</span></div>' : ''}</div>`;
+}
+// Boxes drawn on another photo than this one: hide them.
+function photoLoaded(img){
+  const w = img.closest('.pwrap'); if(!w) return;
+  const pw = +w.dataset.pw, ph = +w.dataset.ph;
+  if(pw && ph && Math.abs(img.naturalWidth / img.naturalHeight - pw / ph) / (pw / ph) > 0.03) w.classList.add('nofit');
+}
+function openSpot(loc, zone, code){
+  const z = zoneList(loc).find(x => x.c === zone) || { c: zone, k:'', s:'' };
+  const s = zoneSpots(z).find(x => x.code === code) || { code, label: code };
+  const st = spotState(loc, zone, code);
+  openSheet(`<h3>${esc(zone)} · ${esc(s.label)}</h3><div class="sub">${st.counted ? 'Comptée ' + esc(ago(st.last)) + (st.by ? ' par ' + esc(st.by) : '') + ' · ' + fmt(st.units) + ' article(s)' : 'Jamais comptée'}</div>
+    ${st.counted ? '<div class="where">' + st.items.sort((a, b) => b[5] - a[5]).map(r => `<div><span>${esc(r[4] || r[3])}</span><b class="num">${fmt(r[5])}</b></div>`).join('') + '</div>' : ''}
+    <p class="sub" style="margin-top:8px">Les quantités sont celles du dernier comptage (les ventes depuis ne sont pas déduites ici).</p>
+    <button class="go" id="spc">${st.counted ? 'Recompter cette étagère' : 'Compter cette étagère'}</button><button class="ghost" id="spx">Fermer</button>`);
+  $('#spx').onclick = closeSheet;
+  $('#spc').onclick = () => { closeSheet(); closeViewer(); startCount(loc, zone, code); };
+}
+function bindPhoto(){
+  document.querySelectorAll('.pzone [data-spot]').forEach(b => b.onclick = e => { e.stopPropagation(); openSpot(VIEW.loc, VIEW.zone, b.dataset.spot); });
+  const f = document.querySelector('[data-act="pfull"]'); if(f) f.onclick = () => openViewer(VIEW.loc, VIEW.zone);
+  const img = document.querySelector('.pwrap img'); if(img){ img.onclick = () => openViewer(VIEW.loc, VIEW.zone); if(img.complete && img.naturalWidth) photoLoaded(img); }
+}
+
+// ── full-screen viewer + box editor ─────────────────────
+let PV = null;   // { loc, zone, zoom, edit, spots:{code:[x,y,w,h]}, sel, dirty }
+function openViewer(loc, zone){
+  const t = traceFor(loc, zone);
+  PV = { loc, zone, zoom: 1, edit: false, spots: t ? JSON.parse(JSON.stringify(t.spots)) : {}, pw: t ? t.pw : 0, ph: t ? t.ph : 0, sel: null, dirty: false };
+  let v = $('#pviewer');
+  if(!v){ v = document.createElement('div'); v.id = 'pviewer'; v.className = 'pviewer'; document.body.appendChild(v); }
+  v.hidden = false; drawViewer();
+}
+function closeViewer(){ const v = $('#pviewer'); if(v){ v.hidden = true; v.innerHTML = ''; } PV = null; if(VIEW.screen === 'zone') render(); }
+function drawViewer(){
+  const v = $('#pviewer'); if(!v || !PV) return;
+  const z = zoneList(PV.loc).find(x => x.c === PV.zone) || { c: PV.zone, k:'', s:'' };
+  const spots = zoneSpots(z);
+  const isAdmin = user && user.role === 'Admin';
+  const t = { spots: PV.spots };
+  const boxes = PV.edit
+    ? spots.filter(s => PV.spots[s.code]).map(s => { const [x, y, w, h] = PV.spots[s.code]; return `<div class="pbox ed ${PV.sel === s.code ? 'sel' : ''}" data-ebox="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%"><span class="pt">${esc(s.code.slice(PV.zone.length + 1))}</span>${PV.sel === s.code ? '<i class="hdl" data-hdl="1"></i>' : ''}</div>`; }).join('')
+    : boxesHTML(PV.loc, PV.zone, t, spots);
+  const missing = spots.filter(s => !PV.spots[s.code]);
+  v.innerHTML = `<div class="pvbar"><b>${esc(PV.zone)}</b><span>${PV.edit ? 'Glissez une case pour la déplacer, le coin pour la redimensionner' : esc(locName(PV.loc))}</span>
+      <button data-pz="-1" aria-label="Dézoomer">−</button><button data-pz="1" aria-label="Zoomer">＋</button><button data-pv="x" aria-label="Fermer">✕</button></div>
+    <div class="pvscroll"><div class="pwrap pvwrap ${PV.edit ? 'editing' : ''}"><img src="${photoFor(PV.loc, PV.zone)}" alt="Photo de la zone ${esc(PV.zone)}" draggable="false" onload="fitViewer()">${boxes}</div></div>
+    <div class="pvfoot">${PV.edit ? `
+      <div class="pvchips">${spots.map(s => `<button data-pick="${esc(s.code)}" class="${PV.spots[s.code] ? '' : 'miss'}" aria-pressed="${PV.sel === s.code}">${esc(s.code.slice(PV.zone.length + 1))}${PV.spots[s.code] ? '' : ' ＋'}</button>`).join('')}</div>
+      <div class="pvrow">${PV.sel && PV.spots[PV.sel] ? '<button data-pv="del">Retirer cette case</button>' : ''}<button data-pv="cancel">Annuler</button><button data-pv="save" class="pri" ${PV.dirty ? '' : 'disabled'}>💾 Enregistrer pour tous</button></div><div class="pvmsg" id="pvmsg"></div>`
+      : `${missing.length && Object.keys(PV.spots).length ? `<div class="pvhint">Pas sur la photo : ${missing.map(s => `<button data-spot="${esc(s.code)}">${esc(s.code.slice(PV.zone.length + 1))}</button>`).join(' ')}</div>` : ''}
+      ${isAdmin ? '<div class="pvrow"><button data-pv="edit">✏️ Ajuster les cases</button></div>' : ''}`}</div>`;
+  v.querySelectorAll('[data-pz]').forEach(b => b.onclick = () => { PV.zoom = Math.max(1, Math.min(4, PV.zoom * (b.dataset.pz === '1' ? 1.5 : 1 / 1.5))); drawViewer(); });
+  v.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => {
+    const a = b.dataset.pv;
+    if(a === 'x'){ if(PV.edit && PV.dirty && !confirmDiscard()) return; closeViewer(); }
+    else if(a === 'edit'){ PV.edit = true; PV.sel = null; drawViewer(); }
+    else if(a === 'cancel'){ const t2 = traceFor(PV.loc, PV.zone); PV.spots = t2 ? JSON.parse(JSON.stringify(t2.spots)) : {}; PV.edit = false; PV.dirty = false; PV.sel = null; drawViewer(); }
+    else if(a === 'del'){ delete PV.spots[PV.sel]; PV.sel = null; PV.dirty = true; drawViewer(); }
+    else if(a === 'save') saveTrace();
+  });
+  if(!PV.edit) v.querySelectorAll('[data-spot]').forEach(b => b.onclick = () => openSpot(PV.loc, PV.zone, b.dataset.spot));
+  v.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
+    const c = b.dataset.pick;
+    if(!PV.spots[c]){ PV.spots[c] = [35, 40, 30, 12]; PV.dirty = true; }
+    PV.sel = c; drawViewer();
+  });
+  if(PV.edit) bindEditor(v);
+  fitViewer();
+}
+// Whole photo on screen at zoom 1, bigger with ＋ (scroll to move around).
+function fitViewer(){
+  const v = $('#pviewer'); if(!v || !PV) return;
+  const img = v.querySelector('.pvwrap img'), sc = v.querySelector('.pvscroll'), w = v.querySelector('.pvwrap');
+  if(!img || !img.naturalWidth || !sc || !w) return;
+  const r = img.naturalWidth / img.naturalHeight;
+  const base = Math.min(sc.clientWidth - 16, (sc.clientHeight - 16) * r);
+  w.style.width = Math.round(base * PV.zoom) + 'px';
+}
+window.addEventListener('resize', () => { if(PV) fitViewer(); });
+function confirmDiscard(){ try { return confirm('Les cases ne sont pas enregistrées. Fermer quand même ?'); } catch(e){ return true; } }
+function bindEditor(v){
+  const wrap = v.querySelector('.pvwrap');
+  let drag = null;
+  const pct = ev => { const r = wrap.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width * 100, (ev.clientY - r.top) / r.height * 100]; };
+  wrap.querySelectorAll('[data-ebox]').forEach(el => {
+    el.onpointerdown = ev => {
+      ev.preventDefault();
+      const c = el.dataset.ebox;
+      if(PV.sel !== c){ PV.sel = c; drawViewer(); return; }
+      const [px, py] = pct(ev);
+      drag = { c, resize: !!ev.target.dataset.hdl, px, py, orig: PV.spots[c].slice(), el };
+      el.setPointerCapture(ev.pointerId);
+    };
+    el.onpointermove = ev => {
+      if(!drag || drag.c !== el.dataset.ebox) return;
+      const [px, py] = pct(ev), dx = px - drag.px, dy = py - drag.py, o = drag.orig;
+      let b;
+      if(drag.resize) b = [o[0], o[1], Math.max(3, Math.min(100 - o[0], o[2] + dx)), Math.max(3, Math.min(100 - o[1], o[3] + dy))];
+      else b = [Math.max(0, Math.min(100 - o[2], o[0] + dx)), Math.max(0, Math.min(100 - o[3], o[1] + dy)), o[2], o[3]];
+      b = b.map(n => Math.round(n * 2) / 2);
+      PV.spots[drag.c] = b; PV.dirty = true;
+      Object.assign(el.style, { left: b[0] + '%', top: b[1] + '%', width: b[2] + '%', height: b[3] + '%' });
+    };
+    el.onpointerup = () => { if(drag){ drag = null; drawViewer(); } };
+  });
+}
+async function saveTrace(){
+  const msg = $('#pvmsg');
+  if(!user || user.role !== 'Admin'){ msg.textContent = 'Réservé aux codes Admin.'; return; }
+  const img = $('#pviewer img');
+  const pw = img && img.naturalWidth || PV.pw, ph = img && img.naturalHeight || PV.ph;
+  msg.textContent = 'Envoi au Sheet…';
+  try {
+    const d = await post({ action:'setZonePhotoTraces', location: PV.loc, zone: PV.zone, photoW: pw, photoH: ph, spots: PV.spots, adminName: user.name, adminHash: user.hash });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Échec');
+    if(d.traces){ SHEET_TRACES = d.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); }
+    PV.dirty = false; PV.edit = false; PV.sel = null; drawViewer(); toast('Cases enregistrées pour tout le monde');
+  } catch(e){ msg.textContent = '❌ ' + (e.message === 'Failed to fetch' ? 'Pas de connexion, réessayez.' : e.message); }
+}
+
+// ── store maps edited in the Comptage app (🗺 Modifier la carte) ──
+// A map saved in the Sheet after MAP_SHEET_AFTER replaces the built-in one.
+const MAP_SHEET_AFTER = '2026-10-29';
+const MAPS_BUILTIN = JSON.parse(JSON.stringify(MAPS));
+function applySheetMaps(layouts){
+  Object.keys(MAPS_BUILTIN).forEach(k => { MAPS[k] = MAPS_BUILTIN[k]; });
+  Object.keys(layouts || {}).forEach(loc => {
+    const L = layouts[loc];
+    if(!L || !L.layout || !Array.isArray(L.layout.items) || String(L.at || '') < MAP_SHEET_AFTER) return;
+    const zones = L.layout.items.filter(i => i.t === 'zone' && i.code);
+    if(!zones.length) return;
+    const deco = L.layout.items.filter(i => i.t !== 'zone').map(i => {
+      const txt = esc(i.text || ''), cx = i.x + i.w / 2, cy = i.y + i.h / 2;
+      return i.t === 'box' ? `<rect x="${i.x}" y="${i.y}" width="${i.w}" height="${i.h}" rx="3" fill="none" stroke="#8a7d6c" stroke-dasharray="5 4"/><text class="map-deco-text strong" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${txt}</text>`
+        : `<text class="map-deco-text strong" x="${i.x + 2}" y="${i.y + i.h * 0.75}">${txt}</text>`;
+    }).join(' ');
+    MAPS[loc] = { vb: L.layout.viewBox, deco, z: zones.map(i => [i.code, i.x, i.y, i.w, i.h]), sheet: { by: L.by, at: L.at, version: L.version } };
+  });
+}
+applySheetMaps(lsj('s1981_maps', {}));
+async function loadMaps(){
+  if(!URL_ || !KEY) return;
+  try { const d = await api({ action:'getMapLayouts' }); if(d && d.success && d.layouts){ ls('s1981_maps', JSON.stringify(d.layouts)); applySheetMaps(d.layouts); if(VIEW.screen === 'store') render(); } } catch(e){}
+}
+
 // ── settings ────────────────────────────────────────────
 function openSettings(){
   const tail = URL_ ? URL_.replace(/\/exec.*$/, '').slice(-8) : '';
@@ -1093,7 +1329,7 @@ function openSettings(){
     <button class="go" id="slock">Verrouiller</button><button class="ghost" id="sx">Fermer</button>`);
   $('#sx').onclick = closeSheet;
   $('#slock').onclick = () => { closeSheet(); lock(); };
-  $('#sreload').onclick = () => { closeSheet(); loadData(); flushQueue(); };
+  $('#sreload').onclick = () => { closeSheet(); loadData(); loadTraces(); loadMaps(); flushQueue(); };
   $('#slink').onclick = () => {
     openSheet(`<h3>Lien du Sheet</h3><div class="sub">Le lien « Application Web » du script d'inventaire (se termine par /exec) et la clé d'écriture. Ils sont partagés avec l'app Comptage sur ce téléphone.</div>
       <label class="f" for="nl">Lien</label><input class="t" id="nl" value="${esc(URL_)}" autocomplete="off">
@@ -1359,7 +1595,7 @@ setInterval(() => {
   if(u && Date.now() - a.at < IDLE_MS){ user = { name: u.name, role: u.role, hash: u.hash }; lastActive = a.at; }
   else lock();
   render();
-  if(URL_ && KEY){ refreshUsers(); await loadData(); flushQueue(); }
+  if(URL_ && KEY){ refreshUsers(); loadTraces(); loadMaps(); await loadData(); flushQueue(); }
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
