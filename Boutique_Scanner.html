@@ -278,6 +278,15 @@ input,select{font-family:inherit}
 .feedback.error{background:var(--red-lt);border-color:#FCA5A5}
 .fb-icon{font-size:26px;flex-shrink:0}
 /* New products from the full-store scan */
+.nc-direct{background:#f0fdfa;border:1.5px solid #0f766e;border-radius:12px;padding:10px 12px;margin:4px 0 6px;display:flex;flex-direction:column;gap:8px}
+.ncd-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700;color:#0f766e}
+.ncd-row label{display:flex;gap:6px;align-items:center}
+.ncd-row .nc-in{width:auto;padding:6px 8px}
+.ncd-stat{margin-left:auto;font-weight:600;color:#475569}
+.ncd-last{font-size:14px;color:#334155}
+.ncd-last.k{color:#166534}.ncd-last.n{color:#9a3412}
+.ncd-wait{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:12px;font-weight:700;color:#92400e}
+#nc-direct-btn.on{background:#0f766e;color:#fff}
 .ncf-host{overflow-y:auto;min-height:200px;padding:2px}
 .ncf{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:22px;align-items:start}
 .ncf>*{min-width:0}
@@ -1479,7 +1488,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v29-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -4638,7 +4647,8 @@ function _ncRenderFiche(list, grid){
     R += '<div class="ncf-done">✅ <b>' + _ncEsc(it.name) + '</b><br>' + (it.price ? _ncEsc(formatCFA(it.price)) + ' · ' : '') + 'stock ' + it.qty + (it.note ? '<br>⚠ ' + _ncEsc(it.note) : '') + '</div>';
   } else {
     R += '<div class="ncf-lbl">Nom — touchez celui qui correspond au produit en main</div>';
-    R += it.sugg.length ? '<div class="ncf-names">' + it.sugg.map((s, i) => '<button type="button" class="' + (d.n && (_ncNorm(d.n) === _ncNorm(s.name) || _ncNorm(d.n) === _ncNorm(_ncSplit(s.name).prod)) ? 'on' : '') + '" onclick="ncUseName(\'' + bc + '\',' + i + ')">' + _ncEsc(String(s.name).replace(/^buy\s+/i, '')) + '<small>' + _ncEsc(s.source) + '</small></button>').join('') + '</div>'
+    if(it.searching) R += '<div class="ncd-wait">🔎 Recherche du nom et des photos… (quelques secondes — vous pouvez scanner le suivant)</div>';
+    else R += it.sugg.length ? '<div class="ncf-names">' + it.sugg.map((s, i) => '<button type="button" class="' + (d.n && (_ncNorm(d.n) === _ncNorm(s.name) || _ncNorm(d.n) === _ncNorm(_ncSplit(s.name).prod)) ? 'on' : '') + '" onclick="ncUseName(\'' + bc + '\',' + i + ')">' + _ncEsc(String(s.name).replace(/^buy\s+/i, '')) + '<small>' + _ncEsc(s.source) + '</small></button>').join('') + '</div>'
       : '<div class="pim-meta">' + (it.status === 'À nommer' ? (it.type === 'Interne' ? 'Notre propre code : tapez le nom.' : 'Code douteux (mal scanné ?) : vérifiez sur le produit.') : 'Aucun nom trouvé en ligne : tapez-le, ou cherchez avec les boutons en bas.') + '</div>';
     R += '<input class="nc-in ncf-big" id="nc-n-' + bc + '" placeholder="Produit (marque + nom, sans la teinte)" value="' + _ncEsc(d.n) + '" oninput="ncDraft(\'' + bc + '\',\'n\',this.value)">';
     const sh = _ncShades(it);
@@ -4665,6 +4675,83 @@ function _ncAdvance(nextBc){
   const s = document.getElementById('nc-search'); if(s && isBarcodeQuery(s.value)){ s.value = ''; }
   if(s) setTimeout(() => s.focus(), 50);
 }
+
+// ── 📷 Scan direct (30 Oct 2026): scan the product in hand into a chosen
+//  store + zone. Known product → +1 stock there. New product → the sales
+//  script searches names + photos at once and its Fiche opens; ✓ Ajouter as
+//  usual. Offline scans wait in a queue (nc_direct_queue) and are sent later.
+let _ncd = { on: false, loc: 'Store 1', zone: '', last: null, n: 0, known: 0, fresh: 0 };
+try { const sv = JSON.parse(localStorage.getItem('nc_direct') || '{}'); if(sv.loc) _ncd.loc = sv.loc; if(sv.zone != null) _ncd.zone = sv.zone; } catch(e){}
+let _ncdQueue = (function(){ try { return JSON.parse(localStorage.getItem('nc_direct_queue') || '[]'); } catch(e){ return []; } })();
+function _ncdSave(){ try { localStorage.setItem('nc_direct', JSON.stringify({ loc: _ncd.loc, zone: _ncd.zone })); localStorage.setItem('nc_direct_queue', JSON.stringify(_ncdQueue)); } catch(e){} }
+const _NCD_LOCS = [['Store 1', 'Balkuy'], ['Store 2', 'Ouaga 2000'], ['Warehouse', 'Entrepôt']];
+function ncDirectToggle(){
+  _ncd.on = !_ncd.on;
+  document.getElementById('nc-direct-btn').classList.toggle('on', _ncd.on);
+  if(_ncd.on){ _ncView = 'fiche'; _nc.tab = 'todo'; }
+  _ncdBar(); renderNewCodes();
+  const s = document.getElementById('nc-search');
+  if(s){ s.placeholder = _ncd.on ? '📷 Scannez le produit en main…' : '🔍 Scanner le produit en main, ou chercher…'; s.value = ''; s.focus(); }
+}
+function _ncdBar(){
+  const el = document.getElementById('nc-direct'); if(!el) return;
+  el.style.display = _ncd.on ? '' : 'none';
+  if(!_ncd.on) return;
+  const L = _ncd.last;
+  el.innerHTML = '<div class="ncd-row"><label>Magasin <select class="nc-in" onchange="_ncd.loc=this.value;_ncdSave()">' + _NCD_LOCS.map(l => '<option value="' + l[0] + '"' + (l[0] === _ncd.loc ? ' selected' : '') + '>' + l[1] + '</option>').join('') + '</select></label>' +
+    '<label>Zone <input class="nc-in" style="width:110px" value="' + _ncEsc(_ncd.zone) + '" placeholder="ex. M2" oninput="_ncd.zone=this.value.trim();_ncdSave()"></label>' +
+    '<span class="ncd-stat">' + _ncd.n + ' scan(s) · ' + _ncd.known + ' déjà connu(s) · ' + _ncd.fresh + ' nouveau(x)' + (_ncdQueue.length ? ' · <b style="color:#b45309">' + _ncdQueue.length + ' en attente d’envoi</b>' : '') + '</span></div>' +
+    (L ? '<div class="ncd-last ' + (L.known ? 'k' : 'n') + '">' + (L.known ? '✓ Déjà connu : <b>' + _ncEsc(L.name) + '</b> · +1 en stock ' + _ncEsc(L.where) : '🆕 Nouveau : <b>' + _ncEsc(L.bc) + '</b> — choisissez le nom ci-dessous') + '</div>' : '<div class="ncd-last">Scannez un produit : s’il est connu, +1 en stock ici ; sinon sa fiche s’ouvre avec des noms et photos proposés.</div>');
+}
+function ncDirectScan(raw){
+  const code = String(raw || '').trim();
+  if(!/^\d{4,20}$/.test(code)){ showToast('⚠ Code illisible : vérifiez la langue du clavier', 3500); return; }
+  if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
+  const where = (_NCD_LOCS.find(l => l[0] === _ncd.loc) || [0, _ncd.loc])[1] + (_ncd.zone ? ' · ' + _ncd.zone : '');
+  const known = lookupBarcode(code);
+  const opId = 'sd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const body = { action: 'scanDirect', barcode: code, location: _ncd.loc, zone: _ncd.zone, known: !!known, name: known ? known.name : '', by: currentEmployee || 'Admin', opId };
+  _ncd.n++;
+  if(known){
+    _ncd.known++; _ncd.last = { known: true, name: known.name, where };
+  } else {
+    _ncd.fresh++; _ncd.last = { known: false, bc: code };
+    const k = _bcKeyClient(code);
+    let it = _nc.items.find(x => _bcKeyClient(x.barcode) === k && (x.location || 'Store 1') === _ncd.loc && (x.zone || '') === _ncd.zone && x.type !== 'Connu' && x.status !== 'Ajouté');
+    if(it) it.qty = (it.qty || 0) + 1;
+    else { it = { barcode: code, qty: 1, type: 'Nouveau', status: 'Suggestions', name: '', sugg: [], photos: [], price: null, location: _ncd.loc, store: where.split(' · ')[0], zone: _ncd.zone, searching: true }; _nc.items.unshift(it); }
+    _nc.cur = it.barcode; _nc.tab = 'todo';
+    body._local = true;
+  }
+  _ncdQueue.push(body); _ncdSave(); _ncdBar(); renderNewCodes(); _ncCard();
+  _ncdFlush();
+}
+let _ncdBusy = false;
+async function _ncdFlush(){
+  if(_ncdBusy || !_ncdQueue.length) return;
+  _ncdBusy = true;
+  try {
+    while(_ncdQueue.length){
+      const b = _ncdQueue[0];
+      let r;
+      try { r = await _ncPostJ(Object.assign({}, b, { _local: undefined })); } catch(e){ break; } // offline: retry later
+      _ncdQueue.shift(); _ncdSave();
+      if(!r || r.success === false){ showToast('⚠ ' + ((r && r.error) || 'Scan non enregistré (collez « LATEST - POS RECEIVER » et redéployez)'), 6000); continue; }
+      if(r.item){
+        const k = _bcKeyClient(r.item.barcode);
+        const i = _nc.items.findIndex(x => _bcKeyClient(x.barcode) === k && (x.location || 'Store 1') === r.item.location && (x.zone || '') === r.item.zone && x.status !== 'Ajouté');
+        const keep = i >= 0 ? _nc.items[i] : null;
+        const merged = Object.assign({}, r.item, keep ? { qty: Math.max(keep.qty || 0, r.item.qty || 0) } : {});
+        if(keep && keep.photos && keep.photos.some(p => p.data || p.site === 'lien collé')) merged.photos = (r.item.photos || []).concat(keep.photos.filter(p => p.data || p.site === 'lien collé'));
+        if(i >= 0) _nc.items[i] = merged; else _nc.items.unshift(merged);
+        if(r.fresh && !(r.item.sugg || []).length) showToast('🔎 Aucun nom trouvé en ligne pour ' + r.item.barcode + ' : tapez-le.', 4000);
+      }
+      _ncdBar(); renderNewCodes(); _ncCard();
+    }
+  } finally { _ncdBusy = false; _ncdBar(); }
+}
+window.addEventListener('online', () => { try { _ncdFlush(); } catch(e){} });
+setInterval(() => { try { if(_ncdQueue.length) _ncdFlush(); } catch(e){} }, 30000);
 function ncPickPhoto(bc, i){ _nc.photo[bc] = _nc.photo[bc] === i ? undefined : i; renderNewCodes(); }
 function ncUseName(bc, i){
   const it = _nc.items.find(x => x.barcode === bc); if(!it) return;
@@ -12107,14 +12194,16 @@ closeSale = function(){
   <div class="modal" style="width:min(1320px,98vw);max-height:96vh;display:flex;flex-direction:column;padding:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
       <div class="modal-title" style="margin:0;flex:1">🆕 Nouveaux produits scannés</div>
+      <button type="button" class="cat-tab" id="nc-direct-btn" onclick="ncDirectToggle()">📷 Scan direct</button>
       <div id="nc-viewsw" class="cat-tabs"></div>
       <button class="btn-cancel" style="width:auto;padding:8px 12px" onclick="loadNewCodes(true)">↻</button>
       <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeNewCodes()">Fermer</button>
     </div>
     <div class="dlv-dim" style="font-size:12px;margin-bottom:4px">Prenez le produit en main : vérifiez le nom, la <b>teinte</b> et la taille, tapez le prix, touchez la bonne photo, puis ✓ Ajouter. « Même produit » reprend le dernier nom et prix : il ne reste que la teinte.</div>
+    <div id="nc-direct" class="nc-direct" style="display:none"></div>
     <div id="nc-tabs" class="cat-tabs"></div>
     <input class="dlv-field" id="nc-search" type="search" placeholder="🔍 Scanner le produit en main, ou chercher…" autocomplete="off"
-      oninput="renderNewCodes()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.select();}" style="margin:6px 0 8px"/>
+      oninput="renderNewCodes()" onkeydown="if(event.key==='Enter'){event.preventDefault();if(_ncd.on)ncDirectScan(this.value);this.select();}" style="margin:6px 0 8px"/>
     <div id="nc-grid" class="nc-grid"></div>
     <div class="dlv-dim" id="nc-foot" style="margin-top:6px"></div>
   </div>
