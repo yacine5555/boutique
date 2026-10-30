@@ -1532,7 +1532,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-e</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3798,7 +3798,7 @@ function openPhotoReview(){
   document.getElementById('pim-modal').classList.add('open');
   renderPhotoReview();
   loadPhotoReview(true);
-  loadLists(); _plsFlush(); _plsStockBar();
+  loadLists(); _plsFlush(); _plsStockBar(); _plsBudget();
   setTimeout(() => { const s = document.getElementById('pim-search'); if(s) s.focus(); }, 60);
 }
 function closePhotoReview(){
@@ -4130,7 +4130,7 @@ function _plsApply(body, d){
   }
   _pimSummary();
 }
-function _plsBadge(){ const el = document.getElementById('pim-queue'); if(el) el.textContent = _plsQ.length ? '⏳ ' + _plsQ.length + ' en attente d\'envoi' : ''; }
+function _plsBadge(){ const el = document.getElementById('pim-queue'); if(el) el.textContent = _plsQ.length ? '⏳ ' + _plsQ.length + ' en attente d\'envoi' : _plsBudgetTxt(); }
 
 function _plsCardHTML(){
   const c = _pls.card;
@@ -4166,7 +4166,8 @@ function _plsCardHTML(){
     R += '<div class="pls-new">🆕 Code inconnu — pas encore dans la liste des produits.<br><span>Ajouté à « Nouveaux codes » ' + (c.stock ? '<b>avec +1 (' + _pimEsc(c.stock) + ')</b> — compté en stock quand vous l\'ajoutez' : '<b>sans stock</b>') + (c.pending ? ' · recherche du nom en cours…' : '') + '</span></div>';
     const ns = (nc && nc.sugg) || [];
     if(ns.length) R += '<div class="ncf-lbl">Noms trouvés</div><div class="pls-names">' + ns.slice(0, 3).map(n => '<div>' + _pimEsc(n.name) + ' <i>' + _pimEsc(n.source || '') + '</i></div>').join('') + '</div>';
-    else if(!c.pending) R += '<div class="dlv-dim">Aucun nom trouvé en ligne — nommez-le dans 🆕 Nouveaux.</div>';
+    else if(!c.pending && nc && nc.status === 'À chercher') R += '<div class="pls-new" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b">⏸ Recherche en pause : limite de recherches du mois atteinte.<br><span>Touchez « 🔁 Relancer les recherches » (onglet 📋 Liste) plus tard, ou cherchez avec les boutons ci-dessous.</span></div>';
+    else if(!c.pending) R += '<div class="dlv-dim">Aucun nom trouvé en ligne — cherchez avec les boutons ci-dessous, ou nommez-le dans 🆕 Nouveaux.</div>';
     R += '<div class="pls-btns"><button class="pim-ok" onclick="pimToNew(\'' + bc + '\')">✏ Nommer maintenant</button><button class="pim-lnk" onclick="pimLater()">⏭ Plus tard</button></div>';
   }
   if(busy) R += '<div class="dlv-dim">Enregistrement…</div>';
@@ -4224,7 +4225,7 @@ function _plsListHTML(){
   const F = [['all', 'Tout'], ['nophoto', 'Sans photo validée'], ['new', 'Nouveaux codes'], ['ok', 'Photo validée']];
   const fl = { all: r => true, nophoto: r => !(r.it && r.it.status === 'Validé') && !(!r.it && r.url), new: r => !r.known, ok: r => (r.it && r.it.status === 'Validé') || (!r.it && r.url) };
   const shown = rows.filter(fl[_pls.filt] || fl.all);
-  let h = '<div class="pls-filt">' + F.map(f => '<button type="button" class="cat-tab' + (_pls.filt === f[0] ? ' on' : '') + '" onclick="_pls.filt=\'' + f[0] + '\';renderPhotoReview()">' + f[1] + ' (' + rows.filter(fl[f[0]]).length + ')</button>').join('') + '</div>';
+  let h = '<div class="pls-filt">' + '<button type="button" class="cat-tab" style="border-style:dashed" onclick="pimRetrySearches()" title="Cherche à nouveau les codes revenus vides (noms, et photos des produits ajoutés sans photo)">🔁 Relancer les recherches</button>' + F.map(f => '<button type="button" class="cat-tab' + (_pls.filt === f[0] ? ' on' : '') + '" onclick="_pls.filt=\'' + f[0] + '\';renderPhotoReview()">' + f[1] + ' (' + rows.filter(fl[f[0]]).length + ')</button>').join('') + '</div>';
   // group shades of the same line together
   const groups = {}, order = [];
   shown.forEach(r => { const k = (r.known ? _plsLineKey(r.name) : '') || ('~' + r.x.barcode); if(!groups[k]){ groups[k] = []; order.push(k); } groups[k].push(r); });
@@ -4252,6 +4253,35 @@ function _plsListHTML(){
   if(single.length) body += (multi.length ? '<div class="pls-gh"><div><b>Autres produits</b><span>' + single.length + '</span></div></div>' : '') + single.map(k => tile(groups[k][0])).join('');
   h += '<div class="pim-grid">' + (shown.length ? body : '<div class="dlv-dim" style="grid-column:1/-1;padding:20px;text-align:center">' + (l.items.length ? 'Rien avec ce filtre 👍' : 'Liste vide — scannez des produits.') + '</div>') + '</div>';
   return h;
+}
+async function _plsBudget(){
+  if(!syncUrl || !writeKey) return;
+  try {
+    const r = await fetch(syncUrl + (syncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getSearchBudget&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.success) _pls.budget = d;
+  } catch(e){}
+  _plsBadge();
+}
+function _plsBudgetTxt(){
+  const b = _pls.budget; if(!b) return '';
+  const f = (x, n) => x.on ? n + ' ' + x.used + '/' + x.cap : n + ' (pas de clé)';
+  return 'Recherches ce mois : ' + f(b.serper, 'Google') + ' · ' + f(b.brave, 'Brave');
+}
+async function pimRetrySearches(){
+  if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
+  showToast('🔁 Recherche en cours… (jusqu\'à 15 codes, ~1 min)', 6000);
+  try {
+    const r = await fetch(syncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: writeKey, action: 'retrySearches', max: 15 }) });
+    const d = await r.json();
+    if(d && d.success){
+      _pls.budget = d;
+      showToast(d.limit ? '⏸ Limite du mois atteinte — ' + d.done + ' code(s) cherché(s)' : '✅ ' + d.done + ' code(s) cherché(s)' + (d.left ? ' · encore ' + d.left + ' — touchez à nouveau' : ''), 6000);
+      loadPhotoReview(true); loadLists();
+      try { loadNewCodes(true); } catch(e){}
+    } else showToast('⚠ ' + ((d && d.error) || 'Échec') + ' — « LATEST - POS RECEIVER » est-il collé et redéployé ?', 6000);
+  } catch(e){ showToast('⚠ Pas de connexion — réessayez', 4000); }
+  _plsBadge();
 }
 function pimListRemove(bc){
   const l = _plsList(_pls.active); if(!l) return;
