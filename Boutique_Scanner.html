@@ -1009,6 +1009,15 @@ input,select{font-family:inherit}
 .pls-names i{font-size:11px;color:#64748b;font-style:normal;font-weight:500}
 .pls-filt{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .pls-tag.stock{background:#fee2e2;color:#991b1b}
+.pls-gh{grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;background:#f1f5f9;border-radius:10px;padding:8px 12px;margin-top:6px}
+.pls-gh b{font-size:14px;color:#0f172a;margin-right:8px}
+.pls-gh span{font-size:12px;color:#64748b}
+.pls-gh button,.pls-line{display:flex;align-items:center;gap:8px;background:#0f766e;color:#fff;border:none;border-radius:9px;padding:5px 12px 5px 5px;font-weight:700;font-size:13px;cursor:pointer;text-align:left}
+.pls-gh button img,.pls-line img{width:38px;height:38px;object-fit:contain;background:#fff;border-radius:6px}
+.pls-line{padding:6px 14px 6px 6px}
+.pls-line img{width:54px;height:54px}
+.pls-line i{font-style:normal;font-weight:500;font-size:11.5px;opacity:.9}
+.pls-line:disabled,.pls-gh button:disabled{opacity:.5}
 .pls-stbtn.on{background:#dc2626;border-color:#dc2626;color:#fff}
 .pls-stbar{align-items:center;gap:8px;flex-wrap:wrap;background:#dc2626;color:#fff;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:13.5px;flex-shrink:0}
 .pls-stbar select,.pls-stbar input{padding:6px 8px;border-radius:8px;border:none;font-weight:700;font-size:13px}
@@ -1523,7 +1532,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -4149,6 +4158,10 @@ function _plsCardHTML(){
     if(it && it.url && it.status !== 'Validé') b.push('<button class="pim-ok" ' + (busy ? 'disabled ' : '') + 'onclick="pimSet(\'' + _pimEsc(it.barcode) + '\',\'Validé\')">✓ Bonne photo</button>');
     if(it && it.url && it.status !== 'Faux') b.push('<button class="pim-bad" ' + (busy ? 'disabled ' : '') + 'onclick="pimSet(\'' + _pimEsc(it.barcode) + '\',\'Faux\')">✗ Fausse</button>');
     if(b.length) R += '<div class="pls-btns">' + b.join('') + '</div>';
+    if(!(it && it.status === 'Validé' && it.url)){
+      const ls = _plsLineSource(c.barcode, name);
+      if(ls) R += '<button type="button" class="pls-line" ' + (busy ? 'disabled ' : '') + 'onclick="pimCopyLine(\'' + _pimEsc(ls.barcode) + '\',[\'' + bc + '\'])"><img src="' + _pimEsc(ls.url) + '" alt=""><span>📋 Utiliser la photo de la même ligne<br><i>' + _pimEsc(_plsNameOf(ls.barcode, ls.name)) + '</i></span></button>';
+    }
   } else {
     R += '<div class="pls-new">🆕 Code inconnu — pas encore dans la liste des produits.<br><span>Ajouté à « Nouveaux codes » ' + (c.stock ? '<b>avec +1 (' + _pimEsc(c.stock) + ')</b> — compté en stock quand vous l\'ajoutez' : '<b>sans stock</b>') + (c.pending ? ' · recherche du nom en cours…' : '') + '</span></div>';
     const ns = (nc && nc.sugg) || [];
@@ -4160,6 +4173,45 @@ function _plsCardHTML(){
   R += '<div class="pim-shop">' + _pimShopLinks({ name: name, barcode: c.barcode }) + '</div>';
   R += '<div class="dlv-dim" style="font-size:12px">Scannez le produit suivant quand vous voulez — la fiche se met à jour.</div>';
   return '<div class="ncf"><div class="ncf-l">' + L + '</div><div class="ncf-r">' + R + '</div></div>';
+}
+// Same product line = same name without the shade (« … - Natural Buff », « …, Toffee »).
+function _plsLineKey(name){
+  const sp = _ncSplit(name || '');
+  const w = _ncNorm(sp.shade ? sp.prod : name).split(' ').filter(x => x && !/^\d/.test(x));
+  return w.slice(0, sp.shade ? 6 : 4).join(' ');
+}
+function _plsNameOf(bc, fallback){ const p = lookupBarcode(bc); return (p && p.name) || fallback || ''; }
+// A validated photo of another product of the same line (to copy).
+function _plsLineSource(bc, name){
+  const key = _plsLineKey(name); if(!key || key.split(' ').length < 2) return null;
+  const k = _bcKeyClient(bc);
+  return _pim.items.find(x => x.status === 'Validé' && x.url && _bcKeyClient(x.barcode) !== k && _plsLineKey(_plsNameOf(x.barcode, x.name)) === key) || null;
+}
+async function pimCopyLine(from, to){
+  to = (to || []).filter(Boolean);
+  if(!to.length) return;
+  if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
+  const names = {}; to.forEach(b => names[b] = _plsNameOf(b));
+  to.forEach(b => _pim.busy[b] = true); renderPhotoReview();
+  showToast('📋 Copie de la photo sur ' + to.length + ' produit(s)…', 3000);
+  try {
+    const r = await fetch(syncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: writeKey, action: 'copyProductImage', from: from, to: to, names: names, by: currentEmployee || 'Admin' }) });
+    const d = await r.json();
+    if(d && d.success){
+      (d.items || []).forEach(it => { _pimUpsert(it); PROD_IMAGES[_bcKeyClient(String(it.barcode).replace(/\D/g, ''))] = it.url; });
+      try { localStorage.setItem('bc_prod_images', JSON.stringify(PROD_IMAGES)); } catch(e){}
+      showToast('✅ Photo copiée sur ' + (d.items || []).length + ' produit(s)' + ((d.skipped || []).length ? ' · ' + d.skipped.length + ' avaient déjà une photo validée' : ''), 4000);
+    } else showToast('⚠ ' + ((d && d.error) || 'Échec') + ((d && /action/i.test(d.error || '')) ? ' — collez « LATEST - POS RECEIVER » et redéployez' : ''), 6000);
+  } catch(e){ showToast('⚠ Pas de connexion — réessayez', 4000); }
+  to.forEach(b => delete _pim.busy[b]);
+  _pimSummary(); renderPhotoReview();
+}
+function pimCopyGroup(key){
+  const g = (_pls.groups || {})[key]; if(!g || !g.src || !g.todo.length) return;
+  const srcName = _plsNameOf(g.src.barcode, g.src.name);
+  if(!confirm('Copier la photo de :\n« ' + srcName + ' »\n\nsur ' + g.todo.length + ' produit(s) sans photo validée :\n' + g.todo.map(r => '• ' + (r.name || r.x.barcode)).slice(0, 15).join('\n') + (g.todo.length > 15 ? '\n…' : '') + '\n\nVous pourrez remplacer chacune plus tard.')) return;
+  pimCopyLine(g.src.barcode, g.todo.map(r => r.x.barcode));
 }
 function _plsListHTML(){
   const l = _plsList(_pls.active);
@@ -4173,13 +4225,32 @@ function _plsListHTML(){
   const fl = { all: r => true, nophoto: r => !(r.it && r.it.status === 'Validé') && !(!r.it && r.url), new: r => !r.known, ok: r => (r.it && r.it.status === 'Validé') || (!r.it && r.url) };
   const shown = rows.filter(fl[_pls.filt] || fl.all);
   let h = '<div class="pls-filt">' + F.map(f => '<button type="button" class="cat-tab' + (_pls.filt === f[0] ? ' on' : '') + '" onclick="_pls.filt=\'' + f[0] + '\';renderPhotoReview()">' + f[1] + ' (' + rows.filter(fl[f[0]]).length + ')</button>').join('') + '</div>';
-  h += '<div class="pim-grid">' + (shown.length ? shown.map(r => {
+  // group shades of the same line together
+  const groups = {}, order = [];
+  shown.forEach(r => { const k = (r.known ? _plsLineKey(r.name) : '') || ('~' + r.x.barcode); if(!groups[k]){ groups[k] = []; order.push(k); } groups[k].push(r); });
+  const multi = order.filter(k => groups[k].length > 1), single = order.filter(k => groups[k].length === 1);
+  _pls.groups = {};
+  const tile = r => {
     const st = !r.known ? '🆕 nouveau' : r.it ? r.it.status : (r.url ? 'photo' : '—');
     return '<div class="pim-tile' + (r.it && r.it.status === 'Validé' ? ' st-ok' : '') + '" style="cursor:pointer" onclick="pimShow(\'' + _pimEsc(r.x.barcode) + '\')">' +
       '<div class="pim-ph">' + (r.url ? '<img src="' + _pimEsc(r.url) + '" alt="" loading="lazy">' : '<div class="none">' + (r.it && (r.it.sugg || []).length ? '🔎 ' + r.it.sugg.length + ' photos proposées' : 'Pas de photo') + '</div>') + '</div>' +
       '<div class="pim-nm">' + _pimEsc(r.name || r.x.barcode) + '</div><div class="pim-meta">' + _pimEsc(r.x.barcode) + '<br>' + _pimEsc(st) + '</div>' +
       '<div class="pim-btns"><button class="pim-lnk" onclick="event.stopPropagation();pimListRemove(\'' + _pimEsc(r.x.barcode) + '\')" title="Retirer de la liste">Retirer</button></div></div>';
-  }).join('') : '<div class="dlv-dim" style="grid-column:1/-1;padding:20px;text-align:center">' + (l.items.length ? 'Rien avec ce filtre 👍' : 'Liste vide — scannez des produits.') + '</div>') + '</div>';
+  };
+  const okOf = r => (r.it && r.it.status === 'Validé' && r.it.url);
+  let body = multi.map(k => {
+    const g = groups[k], done = g.filter(okOf).length;
+    const src = (g.find(okOf) || {}).it || _plsLineSource(g[0].x.barcode, g[0].name);
+    const todo = g.filter(r => r.known && !okOf(r) && !(_pim.busy[r.x.barcode]));
+    const gid = 'g' + Object.keys(_pls.groups).length;
+    _pls.groups[gid] = { src: src, todo: todo };
+    const title = (_ncSplit(g[0].name).shade ? _ncSplit(g[0].name).prod : k) || k;
+    return '<div class="pls-gh"><div><b>' + _pimEsc(title) + '</b><span>' + g.length + ' produits · ' + done + ' avec photo validée</span></div>' +
+      (src && todo.length ? '<button type="button" onclick="pimCopyGroup(\'' + gid + '\')"><img src="' + _pimEsc(src.url) + '" alt="">📋 Copier cette photo sur les ' + todo.length + ' sans photo</button>' : '') + '</div>' +
+      g.map(tile).join('');
+  }).join('');
+  if(single.length) body += (multi.length ? '<div class="pls-gh"><div><b>Autres produits</b><span>' + single.length + '</span></div></div>' : '') + single.map(k => tile(groups[k][0])).join('');
+  h += '<div class="pim-grid">' + (shown.length ? body : '<div class="dlv-dim" style="grid-column:1/-1;padding:20px;text-align:center">' + (l.items.length ? 'Rien avec ce filtre 👍' : 'Liste vide — scannez des produits.') + '</div>') + '</div>';
   return h;
 }
 function pimListRemove(bc){
