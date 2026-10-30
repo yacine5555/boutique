@@ -193,7 +193,11 @@ function doGet(e) {
     }
     if (e.parameter && e.parameter.action === 'getCounterUsers') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
-      return jsonResponse({ success: true, users: readCounterUsers_() });
+      return jsonResponse({ success: true, users: readCounterUsers_(e.parameter.app === 'formation') });
+    }
+    if (e.parameter && e.parameter.action === 'getFormation') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetFormation();
     }
     if (e.parameter && e.parameter.action === 'getMapLayouts') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
@@ -238,6 +242,18 @@ function doGet(e) {
     if (e.parameter && e.parameter.action === 'getStock1981') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
       return handleGetStock1981();
+    }
+    if (e.parameter && e.parameter.action === 'getTransit') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetTransit();
+    }
+    if (e.parameter && e.parameter.action === 'getArrivals') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetArrivals();
+    }
+    if (e.parameter && e.parameter.action === 'getMovements') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetMovements(e.parameter.days);
     }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
     if (!sheet) {
@@ -300,6 +316,12 @@ function doPost(e) {
     }
     if (body.action === "setCounterUser") {
       return handleSetCounterUser(body);
+    }
+    if (body.action === "formationResult") {
+      return handleFormationResult(body);
+    }
+    if (body.action === "formationSuivi") {
+      return handleFormationSuivi(body);
     }
     if (body.action === "setMapLayout") {
       return handleSetMapLayout(body);
@@ -384,6 +406,15 @@ function doPost(e) {
     }
     if (body.action === "markLabelsPrinted") {
       return handleMarkLabelsPrinted(body);
+    }
+    if (body.action === "recvArrival") {
+      return handleRecvArrival(body);
+    }
+    if (body.action === "recvUnit") {
+      return handleRecvUnit(body);
+    }
+    if (body.action === "recvSetDate") {
+      return handleRecvSetDate(body);
     }
     if (body.action === "importZoneStock") {
       return handleImportZoneStock(body);
@@ -1897,22 +1928,26 @@ function counterUsersSheet_() {
   }
   return ws;
 }
-function readCounterUsers_() {
+// Training-only staff (role « Formation », added from formation.html) are
+// left out unless includeTraining is true, so they can never sign in to
+// Comptage / Stock1981 or sign stock changes.
+function readCounterUsers_(includeTraining) {
   const ws = counterUsersSheet_();
   const last = ws.getLastRow();
   if (last < 2) return [];
   return ws.getRange(2, 1, last - 1, COUNTER_USERS_HEADERS.length).getValues()
     .filter(r => String(r[0]).trim())
-    .map(r => ({ name: String(r[0]).trim(), role: String(r[1] || 'Contrôle'), hash: String(r[2] || ''), active: r[3] !== false && String(r[3]).toUpperCase() !== 'FALSE' }));
+    .map(r => ({ name: String(r[0]).trim(), role: String(r[1] || 'Contrôle'), hash: String(r[2] || ''), active: r[3] !== false && String(r[3]).toUpperCase() !== 'FALSE' }))
+    .filter(u => includeTraining || u.role !== 'Formation');
 }
 function handleSetCounterUser(body) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const users = readCounterUsers_();
+    const users = readCounterUsers_(true);
     const name = String(body.name || '').trim();
     if (!name) return jsonResponse({ success: false, error: "Nom manquant" }, 400);
-    const role = body.role === 'Admin' ? 'Admin' : 'Contrôle';
+    const role = body.role === 'Admin' ? 'Admin' : (body.role === 'Formation' ? 'Formation' : 'Contrôle');
     if (users.length) {
       const admin = users.find(u => u.active && u.role === 'Admin' && u.name.toLowerCase() === String(body.adminName || '').toLowerCase());
       if (!admin || admin.hash !== String(body.adminHash || '')) {
@@ -1928,9 +1963,17 @@ function handleSetCounterUser(body) {
     if (!hash) return jsonResponse({ success: false, error: "Code manquant" }, 400);
     const active = body.active === false ? false : true;
     const row = [name, role, hash, active, new Date(), String(body.adminName || name)];
-    if (idx >= 0) ws.getRange(idx + 2, 1, 1, row.length).setValues([row]);
+    if (idx >= 0 && role === 'Formation' && existing.role !== 'Formation') {
+      return jsonResponse({ success: false, error: "Ce nom est déjà utilisé dans Comptage / Stock1981" }, 400);
+    }
+    if (idx >= 0) {
+      // rows are found by position in the full list (training users included)
+      const all = ws.getRange(2, 1, ws.getLastRow() - 1, 1).getValues().map(r => String(r[0]).trim().toLowerCase());
+      const rowNum = all.indexOf(name.toLowerCase()) + 2;
+      ws.getRange(rowNum, 1, 1, row.length).setValues([row]);
+    }
     else ws.appendRow(row);
-    return jsonResponse({ success: true, users: readCounterUsers_() });
+    return jsonResponse({ success: true, users: readCounterUsers_(body.app === 'formation') });
   } finally {
     lock.releaseLock();
   }
@@ -3382,6 +3425,7 @@ function s1981LogSheet_() {
 }
 
 function handleGetStock1981() {
+  s1981PhotoCatchUp_();
   const zs = ensureZoneStockTab();
   const zLast = zs.getLastRow();
   const zones = zLast >= 2 ? zs.getRange(2, 1, zLast - 1, ZONE_STOCK_HEADERS.length).getValues()
@@ -3406,7 +3450,7 @@ function handleGetStock1981() {
       });
     }
   } catch (e) { Logger.log('names skipped: ' + e); }
-  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, aliases: loadAliasMap_(), reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
+  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, aliases: loadAliasMap_(), images: s1981Images_(), reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
 }
 
 function s1981UserOk_(body) {
@@ -3520,6 +3564,7 @@ function handleStock1981Adjust(body) {
       const lw = _lossSheet();
       lw.getRange(lw.getLastRow() + 1, 1, lossRows.length, LOSS_HEADERS.length).setValues(lossRows);
     }
+    s1981QueuePhotos_(ops.filter(op => Number(op.qty) > 0 && op.mode !== 'set' && op.reason === 'Ajout / réception').map(op => ({ bc: normalizeBarcode(resolveAlias_(op.barcode)), name: String(op.name || '') })));
     return jsonResponse({ success: true, results: results });
   } finally {
     lock.releaseLock();
@@ -3617,6 +3662,7 @@ function handleStock1981Count(body) {
     const r1 = log.getLastRow() + 1;
     log.getRange(r1, 4, logRows.length, 1).setNumberFormat('@');
     log.getRange(r1, 1, logRows.length, S1981_LOG_HEADERS.length).setValues(logRows);
+    s1981QueuePhotos_(items.map(it => ({ bc: it.bc, name: it.name })));
     return jsonResponse({ success: true, products: items.length, changed: changed });
   } finally {
     lock.releaseLock();
@@ -3982,4 +4028,758 @@ function handleUpdateCost(body) {
   if (!log) { log = ss.insertSheet('Cost Edits'); log.appendRow(['Timestamp', 'Barcode', 'Product', 'Old Cost (USD)', 'New Cost (USD)', 'By']); log.setFrozenRows(1); log.getRange('B:B').setNumberFormat('@'); }
   log.appendRow([Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), normalizeBarcode(body.barcode), name, old, cost, String(body.by || '')]);
   return jsonResponse({ success: true, cost: cost, rows: hit });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  MOUVEMENTS (action "getMovements", GET, key required), added 27 Oct 2026
+// ──────────────────────────────────────────────────────────────────────────
+//  Read-only, for Scanner Admin → « 📦 Mouvements ».
+//  - moves: every Déplacer from Stock1981 of the last N days (default 30).
+//    A Déplacer is logged in "Stock1981 Log" as two "Transfert" rows written
+//    together (out of one zone, then into another); they are paired back here.
+//  - unplaced: what is still in the zone « Non placé » (Zone Stock), with the
+//    time it last arrived there (Stock1981 Log or Stock Ledger), so the app can
+//    flag stock waiting more than 24 h to be shelved.
+//  Nothing is written.
+// ═════════════════════════════════════════════════════════════════════════
+const MV_UNPLACED = 'Non placé';
+
+function mvParse_(v) {
+  if (v instanceof Date) return v;
+  const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0));
+}
+
+function handleGetMovements(days) {
+  const nDays = Math.max(1, Math.min(180, Number(days) || 30));
+  const since = new Date(Date.now() - nDays * 86400000);
+  const tz = Session.getScriptTimeZone();
+  const iso = d => Utilities.formatDate(d, tz, "yyyy-MM-dd'T'HH:mm");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lastIn = {}; // loc||barcodeKey → latest Date it arrived in « Non placé »
+  const noteIn = (loc, bc, d) => { const k = loc + '||' + barcodeKey(bc); if (!lastIn[k] || d > lastIn[k]) lastIn[k] = d; };
+
+  // 1) Déplacer pairs from Stock1981 Log
+  const moves = [];
+  const log = ss.getSheetByName(S1981_LOG_SHEET);
+  if (log && log.getLastRow() >= 2) {
+    const from = Math.max(2, log.getLastRow() - 6000);
+    const rows = log.getRange(from, 1, log.getLastRow() - from + 1, S1981_LOG_HEADERS.length).getValues();
+    // columns: 0 Timestamp, 1 Location, 2 Zone, 3 Barcode, 4 Product, 5 Before, 6 Change, 7 After, 8 Reason, 9 By, 10 Note, 11 OpId
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (String(r[8]) !== 'Transfert') continue;
+      const d = mvParse_(r[0]);
+      const ch = Number(r[6]) || 0;
+      if (ch > 0 && String(r[2]) === MV_UNPLACED && d) noteIn(String(r[1]), r[3], d);
+      if (!d || d < since) continue;
+      const bc = normalizeBarcode(r[3]);
+      const n = rows[i + 1];
+      const paired = ch < 0 && n && String(n[8]) === 'Transfert' && barcodeKey(n[3]) === barcodeKey(r[3]) && (Number(n[6]) || 0) === -ch;
+      if (paired) {
+        moves.push({ at: iso(d), bc: bc, name: String(r[4] || n[4] || ''), qty: -ch,
+          fromLoc: String(r[1]), fromZone: String(r[2]), toLoc: String(n[1]), toZone: String(n[2]), by: String(r[9] || '') });
+        const dn = mvParse_(n[0]);
+        if ((Number(n[6]) || 0) > 0 && String(n[2]) === MV_UNPLACED && dn) noteIn(String(n[1]), n[3], dn);
+        i++;
+      } else {
+        // a half on its own (e.g. the other half failed) — still shown
+        moves.push({ at: iso(d), bc: bc, name: String(r[4] || ''), qty: Math.abs(ch), half: true,
+          fromLoc: ch < 0 ? String(r[1]) : '', fromZone: ch < 0 ? String(r[2]) : '',
+          toLoc: ch > 0 ? String(r[1]) : '', toZone: ch > 0 ? String(r[2]) : '', by: String(r[9] || ''), note: String(r[10] || '') });
+      }
+    }
+  }
+
+  // 2) Transfers received from the Scanner land in « Non placé » through the Stock Ledger
+  const led = ss.getSheetByName(LEDGER_SHEET_NAME);
+  if (led && led.getLastRow() >= 2) {
+    const from = Math.max(2, led.getLastRow() - 8000);
+    led.getRange(from, 1, led.getLastRow() - from + 1, 8).getValues().forEach(r => {
+      if ((Number(r[5]) || 0) <= 0) return;
+      if (String(r[7] || '').indexOf('Zone ' + MV_UNPLACED) !== 0) return;
+      const d = mvParse_(r[0]); if (d) noteIn(String(r[1]), r[2], d);
+    });
+  }
+
+  // 3) What is still waiting in « Non placé »
+  const unplaced = [];
+  const zs = ss.getSheetByName(ZONE_STOCK_SHEET_NAME);
+  if (zs && zs.getLastRow() >= 2) {
+    zs.getRange(2, 1, zs.getLastRow() - 1, ZONE_STOCK_HEADERS.length).getValues().forEach(r => {
+      if (String(r[ZS_COL_ZONE - 1]) !== MV_UNPLACED) return;
+      const q = Number(r[ZS_COL_ONHAND - 1]) || 0;
+      if (q <= 0) return;
+      const loc = String(r[ZS_COL_LOCATION - 1]);
+      const d = lastIn[loc + '||' + barcodeKey(r[ZS_COL_BARCODE - 1])];
+      unplaced.push({ loc: loc, bc: normalizeBarcode(r[ZS_COL_BARCODE - 1]), name: String(r[ZS_COL_PRODUCT - 1] || ''), qty: q, since: d ? iso(d) : '' });
+    });
+  }
+
+  moves.sort((a, b) => a.at < b.at ? 1 : (a.at > b.at ? -1 : 0));
+  return jsonResponse({ success: true, days: nDays, moves: moves, unplaced: unplaced, generatedAt: new Date().toISOString() });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RÉCEPTION D'UN ARRIVAGE (container), added 28 Oct 2026 — Stock1981 « 📦 Réception »
+// ──────────────────────────────────────────────────────────────────────────
+//  An arrival (« Arrivage ») is emptied one cooler / box at a time, blind:
+//  the phone scans everything inside, then sends the whole unit at once.
+//    POST recvArrival  { by, userHash, id, name, note }         create / rename
+//    POST recvUnit     { by, userHash, opId, arrivalId, arrivalName, unit, kind,
+//                        cooler: { barcode, name } | null,
+//                        lines: [ { lineId, barcode, name, qty, mode: 'date'|'none'|'later',
+//                                   expiry: 'DD/MM/YYYY', solde: bool } ] }
+//    POST recvSetDate  { by, userHash, lineId, mode, expiry }   fill a « plus tard » date
+//    GET  getArrivals                                            arrivals + units + lines
+//  Effects of recvUnit:
+//    - stock goes into Warehouse / « Entrepôt » (zone + store level + ledger +
+//      Stock1981 Log) through handleStock1981Adjust, reason « Ajout / réception »;
+//    - an emptied cooler that is for sale is added as +1 of its own product;
+//    - products the Sheet doesn't know are added to Product Master (no price yet)
+//      and to the Warehouse tab;
+//    - dates go to « Expiry Batches » (Shipment = arrival name), same tab the
+//      Scanner's Péremptions card reads; « ne périme pas » is recorded once per
+//      product so it is never asked again;
+//    - every line is kept in « Réception » and every unit in « Réception Unités ».
+//  opId makes a retried unit (offline queue) apply only once.
+// ══════════════════════════════════════════════════════════════════════════
+const RECV_LOC = 'Warehouse', RECV_ZONE = 'Entrepôt';
+const RECV_ARR_SHEET = 'Arrivages';
+const RECV_ARR_HEADERS = ['ID', 'Nom', 'Créé le', 'Lieu', 'Statut', 'Par', 'Note'];
+const RECV_UNIT_SHEET = 'Réception Unités';
+const RECV_UNIT_HEADERS = ['Timestamp', 'Arrivage ID', 'Arrivage', 'Unité', 'Type', 'Glacière code', 'Glacière nom', 'Produits', 'Articles', 'Par', 'OpId'];
+const RECV_LINE_SHEET = 'Réception';
+const RECV_LINE_HEADERS = ['Timestamp', 'Arrivage ID', 'Arrivage', 'Unité', 'Barcode', 'Produit', 'Qté', 'Date', 'Péremption', 'Solde', 'Par', 'LineId'];
+const RL = { TS: 0, AID: 1, ANAME: 2, UNIT: 3, BC: 4, NAME: 5, QTY: 6, MODE: 7, EXP: 8, SOLDE: 9, BY: 10, LID: 11 };
+
+function recvSheet_(name, headers, textCols) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName(name);
+  if (!ws) {
+    ws = ss.insertSheet(name);
+    ws.appendRow(headers);
+    ws.setFrozenRows(1);
+    ws.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    (textCols || []).forEach(c => ws.getRange(1, c, ws.getMaxRows(), 1).setNumberFormat('@'));
+  }
+  return ws;
+}
+function recvRows_(ws, width) {
+  const last = ws.getLastRow();
+  return last >= 2 ? ws.getRange(2, 1, last - 1, width).getValues() : [];
+}
+function recvStamp_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'); }
+function recvDay_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy'); }
+
+// Product Master: barcode keys already known
+function recvMasterKeys_() {
+  const keys = {};
+  const pm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (pm && pm.getLastRow() >= FIRST_DATA_ROW) {
+    pm.getRange(FIRST_DATA_ROW, 8, pm.getLastRow() - FIRST_DATA_ROW + 1, 1).getValues().forEach(r => { if (r[0]) keys[barcodeKey(r[0])] = true; });
+  }
+  return keys;
+}
+// Adds new products to Product Master (no price) and to the Warehouse tab, so
+// the Scanner can sell them and the store level of the Warehouse moves with them.
+function recvEnsureProducts_(products) {
+  const added = [];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pm = ss.getSheetByName(SHEET_NAME);
+  const known = recvMasterKeys_();
+  if (pm) {
+    let maxNum = 0;
+    if (pm.getLastRow() >= FIRST_DATA_ROW) {
+      pm.getRange(FIRST_DATA_ROW, 1, pm.getLastRow() - FIRST_DATA_ROW + 1, 1).getValues()
+        .forEach(r => { const n = parseInt(r[0], 10); if (!isNaN(n) && n > maxNum) maxNum = n; });
+    }
+    products.forEach(p => {
+      const k = barcodeKey(p.bc);
+      if (!k || known[k]) return;
+      const row = pm.getLastRow() + 1;
+      pm.getRange(row, 8).setNumberFormat('@');
+      pm.getRange(row, 1, 1, 2).setValues([[++maxNum, p.name || p.bc]]);
+      pm.getRange(row, 4).setValue('Cosmetics');
+      pm.getRange(row, 8).setValue(p.bc);
+      known[k] = true;
+      added.push(p.bc);
+    });
+  }
+  const loc = getLocationSheetOrNull(RECV_LOC);
+  if (loc) {
+    const have = {};
+    if (loc.getLastRow() >= FIRST_DATA_ROW) {
+      loc.getRange(FIRST_DATA_ROW, LOCATION_BARCODE_COL, loc.getLastRow() - FIRST_DATA_ROW + 1, 1).getValues()
+        .forEach(r => { if (r[0]) have[barcodeKey(r[0])] = true; });
+    }
+    const qtyCol = getOrCreateColumnByHeader(loc, HEADER_ROW, QTY_ON_HAND_HEADER);
+    products.forEach(p => {
+      const k = barcodeKey(p.bc);
+      if (!k || have[k]) return;
+      const row = loc.getLastRow() + 1;
+      loc.getRange(row, LOCATION_NAME_COL).setValue(p.name || p.bc);
+      loc.getRange(row, LOCATION_BARCODE_COL).setNumberFormat('@').setValue(p.bc);
+      loc.getRange(row, qtyCol).setValue(0);
+      have[k] = true;
+    });
+  }
+  return added;
+}
+
+function recvParseDate_(s) {
+  const d = parseFrDate(String(s || ''));
+  return d ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy') : '';
+}
+
+// Writes dates for received lines into Expiry Batches. A product+date+arrival
+// already recorded from another cooler gets its quantity added, not a new row.
+function recvWriteExpiry_(lines, arrivalName, by) {
+  const ws = ensureExpiryTab();
+  _exEnsureCols(ws);
+  const data = recvRows_(ws, EX_ALL_HEADERS.length);
+  const noExp = {}, sameBatch = {};
+  data.forEach((r, i) => {
+    const k = barcodeKey(r[EX_COL_BARCODE - 1]);
+    if (r[EX_COL_STATUS - 1] === 'noexpiry') noExp[k] = true;
+    if (_exIsActive(r[EX_COL_STATUS - 1]) && r[EX_COL_LOCATION - 1] === RECV_LOC && String(r[EX_COL_ZONE - 1]) === RECV_ZONE &&
+        String(r[EX_COL_SHIPMENT - 1]) === arrivalName) sameBatch[k + '|' + _exStr(r[EX_COL_EXPIRY - 1])] = { row: i + 2, qty: Number(r[EX_COL_QTY - 1]) || 0 };
+  });
+  const stamp = recvStamp_(), day = recvDay_();
+  const add = [], pending = {};
+  lines.forEach(l => {
+    const k = barcodeKey(l.bc);
+    if (l.mode === 'none') {
+      if (noExp[k]) return;
+      noExp[k] = true;
+      add.push([stamp, RECV_LOC, RECV_ZONE, l.bc, l.name || l.bc, 0, '', '', 'noexpiry', by, day]);
+    } else if (l.mode === 'date' && l.expiry) {
+      const bk = k + '|' + l.expiry;
+      if (pending[bk] != null) { add[pending[bk]][5] += l.qty; return; }
+      const sb = sameBatch[bk];
+      if (sb) { sb.qty += l.qty; ws.getRange(sb.row, EX_COL_QTY).setValue(sb.qty); return; }
+      pending[bk] = add.length;
+      add.push([stamp, RECV_LOC, RECV_ZONE, l.bc, l.name || l.bc, l.qty, l.expiry, arrivalName, 'watch', by, day]);
+    }
+  });
+  if (add.length) {
+    const r0 = ws.getLastRow() + 1;
+    const rng = ws.getRange(r0, 1, add.length, EX_ALL_HEADERS.length);
+    rng.setNumberFormat('@');
+    rng.setValues(add);
+  }
+}
+
+function handleRecvArrival(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const id = String(body.id || '').trim(), name = String(body.name || '').trim();
+  if (!id || !name) return jsonResponse({ success: false, error: "Nom de l'arrivage manquant" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = recvSheet_(RECV_ARR_SHEET, RECV_ARR_HEADERS);
+    const rows = recvRows_(ws, RECV_ARR_HEADERS.length);
+    const i = rows.findIndex(r => String(r[0]) === id);
+    const status = body.status === 'closed' ? 'closed' : 'open';
+    if (i >= 0) {
+      ws.getRange(i + 2, 2).setValue(name);
+      if (body.status) ws.getRange(i + 2, 5).setValue(status);
+    } else ws.appendRow([id, name, recvStamp_(), RECV_LOC, status, String(body.by || ''), String(body.note || '')]);
+    return jsonResponse({ success: true });
+  } finally { lock.releaseLock(); }
+}
+
+function handleRecvUnit(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const opId = String(body.opId || ''), aid = String(body.arrivalId || ''), aname = String(body.arrivalName || '').trim();
+  const unit = String(body.unit || '').trim(), kind = String(body.kind || 'Glacière');
+  if (!opId || !aid || !aname || !unit) return jsonResponse({ success: false, error: "Arrivage ou numéro de glacière manquant" }, 400);
+  const by = String(body.by || '');
+  const lines = (Array.isArray(body.lines) ? body.lines : []).map((l, i) => ({
+    lineId: String(l.lineId || (opId + '-' + i)), bc: normalizeBarcode(resolveAlias_(l.barcode)), name: String(l.name || '').trim(),
+    qty: Math.max(0, Math.round(Number(l.qty) || 0)), mode: ['date', 'none', 'later'].indexOf(l.mode) >= 0 ? l.mode : 'later',
+    expiry: recvParseDate_(l.expiry), solde: !!l.solde
+  })).filter(l => l.bc && l.qty > 0);
+  lines.forEach(l => { if (l.mode === 'date' && !l.expiry) l.mode = 'later'; });
+  const cooler = body.cooler && normalizeBarcode(resolveAlias_(body.cooler.barcode)) ?
+    { bc: normalizeBarcode(resolveAlias_(body.cooler.barcode)), name: String(body.cooler.name || '').trim() } : null;
+
+  // 1. Already applied? (offline retry)
+  const unitWs = recvSheet_(RECV_UNIT_SHEET, RECV_UNIT_HEADERS, [6]);
+  if (recvRows_(unitWs, RECV_UNIT_HEADERS.length).some(r => String(r[10]) === opId)) return jsonResponse({ success: true, duplicate: true });
+
+  // 2. Arrival row + unknown products (under the lock)
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  let added = [];
+  try {
+    const aws = recvSheet_(RECV_ARR_SHEET, RECV_ARR_HEADERS);
+    if (!recvRows_(aws, RECV_ARR_HEADERS.length).some(r => String(r[0]) === aid)) aws.appendRow([aid, aname, recvStamp_(), RECV_LOC, 'open', by, '']);
+    const prods = {};
+    lines.forEach(l => { prods[barcodeKey(l.bc)] = prods[barcodeKey(l.bc)] || { bc: l.bc, name: l.name }; });
+    if (cooler) prods[barcodeKey(cooler.bc)] = prods[barcodeKey(cooler.bc)] || { bc: cooler.bc, name: cooler.name };
+    added = recvEnsureProducts_(Object.keys(prods).map(k => prods[k]));
+  } finally { lock.releaseLock(); }
+
+  // 3. Stock (each op has its own opId, so a retry never adds twice)
+  const note = aname + ' · ' + kind + ' ' + unit;
+  const ops = lines.map((l, i) => ({ opId: opId + '-s' + i, location: RECV_LOC, zone: RECV_ZONE, barcode: l.bc, name: l.name, mode: 'delta', qty: l.qty, reason: 'Ajout / réception', note: note }));
+  if (cooler) ops.push({ opId: opId + '-c', location: RECV_LOC, zone: RECV_ZONE, barcode: cooler.bc, name: cooler.name, mode: 'delta', qty: 1, reason: 'Ajout / réception', note: note + ' (glacière vidée, à vendre)' });
+  if (ops.length) {
+    const res = JSON.parse(handleStock1981Adjust({ by: by, userHash: body.userHash, ops: ops }).getContent());
+    if (!res.success) return jsonResponse({ success: false, error: res.error || 'Stock non mis à jour' });
+    const bad = (res.results || []).filter(r => !r.ok);
+    if (bad.length) return jsonResponse({ success: false, error: bad.length + ' ligne(s) refusée(s) : ' + bad[0].error });
+  }
+
+  // 4. Dates, lines, unit summary
+  lock.waitLock(25000);
+  try {
+    if (recvRows_(unitWs, RECV_UNIT_HEADERS.length).some(r => String(r[10]) === opId)) return jsonResponse({ success: true, duplicate: true });
+    recvWriteExpiry_(lines, aname, by);
+    const stamp = recvStamp_();
+    if (lines.length) {
+      const lws = recvSheet_(RECV_LINE_SHEET, RECV_LINE_HEADERS, [5, 9]);
+      const rows = lines.map(l => [stamp, aid, aname, unit, l.bc, l.name, l.qty, l.mode, l.mode === 'date' ? l.expiry : '', l.solde ? 'oui' : '', by, l.lineId]);
+      lws.getRange(lws.getLastRow() + 1, 1, rows.length, RECV_LINE_HEADERS.length).setValues(rows);
+    }
+    const units = lines.reduce((a, l) => a + l.qty, 0);
+    const prodCount = Object.keys(lines.reduce((o, l) => (o[barcodeKey(l.bc)] = 1, o), {})).length;
+    unitWs.appendRow([stamp, aid, aname, unit, kind, cooler ? cooler.bc : '', cooler ? cooler.name : '', prodCount, units, by, opId]);
+    return jsonResponse({ success: true, products: prodCount, units: units, newProducts: added.length });
+  } finally { lock.releaseLock(); }
+}
+
+function handleRecvSetDate(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const lineId = String(body.lineId || '');
+  const mode = body.mode === 'none' ? 'none' : 'date';
+  const expiry = recvParseDate_(body.expiry);
+  if (!lineId || (mode === 'date' && !expiry)) return jsonResponse({ success: false, error: "Date invalide" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const lws = recvSheet_(RECV_LINE_SHEET, RECV_LINE_HEADERS, [5, 9]);
+    const rows = recvRows_(lws, RECV_LINE_HEADERS.length);
+    const i = rows.findIndex(r => String(r[RL.LID]) === lineId);
+    if (i < 0) return jsonResponse({ success: false, error: "Ligne introuvable" });
+    const r = rows[i];
+    if (r[RL.MODE] !== 'later') return jsonResponse({ success: true, already: true });
+    lws.getRange(i + 2, RL.MODE + 1, 1, 2).setValues([[mode, mode === 'date' ? expiry : '']]);
+    recvWriteExpiry_([{ bc: normalizeBarcode(r[RL.BC]), name: String(r[RL.NAME]), qty: Number(r[RL.QTY]) || 0, mode: mode, expiry: expiry }],
+      String(r[RL.ANAME]), String(body.by || ''));
+    return jsonResponse({ success: true });
+  } finally { lock.releaseLock(); }
+}
+
+function handleGetArrivals() {
+  const aws = recvSheet_(RECV_ARR_SHEET, RECV_ARR_HEADERS);
+  const uws = recvSheet_(RECV_UNIT_SHEET, RECV_UNIT_HEADERS, [6]);
+  const lws = recvSheet_(RECV_LINE_SHEET, RECV_LINE_HEADERS, [5, 9]);
+  const prices = _exPriceMap();
+  const arrivals = recvRows_(aws, RECV_ARR_HEADERS.length).filter(r => r[0]).map(r => ({
+    id: String(r[0]), name: String(r[1]), created: r[2] instanceof Date ? Utilities.formatDate(r[2], Session.getScriptTimeZone(), 'dd/MM/yyyy') : String(r[2]).slice(0, 10), status: String(r[4] || 'open'), by: String(r[5] || ''), units: [], lines: [] }));
+  const byId = {}; arrivals.forEach(a => { byId[a.id] = a; });
+  recvRows_(uws, RECV_UNIT_HEADERS.length).forEach(r => {
+    const a = byId[String(r[1])]; if (!a) return;
+    a.units.push({ unit: String(r[3]), kind: String(r[4]), cooler: String(r[6] || r[5] || ''), products: Number(r[7]) || 0, units: Number(r[8]) || 0, by: String(r[9] || ''), at: r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : String(r[0]) });
+  });
+  recvRows_(lws, RECV_LINE_HEADERS.length).forEach(r => {
+    const a = byId[String(r[RL.AID])]; if (!a) return;
+    const p = prices[barcodeKey(r[RL.BC])];
+    // [lineId, unit, barcode, name, qty, mode, expiry, solde, price]
+    a.lines.push([String(r[RL.LID]), String(r[RL.UNIT]), normalizeBarcode(r[RL.BC]), String(r[RL.NAME]), Number(r[RL.QTY]) || 0,
+      String(r[RL.MODE]), _exStr(r[RL.EXP]), r[RL.SOLDE] === 'oui' ? 1 : 0, p == null ? null : p]);
+  });
+  // products recorded once as « ne périme pas » (any place) are never asked again
+  const noExpiry = {};
+  recvRows_(ensureExpiryTab(), EXPIRY_HEADERS.length).forEach(r => { if (r[EX_COL_STATUS - 1] === 'noexpiry') noExpiry[barcodeKey(r[EX_COL_BARCODE - 1])] = 1; });
+  arrivals.sort((a, b) => (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1) || (a.id < b.id ? 1 : -1));
+  return jsonResponse({ success: true, arrivals: arrivals, noExpiry: Object.keys(noExpiry), generatedAt: new Date().toISOString() });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STOCK1981 PRODUCT PHOTOS (29 Oct 2026) — added to getStock1981 as `images`
+//  { barcodeKey: url }. Same photos the Scanner shows at the till: the sales
+//  Sheet's « Product Images » tab, rows « Trouvé » / « Validé » with a photo
+//  link (read through SALES_SHEET_ID, like the controls), plus the Catalogue
+//  photos kept on the site (images/products/…). Read-only.
+// ══════════════════════════════════════════════════════════════════════════
+function s1981Images_() {
+  const out = {};
+  try {
+    const cat = readCatalogue_();
+    Object.keys(cat).forEach(l => cat[l].forEach(it => {
+      const k = barcodeKey(it.barcode);
+      if (k && it.photo && !out[k]) out[k] = 'images/products/' + encodeURIComponent(it.photo);
+    }));
+  } catch (e) { Logger.log('catalogue photos skipped: ' + e); }
+  try {
+    const ss = ctlSalesSS_();
+    const sh = ss && ss.getSheetByName('Product Images');
+    if (sh && sh.getLastRow() >= 2) {
+      sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues().forEach(r => {
+        if (['Trouvé', 'Validé'].indexOf(String(r[2])) < 0 || !r[5]) return;
+        const k = barcodeKey(r[0]);
+        if (k) out[k] = String(r[5]);
+      });
+    }
+  } catch (e) { Logger.log('sales photos skipped: ' + e); }
+  return out;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  PHOTO SEARCH FOR CONFIRMED STOCK (29 Oct 2026)
+//  When stock is confirmed in Stock1981 (shelf count sent, cooler emptied in
+//  Réception, product added to a zone), every product that has no row yet in
+//  the sales Sheet's « Product Images » tab gets one, « À chercher ». The
+//  sales script's 15-min runImageLookup() then searches its photo as usual
+//  (free databases, UPCitemdb, Brave suggestions). Our own 0610000… codes are
+//  marked « Code interne » (no website knows them). Never blocks the count:
+//  any problem is only logged.
+//  The first getStock1981 after this update also queues everything already
+//  counted with stock (once; Script property S1981_PHOTO_CATCHUP).
+// ══════════════════════════════════════════════════════════════════════════
+function s1981QueuePhotos_(products) {
+  try {
+    if (!products || !products.length) return 0;
+    const ss = ctlSalesSS_();
+    const sh = ss && ss.getSheetByName('Product Images');
+    if (!sh) return 0;
+    const have = {};
+    if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(r => { const k = barcodeKey(r[0]); if (k) have[k] = true; });
+    const rows = [];
+    products.forEach(p => {
+      const bc = normalizeBarcode(p.bc), k = barcodeKey(bc);
+      if (!k || have[k] || k.length < 6) return;
+      have[k] = true;
+      rows.push([bc, String(p.name || ''), /^610000/.test(k) ? 'Code interne' : 'À chercher', '', '', '', '', '', '', 0, '']);
+    });
+    if (!rows.length) return 0;
+    const r0 = sh.getLastRow() + 1;
+    sh.getRange(r0, 1, rows.length, 1).setNumberFormat('@');
+    sh.getRange(r0, 1, rows.length, rows[0].length).setValues(rows);
+    return rows.length;
+  } catch (e) { Logger.log('photo queue skipped: ' + e); return 0; }
+}
+function s1981PhotoCatchUp_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty('S1981_PHOTO_CATCHUP') === '1') return;
+    const zs = ensureZoneStockTab();
+    const prods = [];
+    if (zs.getLastRow() >= 2) zs.getRange(2, 1, zs.getLastRow() - 1, ZONE_STOCK_HEADERS.length).getValues().forEach(r => {
+      if ((Number(r[ZS_COL_ONHAND - 1]) || 0) > 0 && r[ZS_COL_BARCODE - 1]) prods.push({ bc: r[ZS_COL_BARCODE - 1], name: r[ZS_COL_PRODUCT - 1] });
+    });
+    const n = s1981QueuePhotos_(prods);
+    props.setProperty('S1981_PHOTO_CATCHUP', '1');
+    Logger.log('photo catch-up: ' + n + ' product(s) queued');
+  } catch (e) { Logger.log('photo catch-up skipped: ' + e); }
+}
+// Can also be run by hand from the editor to queue everything in stock again.
+function queueStockPhotosNow() { PropertiesService.getScriptProperties().deleteProperty('S1981_PHOTO_CATCHUP'); s1981PhotoCatchUp_(); }
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  EN ROUTE (action "getTransit", GET, key required), added 29 Oct 2026
+//  Read-only, for Stock1981 « 🚚 En route ». Reads the sales Sheet's
+//  « Transfers » tab (written by the Scanner's 🔄 Transferts): lines sent and
+//  not yet received (status 'transit'), and requests not yet prepared
+//  ('requested'). The JSON column holds the shipment (grp), carrier, boxes,
+//  sentTs / sentBy, ts / by.
+// ══════════════════════════════════════════════════════════════════════════
+function handleGetTransit() {
+  const out = { transit: [], requested: [] };
+  try {
+    const ss = ctlSalesSS_();
+    const sh = ss && ss.getSheetByName('Transfers');
+    if (sh && sh.getLastRow() >= 2) {
+      sh.getRange(2, 1, sh.getLastRow() - 1, 14).getValues().forEach(r => {
+        const st = String(r[3] || '');
+        if (st !== 'transit' && st !== 'requested') return;
+        let o = {};
+        try { o = r[13] ? JSON.parse(String(r[13])) : {}; } catch (e) { o = {}; }
+        const line = { id: String(r[2] || o.id || ''), grp: String(o.grp || o.gid || r[2] || ''), from: String(r[4] || ''), to: String(r[5] || ''),
+          bc: normalizeBarcode(r[6]), name: String(r[7] || ''), qty: Number(r[8]) || 0, by: String(r[10] || o.by || ''),
+          carrier: String(o.carrier || ''), boxes: Number(o.boxes) || 0, sentTs: String(o.sentTs || ''), sentBy: String(o.sentBy || ''), ts: String(o.ts || '') };
+        (st === 'transit' ? out.transit : out.requested).push(line);
+      });
+    }
+  } catch (e) { return jsonResponse({ success: false, error: 'Transferts illisibles : ' + e }); }
+  return jsonResponse(Object.assign({ success: true, generatedAt: new Date().toISOString() }, out));
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FORMATION — staff cosmetics training (formation.html, 30 Oct 2026)
+//  Content lives in two tabs you edit yourself:
+//    « Formation Contenu »   one row per ingredient (level, effect, notes,
+//                            what customers say, our products' barcodes)
+//    « Formation Questions » your own extra quiz questions
+//  Results are written by the page:
+//    « Formation Résultats » one row per game played (score, exam passed)
+//    « Formation Réponses »  one row per answer (topic, right / wrong)
+//  Both content tabs are created with a first Level 1 the first time the
+//  page loads. Set « Actif » to NON to hide a row; add rows with Niveau 2
+//  for next week's level. Training staff are « Formation » users in
+//  Counter Users: they can only sign in to the training page.
+// ══════════════════════════════════════════════════════════════════════════
+const FORMATION_PASS = 80;        // % needed on the exam to pass a level
+const FORMATION_EXAM_SIZE = 20;   // questions per exam
+const FM_CONTENT_SHEET = 'Formation Contenu';
+const FM_QUESTIONS_SHEET = 'Formation Questions';
+const FM_RESULTS_SHEET = 'Formation Résultats';
+const FM_ANSWERS_SHEET = 'Formation Réponses';
+const FM_CONTENT_HEADERS = ['Niveau', 'Ordre', 'Ingrédient', 'Pour', 'Effet court', 'Explication', 'À dire au client', 'Attention', 'Le client dit (séparer par |)', 'Codes-barres de nos produits (séparer par ,)', 'Actif'];
+const FM_QUESTIONS_HEADERS = ['Niveau', 'Question', 'Bonne réponse', 'Faux 1', 'Faux 2', 'Faux 3', 'Sujet (ingrédient)', 'Explication', 'Actif'];
+const FM_RESULTS_HEADERS = ['Date', 'Semaine', 'Employé', 'Niveau', 'Jeu', 'Score', 'Total', '%', 'Examen réussi', 'Durée (s)', 'Session'];
+const FM_ANSWERS_HEADERS = ['Date', 'Semaine', 'Employé', 'Niveau', 'Jeu', 'Session', 'Sujet', 'Question', 'Réponse donnée', 'Bonne réponse', 'Juste'];
+
+const FM_SEED_CONTENT = [
+  [1, 1, 'Vitamine C', 'Peau', 'Éclat du teint et taches',
+    "Antioxydant. Rend le teint plus lumineux et aide à atténuer les taches brunes, avec le temps. On la trouve dans des crèmes, des sérums, des savons, et aussi en comprimés à avaler.",
+    "Pour un teint plus lumineux et des taches moins visibles, un produit à la vitamine C, tous les jours.",
+    "Résultats en quelques semaines, pas en un jour. Protection solaire le jour. Peut picoter un peu les peaux sensibles.",
+    "J'ai des taches brunes | Mon teint est terne, sans éclat",
+    '811170034395, 75609201059, 75609215339, 19100109995, 810400035447, 8859587314114, 74312715105, 76314302024'],
+  [1, 2, 'Vitamine E', 'Peau et cheveux', 'Nourrit et protège',
+    "Antioxydant qui nourrit, adoucit et protège la peau du dessèchement. Souvent associée au beurre de cacao, au karité ou à la vitamine C.",
+    "La vitamine E nourrit et protège la peau : très bien pour une peau sèche ou abîmée.",
+    "Ce n'est pas un produit contre les taches : elle nourrit et protège.",
+    "Je cherche une crème qui protège et nourrit ma peau",
+    '610000084353, 10181140082, 810107180075, 19100109995, 8859587314114, 610000010260'],
+  [1, 3, 'Rétinol', 'Peau', 'Rides et renouvellement de la peau',
+    "Dérivé de la vitamine A. Accélère le renouvellement des cellules : rides et ridules moins marquées, peau plus lisse. Aide aussi contre les boutons.",
+    "Le rétinol s'utilise le soir. On commence 2 ou 3 soirs par semaine.",
+    "Seulement le soir, et protection solaire le jour. Peut irriter au début (rougeurs, peau qui pèle). Déconseillé pendant la grossesse et l'allaitement.",
+    "J'ai des rides, je veux une crème anti-âge",
+    ''],
+  [1, 4, 'Niacinamide (vitamine B3)', 'Peau', 'Pores et peau grasse',
+    "Resserre l'aspect des pores, régule le sébum (peau qui brille), apaise les rougeurs et aide à unifier le teint. Douce : convient à presque toutes les peaux.",
+    "Pour la peau grasse et les pores visibles, la niacinamide est douce, matin et soir.",
+    "Très bien tolérée. Peut s'utiliser avec la vitamine C.",
+    "J'ai la peau grasse, je brille | Mes pores sont très visibles",
+    '3600551183992'],
+  [1, 5, 'Acide hyaluronique', 'Peau', 'Hydratation',
+    "Attire et retient l'eau dans la peau, comme une éponge. La peau est repulpée et plus souple. Convient à tous les types de peau, même grasse.",
+    "Pour une peau qui tire et manque d'eau, l'acide hyaluronique hydrate sans graisser.",
+    "Malgré son nom, il ne pique pas et n'exfolie pas. Mettre une crème par-dessus pour garder l'eau.",
+    "Ma peau tire, elle manque d'eau",
+    '3606000537668, 8851932427722'],
+  [1, 6, 'Collagène', 'Peau et cheveux', 'Fermeté et souplesse',
+    "Protéine qui donne sa fermeté à la peau. Dans une crème, un savon ou un shampoing, il hydrate et adoucit la surface. En poudre ou en gélules, c'est un complément alimentaire qu'on avale.",
+    "En crème, le collagène hydrate et adoucit. Il existe aussi en poudre à boire, comme complément.",
+    "Une crème au collagène ne remplace pas le collagène de la peau : ne pas promettre de miracle.",
+    "Ma peau est moins ferme, elle se relâche",
+    '8851437881982, 8859587314114, 19100110083, 610000020092, 8859587324113, 816559019031, 610000010260, 16185129481, 857273008666, 817598001032'],
+  [1, 7, 'Beurre de karité', 'Peau et cheveux', 'Nourrit peaux et cheveux secs',
+    "Beurre de la noix de l'arbre à karité, un produit de chez nous. Très nourrissant : protège la peau sèche et adoucit les cheveux secs ou crépus.",
+    "Le karité nourrit en profondeur la peau et les cheveux très secs.",
+    "Très riche : il peut être lourd sur un visage gras (risque de boutons).",
+    "Ma peau et mes cheveux sont très secs",
+    '810107180075'],
+  [1, 8, 'Beurre de cacao', 'Peau', 'Adoucit et assouplit la peau',
+    "Beurre de la fève de cacao. Nourrit et rend la peau souple et douce. Très utilisé sur le corps, souvent choisi pendant la grossesse pour les vergetures.",
+    "Le beurre de cacao garde la peau souple : beaucoup de clientes l'utilisent sur le ventre pendant la grossesse.",
+    "Il aide la peau à rester souple mais n'efface pas les vergetures déjà là.",
+    "J'ai des vergetures",
+    '610000084353, 10181140082'],
+  [1, 9, 'AHA (acides de fruits)', 'Peau', 'Exfolie : peau lisse et éclatante',
+    "Acide glycolique, lactique, citrique… Ils enlèvent les cellules mortes à la surface : peau plus lisse, teint plus éclatant, petites taches atténuées.",
+    "Les AHA exfolient en douceur, pour une peau plus lisse et plus nette.",
+    "Rendent la peau plus sensible au soleil : protection solaire le jour. Pas tous les jours au début.",
+    "Ma peau est rugueuse, pas lisse",
+    ''],
+  [1, 10, 'BHA (acide salicylique)', 'Peau', 'Boutons et points noirs',
+    "Exfoliant qui entre dans les pores et les débouche. Idéal contre les boutons, les points noirs et la peau grasse.",
+    "Pour les boutons et les points noirs, un produit à l'acide salicylique (BHA).",
+    "Peut dessécher : ajouter une crème hydratante. Protection solaire le jour. Pas avec un autre exfoliant le même soir.",
+    "J'ai des boutons et des points noirs",
+    '70501025901'],
+  [1, 11, 'Céramides', 'Peau', 'Répare la barrière de la peau',
+    "Graisses naturellement présentes dans la peau. Elles jouent le rôle du ciment entre les briques : moins de sécheresse, moins d'irritations.",
+    "Pour une peau sèche qui gratte ou s'irrite, une crème aux céramides répare et protège.",
+    "Très douces, conviennent aussi aux peaux sensibles et aux enfants.",
+    "Ma peau gratte et s'irrite facilement",
+    '3606000537668, 52800483286'],
+  [1, 12, 'Acide kojique / Arbutine', 'Peau', 'Unifie le teint, atténue les taches',
+    "Actifs qui freinent la fabrication des taches brunes (mélanine). On les trouve dans beaucoup de nos savons et sérums « éclat » de Thaïlande.",
+    "Pour les taches : utiliser régulièrement et se protéger du soleil, sinon les taches reviennent.",
+    "Peut irriter : essayer d'abord sur une petite zone. Protection solaire indispensable. Pas sur une peau blessée.",
+    "J'ai des taches brunes",
+    '610000020078, 8851437881982'],
+  [1, 13, 'Glutathion (« gluta »)', 'Peau', 'Antioxydant pour un teint lumineux',
+    "Antioxydant présent naturellement dans le corps. Dans les savons et laits « gluta », il est utilisé pour un teint plus lumineux et plus uniforme.",
+    "Le gluta aide à avoir un teint plus lumineux, avec une utilisation régulière.",
+    "En crème ou en savon, les effets restent modestes : ne pas promettre un changement de couleur de peau.",
+    '',
+    '610000020023, 8851932427722']
+];
+const FM_SEED_QUESTIONS = [
+  [1, "Une cliente enceinte demande une crème anti-rides. Quel actif faut-il éviter ?", 'Rétinol', 'Acide hyaluronique', 'Beurre de cacao', 'Vitamine E', 'Rétinol', "Le rétinol est déconseillé pendant la grossesse et l'allaitement."],
+  [1, "Quand faut-il utiliser le rétinol ?", 'Le soir', 'Le matin avant de sortir', 'Juste avant d’aller au soleil', 'N’importe quand, sans précaution', 'Rétinol', "Le soir seulement, avec une protection solaire le jour."],
+  [1, "Quels actifs rendent la peau plus sensible au soleil ?", 'AHA, BHA et rétinol', 'Karité et beurre de cacao', 'Acide hyaluronique et céramides', 'Vitamine E seule', 'AHA (acides de fruits)', "Les exfoliants et le rétinol : toujours conseiller une protection solaire le jour."],
+  [1, "D'où vient le beurre de karité ?", "De la noix d'un arbre de chez nous", "De la fève de cacao", "D'un fruit de Thaïlande", "Uniquement d'un laboratoire", 'Beurre de karité', "Le karité est un produit d'Afrique de l'Ouest, du Burkina notamment."],
+  [1, "Malgré son nom, l'acide hyaluronique…", "Hydrate et ne pique pas", "Exfolie très fort", "Débouche les pores", "Fait des taches", 'Acide hyaluronique', "Ce n'est pas un acide qui exfolie : il retient l'eau dans la peau."],
+  [1, "Une crème au collagène…", "Hydrate et adoucit la peau", "Remplace le collagène perdu de la peau", "Efface les rides en un jour", "Fait pousser les cheveux", 'Collagène', "Elle hydrate en surface. Ne pas promettre de miracle."],
+  [1, "Avec un produit contre les taches, que faut-il toujours conseiller ?", "Une protection solaire le jour", "De l'utiliser une seule fois", "De le rincer à l'eau très chaude", "Rien de plus", 'Acide kojique / Arbutine', "Sans protection solaire, les taches reviennent."],
+  [1, "Le BHA, c'est quel actif ?", "L'acide salicylique", "La vitamine C", "Le collagène", "Le beurre de cacao", 'BHA (acide salicylique)', "BHA = acide salicylique, contre les boutons et les points noirs."]
+];
+
+function fmSheet_(name, headers, seed, textCols) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName(name);
+  if (ws) return ws;
+  ws = ss.insertSheet(name);
+  ws.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#f3e8ee');
+  ws.setFrozenRows(1);
+  (textCols || []).forEach(c => ws.getRange(1, c, ws.getMaxRows(), 1).setNumberFormat('@'));
+  if (seed && seed.length) {
+    const rows = seed.map(r => { const o = r.slice(); while (o.length < headers.length - 1) o.push(''); o.push('OUI'); return o; });
+    ws.getRange(2, 1, rows.length, headers.length).setValues(rows).setVerticalAlignment('top').setWrap(true);
+    if (name === FM_CONTENT_SHEET) [60, 50, 160, 110, 180, 360, 280, 300, 240, 260, 60].forEach((w, i) => ws.setColumnWidth(i + 1, w));
+    if (name === FM_QUESTIONS_SHEET) [60, 340, 200, 180, 180, 180, 160, 300, 60].forEach((w, i) => ws.setColumnWidth(i + 1, w));
+  }
+  return ws;
+}
+function fmRows_(ws, n) {
+  const last = ws.getLastRow();
+  return last < 2 ? [] : ws.getRange(2, 1, last - 1, n).getValues();
+}
+function fmActive_(v) { return String(v).trim().toUpperCase() !== 'NON'; }
+function fmWeek_(d) {
+  // ISO week, e.g. 2026-S44 (weeks start on Monday)
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const w = Math.ceil(((t - y0) / 86400000 + 1) / 7);
+  return t.getUTCFullYear() + '-S' + (w < 10 ? '0' : '') + w;
+}
+function fmUser_(body) {
+  const u = readCounterUsers_(true).find(x => x.active && x.name.toLowerCase() === String(body.by || '').toLowerCase());
+  return (u && u.hash && u.hash === String(body.userHash || '')) ? u : null;
+}
+function fmProgress_() {
+  const out = {};
+  const ws = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FM_RESULTS_SHEET);
+  if (!ws) return out;
+  fmRows_(ws, FM_RESULTS_HEADERS.length).forEach(r => {
+    if (r[4] !== 'Examen' || !r[2]) return;
+    const emp = String(r[2]), lvl = String(r[3]);
+    const at = r[0] instanceof Date ? r[0].toISOString() : String(r[0]);
+    const p = (out[emp] = out[emp] || {})[lvl] = (out[emp] || {})[lvl] || { passedAt: '', lastExamAt: '', lastPassed: false, best: 0, exams: 0 };
+    p.exams++;
+    p.best = Math.max(p.best, Number(r[7]) || 0);
+    if (!p.lastExamAt || at > p.lastExamAt) { p.lastExamAt = at; p.lastPassed = r[8] === 'OUI'; }
+    if (r[8] === 'OUI' && (!p.passedAt || at < p.passedAt)) p.passedAt = at;
+  });
+  return out;
+}
+
+function handleGetFormation() {
+  try {
+    const cws = fmSheet_(FM_CONTENT_SHEET, FM_CONTENT_HEADERS, FM_SEED_CONTENT, [10]);
+    const qws = fmSheet_(FM_QUESTIONS_SHEET, FM_QUESTIONS_HEADERS, FM_SEED_QUESTIONS);
+    const content = fmRows_(cws, FM_CONTENT_HEADERS.length)
+      .filter(r => String(r[2]).trim() && fmActive_(r[10]))
+      .map(r => ({
+        level: Number(r[0]) || 1, order: Number(r[1]) || 0, name: String(r[2]).trim(), for: String(r[3]).trim(),
+        effect: String(r[4]).trim(), text: String(r[5]).trim(), say: String(r[6]).trim(), warn: String(r[7]).trim(),
+        says: String(r[8]).split('|').map(x => x.trim()).filter(String),
+        products: String(r[9]).split(/[,;\s]+/).map(x => barcodeKey(x)).filter(String)
+      }))
+      .sort((a, b) => a.level - b.level || a.order - b.order);
+    const questions = fmRows_(qws, FM_QUESTIONS_HEADERS.length)
+      .filter(r => String(r[1]).trim() && String(r[2]).trim() && fmActive_(r[8]))
+      .map(r => ({ level: Number(r[0]) || 1, q: String(r[1]).trim(), a: String(r[2]).trim(),
+        wrong: [r[3], r[4], r[5]].map(x => String(x).trim()).filter(String), topic: String(r[6]).trim(), why: String(r[7]).trim() }));
+    // names + photos for the barcodes used in the content
+    const keys = {};
+    content.forEach(c => c.products.forEach(k => keys[k] = true));
+    const products = {};
+    const pm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    if (pm && pm.getLastRow() >= FIRST_DATA_ROW) {
+      pm.getRange(FIRST_DATA_ROW, 1, pm.getLastRow() - FIRST_DATA_ROW + 1, 8).getValues().forEach(r => {
+        const k = barcodeKey(r[7]);
+        if (k && keys[k] && r[1] && !products[k]) products[k] = { name: String(r[1]).trim(), img: '' };
+      });
+    }
+    let images = {};
+    try { images = s1981Images_(); } catch (e) { Logger.log('formation photos skipped: ' + e); }
+    Object.keys(keys).forEach(k => {
+      if (!products[k]) products[k] = { name: '', img: '' };
+      if (images[k]) products[k].img = images[k];
+    });
+    return jsonResponse({ success: true, content: content, questions: questions, products: products,
+      progress: fmProgress_(), passMark: FORMATION_PASS, examSize: FORMATION_EXAM_SIZE, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    return jsonResponse({ success: false, error: 'Formation : ' + err.message });
+  }
+}
+
+// body: { by, userHash, session: { id, level, game, score, total, seconds, at,
+//         answers: [ { topic, q, given, correct, ok } ] } }
+function handleFormationResult(body) {
+  const u = fmUser_(body);
+  if (!u) return jsonResponse({ success: false, error: 'Utilisateur ou code incorrect' }, 403);
+  const s = body.session || {};
+  if (!s.id || !s.game) return jsonResponse({ success: false, error: 'Session incomplète' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const rws = fmSheet_(FM_RESULTS_SHEET, FM_RESULTS_HEADERS);
+    const aws = fmSheet_(FM_ANSWERS_SHEET, FM_ANSWERS_HEADERS);
+    const last = rws.getLastRow();
+    if (last >= 2) {
+      const ids = rws.getRange(2, 11, last - 1, 1).getValues().map(r => String(r[0]));
+      if (ids.indexOf(String(s.id)) >= 0) return jsonResponse({ success: true, duplicate: true, progress: fmProgress_() });
+    }
+    const at = s.at ? new Date(s.at) : new Date();
+    const when = isNaN(at.getTime()) ? new Date() : at;
+    const week = fmWeek_(when);
+    const total = Math.max(0, Number(s.total) || 0), score = Math.max(0, Number(s.score) || 0);
+    const pct = total ? Math.round(score * 100 / total) : 0;
+    const passed = s.game === 'Examen' ? (pct >= FORMATION_PASS ? 'OUI' : 'NON') : '';
+    rws.appendRow([when, week, u.name, Number(s.level) || 1, String(s.game), score, total, pct, passed, Math.round(Number(s.seconds) || 0), String(s.id)]);
+    const ans = (s.answers || []).slice(0, 200).map(a => [when, week, u.name, Number(s.level) || 1, String(s.game), String(s.id),
+      String(a.topic || ''), String(a.q || '').slice(0, 300), String(a.given || '').slice(0, 200), String(a.correct || '').slice(0, 200), a.ok ? 'OUI' : 'NON']);
+    if (ans.length) aws.getRange(aws.getLastRow() + 1, 1, ans.length, FM_ANSWERS_HEADERS.length).setValues(ans);
+    return jsonResponse({ success: true, passed: passed, pct: pct, progress: fmProgress_() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Admin only. Everything the « Suivi » screen needs, already grouped.
+function handleFormationSuivi(body) {
+  const u = fmUser_(body);
+  if (!u || u.role !== 'Admin') return jsonResponse({ success: false, error: 'Réservé à l’administrateur' }, 403);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const results = [];
+  const rws = ss.getSheetByName(FM_RESULTS_SHEET);
+  if (rws) fmRows_(rws, FM_RESULTS_HEADERS.length).forEach(r => {
+    if (!r[2]) return;
+    results.push({ at: r[0] instanceof Date ? r[0].toISOString() : String(r[0]), week: String(r[1]), emp: String(r[2]),
+      level: Number(r[3]) || 1, game: String(r[4]), score: Number(r[5]) || 0, total: Number(r[6]) || 0, pct: Number(r[7]) || 0,
+      passed: r[8] === 'OUI', seconds: Number(r[9]) || 0 });
+  });
+  const topics = {}, weeks = {};
+  const aws = ss.getSheetByName(FM_ANSWERS_SHEET);
+  if (aws) fmRows_(aws, FM_ANSWERS_HEADERS.length).forEach(r => {
+    const emp = String(r[2]); if (!emp) return;
+    const ok = r[10] === 'OUI', t = String(r[6]) || '—', w = String(r[1]);
+    const tp = (topics[emp] = topics[emp] || {})[t] = (topics[emp] || {})[t] || [0, 0];
+    tp[0]++; if (!ok) tp[1]++;
+    const wk = (weeks[emp] = weeks[emp] || {})[w] = (weeks[emp] || {})[w] || [0, 0];
+    wk[0]++; if (ok) wk[1]++;
+  });
+  const users = readCounterUsers_(true).filter(x => x.active).map(x => ({ name: x.name, role: x.role }));
+  return jsonResponse({ success: true, users: users, results: results, topics: topics, weeks: weeks,
+    progress: fmProgress_(), passMark: FORMATION_PASS, generatedAt: new Date().toISOString() });
 }
