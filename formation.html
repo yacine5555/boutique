@@ -79,6 +79,12 @@ main{max-width:900px;margin:0 auto;padding:18px 16px 60px}
 .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:8px;break-inside:avoid}
 .card h3{margin:0;font:800 20px var(--display)}
+.card .ill{width:100%;height:110px;border-radius:14px;background:var(--brand-soft);display:grid;place-items:center;overflow:hidden}
+.card .ill svg{height:96px;width:96px}
+.card .ill img{height:100%;width:100%;object-fit:contain}
+.vid{align-self:flex-start;background:var(--plum);color:#fbeaf3;text-decoration:none;font-weight:700;font-size:14px;padding:8px 12px;border-radius:10px}
+.qill{width:64px;height:64px;border-radius:14px;background:var(--brand-soft);display:grid;place-items:center;float:right;margin:0 0 8px 12px}
+.qill svg{width:54px;height:54px}
 .card .eff{font-weight:700;color:var(--brand);font-size:16px}
 .card p{margin:0;font-size:14.5px}
 .card .say{background:var(--brand-soft);border-radius:12px;padding:9px 11px;font-size:14px}
@@ -170,6 +176,8 @@ tr.click:hover td{background:var(--brand-soft)}
   .cards{grid-template-columns:1fr 1fr;gap:8px}
   .card{border:1px solid #999;font-size:12px}
   .card .say,.card .warn{background:#f4f4f4}
+  .card .ill{height:70px;background:#f7f7f7}
+  .card .ill svg{height:60px;width:60px}
   .printhead{display:block!important}
 }
 .printhead{display:none;font:800 22px var(--display);margin:0 0 10px}
@@ -190,7 +198,7 @@ tr.click:hover td{background:var(--brand-soft)}
 // ── setup ───────────────────────────────────────────────
 const IDLE_MS = 15 * 60 * 1000;
 const LEVEL_NAMES = { 1: 'Les bases : vitamines et actifs', 2: 'Niveau 2', 3: 'Niveau 3' };
-const GAMES = { fiches:'Fiches', match:'Association', qcm:'QCM', client:'Le client dit', produits:'Nos produits', exam:'Examen' };
+const GAMES = { fiches:'Fiches', match:'Association', qcm:'QCM', client:'La cliente dit', produits:'Nos produits', exam:'Examen' };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bkey = b => String(b || '').trim().replace(/^0+/, '');
@@ -261,6 +269,45 @@ async function flushQueue(){
 setInterval(flushQueue, 60000);
 window.addEventListener('online', () => { online = true; flushQueue(); });
 
+// Original flat illustrations for the fiches (viewBox 0 0 120 120). Key = « Illustration » column.
+const ILL = {
+  orange: `<circle cx="60" cy="62" r="40" fill="#f59a23"/><circle cx="60" cy="62" r="33" fill="#ffc35a"/>
+    <g stroke="#f59a23" stroke-width="3">${[0,45,90,135].map(a => `<line x1="60" y1="62" x2="${60+33*Math.cos(a*Math.PI/180)}" y2="${62+33*Math.sin(a*Math.PI/180)}"/><line x1="60" y1="62" x2="${60-33*Math.cos(a*Math.PI/180)}" y2="${62-33*Math.sin(a*Math.PI/180)}"/>`).join('')}</g>
+    <circle cx="60" cy="62" r="6" fill="#fff3d6"/><path d="M60 22c6-12 20-14 26-10-6 10-18 12-26 10z" fill="#3e9a5a"/>`,
+  capsule: `<g transform="rotate(-35 60 60)"><path d="M40 60V38a20 20 0 0 1 40 0v22z" fill="#f2c14e"/><path d="M40 60h40v22a20 20 0 0 1-40 0z" fill="#d69a1e"/><ellipse cx="52" cy="38" rx="5" ry="11" fill="#fff" opacity=".55"/></g>
+    <text x="60" y="68" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="20" fill="#5a3a06">E</text>`,
+  lune: `<circle cx="60" cy="60" r="42" fill="#2a1f4d"/><path d="M72 30a30 30 0 1 0 14 48 24 24 0 1 1-14-48z" fill="#ffe08a"/>
+    <circle cx="34" cy="38" r="2.5" fill="#fff"/><circle cx="88" cy="32" r="2" fill="#fff"/><circle cx="90" cy="84" r="2.5" fill="#fff"/><circle cx="30" cy="80" r="1.8" fill="#fff"/>`,
+  bouclier: `<path d="M60 16l38 14v28c0 26-17 40-38 48-21-8-38-22-38-48V30z" fill="#5b7fd6"/><path d="M60 26l28 10v22c0 20-12 31-28 37z" fill="#7d9be3"/>
+    <text x="60" y="72" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="24" fill="#fff">B3</text>`,
+  goutte: `<path d="M60 14C48 36 30 54 30 74a30 30 0 0 0 60 0c0-20-18-38-30-60z" fill="#3fb3e6"/><path d="M46 70a14 14 0 0 0 10 16" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/>
+    <circle cx="90" cy="28" r="7" fill="#8fd6f5"/><circle cx="26" cy="36" r="5" fill="#8fd6f5"/>`,
+  fibres: `<g fill="none" stroke-linecap="round" stroke-width="6"><path d="M20 40c20-14 30 14 50 0s30 14 30 0" stroke="#e86a8f"/><path d="M20 60c20-14 30 14 50 0s30 14 30 0" stroke="#f08fac"/><path d="M20 80c20-14 30 14 50 0s30 14 30 0" stroke="#f6b3c7"/></g>`,
+  karite: `<path d="M60 104c-2-20 0-34 6-46" stroke="#6b4a2b" stroke-width="5" fill="none"/><path d="M64 60c-26-4-40-22-36-40 22 0 38 16 36 40z" fill="#4c9a52"/><path d="M66 58c18-10 34-8 40 4-14 12-30 10-40-4z" fill="#6bb36f"/>
+    <ellipse cx="44" cy="86" rx="16" ry="12" fill="#c99a5b"/><ellipse cx="80" cy="90" rx="16" ry="12" fill="#b9874a"/><ellipse cx="40" cy="82" rx="5" ry="3" fill="#e6c38f"/>`,
+  cacao: `<g transform="rotate(25 60 60)"><ellipse cx="60" cy="60" rx="26" ry="44" fill="#b8562b"/>${[-14,-5,5,14].map(x => `<path d="M${60+x} 20c${x/2} 20 ${x/2} 60 0 80" stroke="#8a3c1a" stroke-width="3" fill="none"/>`).join('')}<path d="M60 16c0-8 4-12 8-14" stroke="#5a3a1a" stroke-width="4" fill="none"/></g>`,
+  fruits: `<circle cx="46" cy="66" r="28" fill="#e84a3a"/><path d="M46 38c0-8 4-12 8-14" stroke="#5a3a1a" stroke-width="4" fill="none"/><path d="M50 32c10-8 20-6 24 0-10 6-18 6-24 0z" fill="#4c9a52"/>
+    <ellipse cx="84" cy="74" rx="22" ry="17" fill="#f4d23a"/><ellipse cx="84" cy="74" rx="16" ry="12" fill="#fbe77a"/><ellipse cx="36" cy="58" rx="6" ry="9" fill="#fff" opacity=".45"/>`,
+  feuille: `<path d="M24 98C24 50 56 20 100 18c0 46-30 80-76 80z" fill="#6bb36f"/><path d="M24 98C46 70 70 46 100 18" stroke="#3e7a43" stroke-width="4" fill="none"/>
+    <circle cx="36" cy="30" r="9" fill="none" stroke="#a7d6ff" stroke-width="4"/><circle cx="36" cy="30" r="3" fill="#a7d6ff"/>`,
+  briques: `${[[18,30,40],[62,30,40],[18,56,18],[40,56,40],[84,56,18],[18,82,40],[62,82,40]].map(([x,y,w]) => `<rect x="${x}" y="${y}" width="${w}" height="20" rx="3" fill="#d9734a"/>`).join('')}
+    <path d="M14 52h92M14 78h92" stroke="#f6e3c9" stroke-width="5"/>`,
+  taches: `<circle cx="60" cy="60" r="42" fill="#8a5a3c"/><circle cx="44" cy="48" r="9" fill="#4a2c1a"/><circle cx="74" cy="72" r="7" fill="#5a3826" opacity=".7"/><circle cx="54" cy="80" r="5" fill="#6a4430" opacity=".45"/>
+    <path d="M84 30l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#ffe08a"/>`,
+  eclat: `<circle cx="60" cy="60" r="40" fill="#f6c7a8" opacity=".5"/><path d="M60 22l8 26 26 8-26 8-8 26-8-26-26-8 26-8z" fill="#f2a93b"/><path d="M92 24l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#f6c76a"/><path d="M28 82l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#f6c76a"/>`,
+  danger: `<path d="M60 14l50 88H10z" fill="#e0453a"/><path d="M60 30l36 64H24z" fill="#fff4e6"/><rect x="55" y="48" width="10" height="28" rx="5" fill="#e0453a"/><circle cx="60" cy="86" r="5.5" fill="#e0453a"/>`
+};
+// built-in picture for each ingredient when the « Illustration » cell is empty
+const ILL_AUTO = [[/vitamine c\b/, 'orange'], [/vitamine e\b/, 'capsule'], [/retinol/, 'lune'], [/niacinamide|b3/, 'bouclier'], [/hyaluronique/, 'goutte'], [/collagene/, 'fibres'], [/karite/, 'karite'], [/cacao/, 'cacao'], [/\baha\b|fruits/, 'fruits'], [/\bbha\b|salicylique/, 'feuille'], [/ceramide/, 'briques'], [/kojique|arbutine/, 'taches'], [/gluta/, 'eclat'], [/eclaircissant|danger/, 'danger']];
+function illHtml(c, cls){
+  const v = String(c.ill || '').trim();
+  if(/^https?:\/\//.test(v)) return `<div class="${cls}"><img src="${esc(v)}" alt="" loading="lazy"></div>`;
+  let k = ILL[norm(v)] ? norm(v) : '';
+  if(!k){ const n = norm(c.name); const hit = ILL_AUTO.find(([re]) => re.test(n)); k = hit ? hit[1] : ''; }
+  return k ? `<div class="${cls}"><svg viewBox="0 0 120 120" aria-hidden="true">${ILL[k]}</svg></div>` : '';
+}
+function videoLink(c){ return /^https?:\/\//.test(c.video || '') ? `<a class="vid noprint" href="${esc(c.video)}" target="_blank" rel="noopener">▶ Voir la vidéo</a>` : ''; }
+
 // ── content helpers ─────────────────────────────────────
 function levelContent(l){ return ((DATA && DATA.content) || []).filter(c => c.level === l); }
 function levelQuestions(l){ return ((DATA && DATA.questions) || []).filter(q => q.level === l); }
@@ -307,7 +354,7 @@ function clientPool(l){
     const also = C.filter(o => o.says.some(x => norm(x) === norm(s))).map(o => o.name);
     const wrong = C.filter(o => !also.includes(o.name)).map(o => o.name);
     if(wrong.length < 2) return;
-    out.push(mkQ('client', c.name, `Le client dit : <q>${esc(s)}</q><br>Quel ingrédient lui conseiller ?`, c.name, pick(wrong, 3), (c.say ? '💬 ' + esc(c.say) + ' ' : '') + (c.warn ? '⚠️ ' + esc(c.warn) : '')));
+    out.push(mkQ('client', c.name, `La cliente dit : <q>${esc(s)}</q><br>Quel ingrédient lui conseiller ?`, c.name, pick(wrong, 3), (c.say ? '💬 ' + esc(c.say) + ' ' : '') + (c.warn ? '⚠️ ' + esc(c.warn) : '')));
   }));
   return out;
 }
@@ -405,7 +452,7 @@ function renderHome(){
         <button class="act" data-g="fiches" data-l="${l}"><span class="e">📖</span><strong>Fiches</strong><small>Lire et imprimer les notes</small></button>
         <button class="act" data-g="match" data-l="${l}" ${C.length < 3 ? 'disabled' : ''}><span class="e">🔗</span><strong>Association</strong><small>Ingrédient ↔ effet</small></button>
         <button class="act" data-g="qcm" data-l="${l}"><span class="e">✅</span><strong>QCM</strong><small>10 questions</small></button>
-        <button class="act" data-g="client" data-l="${l}" ${nClient ? '' : 'disabled'}><span class="e">🗣</span><strong>Le client dit…</strong><small>Que lui conseiller ?</small></button>
+        <button class="act" data-g="client" data-l="${l}" ${nClient ? '' : 'disabled'}><span class="e">🗣</span><strong>La cliente dit…</strong><small>Que lui conseiller ?</small></button>
         <button class="act" data-g="produits" data-l="${l}" ${nProd ? '' : 'disabled'}><span class="e">🛍</span><strong>Nos produits</strong><small>Avec les photos du magasin</small></button>
         <button class="act exam" data-g="exam" data-l="${l}" ${lockedExam ? 'disabled' : ''}><span class="e">🎯</span><strong>Examen niveau ${l}</strong><small>${lockedExam ? 'Pas réussi aujourd’hui : nouvel essai demain' : (DATA.examSize || 20) + ' questions · ' + passMark() + ' % pour réussir'}</small></button>
       </div>`;
@@ -431,11 +478,12 @@ function renderFiches(l){
   $('#app').innerHTML = `<div class="row noprint" style="margin-bottom:14px"><button class="btn small" id="print">🖨 Imprimer le carnet</button><span class="sub">Lisez les fiches, puis entraînez-vous avec les jeux.</span></div>
     <p class="printhead">Beauty Empire — Formation niveau ${l} : ${esc(LEVEL_NAMES[l] || '')}</p>
     <div class="cards">${C.map(c => `<article class="card">
-      <h3>${esc(c.name)}</h3><div class="row"><span class="chip brand">${esc(c.for || '—')}</span></div>
+      ${illHtml(c, 'ill')}<h3>${esc(c.name)}</h3><div class="row"><span class="chip brand">${esc(c.for || '—')}</span></div>
       <div class="eff">${esc(c.effect)}</div>
       ${c.text ? `<p>${esc(c.text)}</p>` : ''}
       ${c.say ? `<div class="say">💬 <b>À dire au client :</b> ${esc(c.say)}</div>` : ''}
       ${c.warn ? `<div class="warn">⚠️ <b>Attention :</b> ${esc(c.warn)}</div>` : ''}
+      ${videoLink(c)}
       ${c.products.length ? `<div><small class="sub">Chez nous :</small><div class="thumbs">${c.products.slice(0, 8).map(k => `<div class="thumb" ${imgStyle(k)} title="${esc(prodName(k))}">${prod(k).img ? '' : initials(prodName(k))}</div>`).join('')}</div></div>` : ''}
     </article>`).join('')}</div>`;
   $('#print').onclick = () => window.print();
@@ -481,7 +529,8 @@ function answer(i){
   }
   btns.forEach((b, j) => { if(q.opts[j] === q.answer) b.classList.add('good'); });
   if(!ok) btns[i].classList.add('badc');
-  $('#fb').innerHTML = `<div class="feedback ${ok ? 'good' : 'badc'}"><b>${ok ? 'Bravo, c’est juste !' : 'Pas tout à fait. Bonne réponse : ' + esc(label(q.answer))}</b>${q.why || ''}</div>
+  const ing = levelContent(G.l).find(c => c.name === q.topic);
+  $('#fb').innerHTML = `<div class="feedback ${ok ? 'good' : 'badc'}">${ing ? illHtml(ing, 'qill') : ''}<b>${ok ? 'Bravo, c’est juste !' : 'Pas tout à fait. Bonne réponse : ' + esc(label(q.answer))}</b>${q.why || ''}</div>
     <button class="btn next" id="nx">${last ? 'Voir mon score' : 'Question suivante →'}</button>`;
   $('#nx').onclick = nextQ; $('#nx').focus();
 }
