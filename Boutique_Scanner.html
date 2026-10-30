@@ -992,6 +992,33 @@ input,select{font-family:inherit}
 .catadm-res:hover{background:#f0fdfa}
 /* Product photo review (Admin → 📷 Photos produits) */
 .pim-sum{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px}
+.pls-sel{padding:8px 10px;border:1.5px solid #5eb8a8;border-radius:10px;font-weight:700;font-size:13px;background:#fff;max-width:240px}
+.pls-sep{display:inline-block;width:1px;height:22px;background:#cbd5e1;margin:0 4px;align-self:center}
+.pls-empty{padding:40px 16px;text-align:center;font-size:16px;color:#334155;line-height:1.6}
+.pls-empty span{font-size:13px;color:#64748b}
+.pls-name{font-size:22px;font-weight:800;line-height:1.25;color:#0f172a}
+.pls-price{font-size:20px;font-weight:800;color:#0f766e}
+.pls-st{font-size:14px;font-weight:700;color:#334155}
+.pls-tag{font-size:11.5px;font-weight:700;background:#f1f5f9;color:#475569;border-radius:99px;padding:3px 9px}
+.pls-tag.ok{background:#dcfce7;color:#166534}
+.pls-btns{display:flex;gap:8px;flex-wrap:wrap}
+.pls-btns button{padding:11px 16px;font-size:14px;border-radius:10px}
+.pls-new{background:#fef9c3;border:1px solid #fde047;border-radius:12px;padding:12px;font-weight:800;color:#713f12}
+.pls-new span{font-weight:500;font-size:13px}
+.pls-names div{padding:7px 10px;border:1px solid #e2e8f0;border-radius:9px;margin-top:5px;font-size:13.5px;font-weight:600}
+.pls-names i{font-size:11px;color:#64748b;font-style:normal;font-weight:500}
+.pls-filt{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+#pim-modal .ncf-img{height:min(52vh,540px)}
+#pim-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+@media (max-width:700px){
+  #pim-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;flex-shrink:0}
+  #pim-modal .ncf-img.none{height:150px}
+  #pim-tabs .cat-tab{flex:none}
+  #pim-modal .pim-sum{display:none}
+  #pim-modal .ncf-img{height:min(40vh,360px)}
+  #pim-modal .pim-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pls-sel{max-width:none;flex:1}
+}
 .pim-sum span{background:#f1f5f9;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;color:#334155}
 .pim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;overflow-y:auto;min-height:140px;padding:2px}
 .pim-tile{border:1.5px solid var(--border,#e5e7eb);border-radius:12px;background:#fff;padding:8px;display:flex;flex-direction:column;gap:6px}
@@ -1488,7 +1515,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1633,11 +1660,11 @@ input,select{font-family:inherit}
       <div class="admin-card" id="pim-card">
         <div class="admin-card-title">📷 Photos produits</div>
         <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
-          Photos trouvées automatiquement pour les produits vendus ces 3 derniers mois. Vérifiez-les ici :
-          ✓ Bon, ✗ Faux (la photo n'est plus montrée à la caisse), ou 🔗 collez le lien d'une meilleure image.
+          Scannez ou cherchez n'importe quel produit pour voir sa photo ; chaque scan va dans une liste (ex. « Maybelline 30 oct »).
+          Les codes inconnus sont recherchés tout de suite (sans stock). Vérifiez aussi les photos trouvées automatiquement.
         </div>
         <div class="pim-sum" id="pim-card-sum"><span>…</span></div>
-        <button class="btn-sm" style="background:#0f766e;color:#fff;border:none" onclick="openPhotoReview()">📷 Vérifier les photos</button>
+        <button class="btn-sm" style="background:#0f766e;color:#fff;border:none" onclick="openPhotoReview()">📷 Ouvrir Photos produits</button>
       </div>
 
       <!-- Catalogue lists (📚 picker at the till) -->
@@ -3727,7 +3754,7 @@ const PIM_TABS = [
   ['bad', 'Faux / introuvables', it => ['Faux', 'Introuvable', 'Erreur', 'Code interne'].indexOf(it.status) >= 0],
   ['wait', 'En attente', it => it.status === 'À chercher'],
 ];
-let _pim = { items: [], tab: 'check', loadedAt: 0, busy: {} };
+let _pim = { items: [], tab: 'scan', loadedAt: 0, busy: {} };
 function _pimEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 async function loadPhotoReview(force){
   if(!syncUrl || !writeKey){ _pimSummary(); return; }
@@ -3754,6 +3781,8 @@ function openPhotoReview(){
   document.getElementById('pim-modal').classList.add('open');
   renderPhotoReview();
   loadPhotoReview(true);
+  loadLists(); _plsFlush();
+  setTimeout(() => { const s = document.getElementById('pim-search'); if(s) s.focus(); }, 60);
 }
 function closePhotoReview(){
   document.getElementById('pim-modal').classList.remove('open');
@@ -3762,10 +3791,33 @@ function closePhotoReview(){
 function pimSetTab(t){ _pim.tab = t; renderPhotoReview(); }
 function renderPhotoReview(){
   const c = _pimCounts();
-  document.getElementById('pim-tabs').innerHTML = PIM_TABS.map(t =>
+  const al = _plsList(_pls.active);
+  document.getElementById('pim-tabs').innerHTML =
+    '<button type="button" class="cat-tab' + (_pim.tab === 'scan' ? ' on' : '') + '" onclick="pimSetTab(\'scan\')">🔎 Scanner / chercher</button>' +
+    '<button type="button" class="cat-tab' + (_pim.tab === 'list' ? ' on' : '') + '" onclick="pimSetTab(\'list\')">📋 Liste' + (al ? ' (' + al.items.length + ')' : '') + '</button>' +
+    '<span class="pls-sep"></span>' +
+    PIM_TABS.map(t =>
     '<button type="button" class="cat-tab' + (t[0] === _pim.tab ? ' on' : '') + '" onclick="pimSetTab(\'' + t[0] + '\')">' + t[1] + ' (' + c[t[0]] + ')</button>').join('');
-  const tab = PIM_TABS.find(t => t[0] === _pim.tab) || PIM_TABS[0];
+  const sel = document.getElementById('pim-listsel');
+  if(sel){
+    const names = _pls.lists.map(l => l.name);
+    if(_pls.active && names.indexOf(_pls.active) < 0) names.unshift(_pls.active);
+    sel.innerHTML = (names.length ? '' : '<option value="">— aucune liste —</option>') + names.map(n => '<option' + (n === _pls.active ? ' selected' : '') + ' value="' + _pimEsc(n) + '">📋 ' + _pimEsc(n) + '</option>').join('') + '<option value="__new">＋ Nouvelle liste…</option>';
+  }
+  _plsBadge();
   const q = String(document.getElementById('pim-search').value || '').toLowerCase().trim();
+  if(_pim.tab === 'scan' || _pim.tab === 'list'){
+    const g = document.getElementById('pim-grid');
+    const foot = document.getElementById('pim-foot'); if(foot) foot.textContent = '';
+    if(_pim.tab === 'scan' && q && !isBarcodeQuery(q)){ g.className = 'ncf-host'; g.innerHTML = _plsSearchHTML(q); return; }
+    g.className = 'ncf-host';
+    const sig = _pim.tab + ':' + (_pls.card ? _pls.card.barcode : '');
+    g.innerHTML = _pim.tab === 'scan' ? _plsCardHTML() : _plsListHTML();
+    if(g.dataset.sig !== sig){ g.scrollTop = 0; g.dataset.sig = sig; }
+    return;
+  }
+  document.getElementById('pim-grid').className = 'pim-grid';
+  const tab = PIM_TABS.find(t => t[0] === _pim.tab) || PIM_TABS[0];
   const byCode = isBarcodeQuery(q); // a scanned/typed barcode searches every tab
   const list = byCode ? _pim.items.filter(it => bcSearchMatch(it.barcode, q))
     : _pim.items.filter(tab[2]).filter(it => !q || it.name.toLowerCase().indexOf(q) >= 0 || bcSearchMatch(it.barcode, q));
@@ -3867,13 +3919,262 @@ async function _pimPost(bc, extra){
       const k = String(bc).replace(/\D/g, '').replace(/^0+/, '');
       if(['Trouvé', 'Validé'].indexOf(d.item.status) >= 0 && d.item.url) PROD_IMAGES[k] = d.item.url; else delete PROD_IMAGES[k];
       try { localStorage.setItem('bc_prod_images', JSON.stringify(PROD_IMAGES)); } catch(e){}
-      if(extra.link) showToast('✅ Nouvelle photo enregistrée', 2500);
+      if(extra.link || extra.data) showToast('✅ Nouvelle photo enregistrée', 2500);
     } else {
       showToast('⚠ ' + ((d && d.error) || 'Échec'), 5000);
     }
   } catch(e){ showToast('⚠ Pas de connexion — réessayez', 4000); }
   delete _pim.busy[bc];
   _pimSummary(); renderPhotoReview();
+}
+
+// ══════════════════════════════════════════
+//  📋 LISTES + SCAN (30 Oct 2026) — inside 📷 Photos produits.
+//  Scan / search ANY product: its card shows the photo (or the photos found),
+//  name, price. Each scan goes into the active list (« Maybelline 30 oct »…),
+//  saved in the sales sheet tab « Listes produits » (POST listScan).
+//  Unknown codes → « Nouveaux codes » with qty 0 + names/photos searched at
+//  once; name them later from 🆕 Nouveaux. NOTHING HERE CHANGES STOCK.
+// ══════════════════════════════════════════
+let _pls = { lists: [], active: '', card: null, sending: false, filt: 'all', loadedAt: 0 };
+try { _pls.active = localStorage.getItem('pim_list_active') || ''; } catch(e){}
+let _plsQ = [];
+try { _plsQ = JSON.parse(localStorage.getItem('pim_list_queue') || '[]') || []; } catch(e){ _plsQ = []; }
+function _plsSaveQ(){ try { localStorage.setItem('pim_list_queue', JSON.stringify(_plsQ)); } catch(e){} }
+function _plsToday(){ const m = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'], d = new Date(); return d.getDate() + ' ' + m[d.getMonth()]; }
+function _plsList(name){ return _pls.lists.find(l => l.name === name); }
+function _plsEnsure(name){
+  let l = _plsList(name);
+  if(!l){ l = { name: name, created: '', items: [] }; _pls.lists.unshift(l); }
+  return l;
+}
+async function loadLists(){
+  if(!syncUrl || !writeKey) return;
+  try {
+    const r = await fetch(syncUrl + (syncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getLists&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.success){
+      const local = _pls.lists;
+      _pls.lists = (d.lists || []).slice().reverse(); // newest list first
+      // keep scans still waiting in the queue
+      _plsQ.forEach(b => { if(b.list){ const l = _plsEnsure(b.list); if(b.barcode && !l.items.some(x => _bcKeyClient(x.barcode) === _bcKeyClient(b.barcode))) l.items.push({ barcode: b.barcode, name: b.name || '', isNew: !b.known }); } });
+      local.forEach(l => { if(!_plsList(l.name) && !l.items.length) _pls.lists.unshift(l); });
+      _pls.loadedAt = Date.now();
+    } else if(d && d.error) showToast('⚠ Listes : ' + d.error + ' — collez « LATEST - POS RECEIVER » et redéployez', 6000);
+  } catch(e){}
+  if(_pimOpen()) renderPhotoReview();
+}
+function _pimOpen(){ const m = document.getElementById('pim-modal'); return !!(m && m.classList.contains('open')); }
+function pimListChange(v){
+  if(v === '__new'){
+    const n = (prompt('Nom de la liste (ex. « Maybelline ' + _plsToday() + ' ») :', 'Liste ' + _plsToday()) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if(!n){ renderPhotoReview(); return; }
+    v = n; _plsEnsure(n);
+    _plsQ.push({ action: 'listScan', list: n, by: currentEmployee || 'Admin' }); _plsSaveQ(); _plsFlush();
+  }
+  _pls.active = v;
+  try { localStorage.setItem('pim_list_active', v); } catch(e){}
+  if(_pim.tab !== 'scan') _pim.tab = 'list';
+  renderPhotoReview();
+}
+function _plsActive(){
+  if(!_pls.active){
+    _pls.active = 'Liste ' + _plsToday();
+    try { localStorage.setItem('pim_list_active', _pls.active); } catch(e){}
+    showToast('📋 Nouvelle liste : « ' + _pls.active + ' »', 3000);
+  }
+  _plsEnsure(_pls.active);
+  return _pls.active;
+}
+function _pimItem(bc){ const k = _bcKeyClient(String(bc).replace(/\D/g, '')); return _pim.items.find(x => _bcKeyClient(x.barcode) === k); }
+function _pimUpsert(it){
+  if(!it || !it.barcode) return;
+  const k = _bcKeyClient(it.barcode), i = _pim.items.findIndex(x => _bcKeyClient(x.barcode) === k);
+  if(i >= 0) _pim.items[i] = it; else _pim.items.push(it);
+}
+// Scan or pick a product → its card + added to the active list.
+function pimScan(raw){
+  const bc = String(raw || '').replace(/\D/g, '');
+  if(bc.length < 4){ showToast('⚠ Code illisible', 2500); return; }
+  const p = lookupBarcode(bc);
+  const known = !!(p && p.name);
+  const list = _plsActive();
+  const l = _plsEnsure(list);
+  const k = _bcKeyClient(bc);
+  const already = l.items.some(x => _bcKeyClient(x.barcode) === k);
+  if(!already) l.items.push({ barcode: bc, name: known ? p.name : '', isNew: !known, at: 'à l\'instant' });
+  _pls.card = { barcode: bc, known: known, name: known ? p.name : '', pending: true, nc: null, already: already };
+  _pim.tab = 'scan';
+  _plsQ.push({ action: 'listScan', list: list, barcode: bc, name: known ? p.name : '', known: known, by: currentEmployee || 'Admin' });
+  _plsSaveQ(); _plsFlush();
+  const s = document.getElementById('pim-search'); if(s){ s.value = ''; }
+  renderPhotoReview();
+  setTimeout(() => { const s2 = document.getElementById('pim-search'); if(s2) s2.focus(); }, 30);
+}
+// Open a card again from a list (no new scan sent).
+function pimShow(bc){
+  const p = lookupBarcode(bc), li = (_plsList(_pls.active) || { items: [] }).items.find(x => _bcKeyClient(x.barcode) === _bcKeyClient(bc));
+  const ncIt = (_nc.items || []).find(x => _bcKeyClient(x.barcode) === _bcKeyClient(bc));
+  _pls.card = { barcode: bc, known: !!(p && p.name), name: (p && p.name) || (li && li.name) || (ncIt && ncIt.name) || '', pending: false, nc: ncIt || null, already: true };
+  _pim.tab = 'scan'; renderPhotoReview();
+}
+async function _plsFlush(){
+  if(_pls.sending || !_plsQ.length) return;
+  if(!syncUrl || !writeKey){ showToast('⚠ Sales Sync non configuré', 3500); return; }
+  _pls.sending = true;
+  while(_plsQ.length){
+    const body = _plsQ[0];
+    let d = null;
+    try {
+      const r = await fetch(syncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: writeKey }, body)) });
+      d = await r.json();
+    } catch(e){ _pls.sending = false; setTimeout(_plsFlush, 15000); _plsBadge(); return; }
+    if(!d || !d.success){
+      const err = (d && d.error) || 'Échec';
+      if(/illisible|manquant/i.test(err)){ _plsQ.shift(); _plsSaveQ(); showToast('⚠ ' + err, 3500); continue; }
+      showToast('⚠ Liste : ' + err + ' — « LATEST - POS RECEIVER » est-il collé et redéployé ?', 6000);
+      break;
+    }
+    _plsQ.shift(); _plsSaveQ();
+    if(body.barcode) _plsApply(body, d);
+  }
+  _pls.sending = false; _plsBadge();
+}
+function _plsApply(body, d){
+  if(d.item) _pimUpsert(d.item);
+  if(d.nc){
+    const ni = Object.assign({ sugg: [], photos: [] }, d.nc);
+    const i = _nc.items.findIndex(x => _bcKeyClient(x.barcode) === _bcKeyClient(ni.barcode));
+    if(i >= 0) _nc.items[i] = ni; else _nc.items.push(ni);
+    // photos found for a new code can be chosen right here too
+    if(!d.item && (ni.photos || []).length) _pimUpsert({ barcode: ni.barcode, name: ni.name || ((ni.sugg[0] || {}).name || ''), status: 'À chercher', source: '', url: '', at: ni.at, sugg: ni.photos, fromNc: true });
+  }
+  const c = _pls.card;
+  if(c && _bcKeyClient(c.barcode) === _bcKeyClient(body.barcode)){
+    c.pending = false; c.nc = d.nc || null;
+    if(_pimOpen() && _pim.tab === 'scan') renderPhotoReview();
+  }
+  _pimSummary();
+}
+function _plsBadge(){ const el = document.getElementById('pim-queue'); if(el) el.textContent = _plsQ.length ? '⏳ ' + _plsQ.length + ' en attente d\'envoi' : ''; }
+
+function _plsCardHTML(){
+  const c = _pls.card;
+  if(!c) return '<div class="pls-empty">📷 <b>Scannez un produit</b> (ou tapez son nom) pour voir sa photo.<br><span>Chaque produit scanné est ajouté à la liste « ' + _pimEsc(_pls.active || 'Liste ' + _plsToday()) + ' ». Le stock ne change pas.</span></div>';
+  const bc = _pimEsc(c.barcode), it = _pimItem(c.barcode), busy = !!_pim.busy[c.barcode];
+  const p = lookupBarcode(c.barcode);
+  let price = null; try { price = (p && p.price > 0) ? p.price : psPriceFor(c.barcode); } catch(e){}
+  const url = (it && it.url && it.status !== 'Faux') ? it.url : productPhotoFor(c.barcode);
+  const nc = c.nc, sg = (it && it.sugg) || (nc && nc.photos) || [];
+  let L = '<div class="ncf-img' + (url ? '' : ' none') + '">' + (url
+      ? '<img src="' + _pimEsc(url) + '" alt="Photo du produit" onerror="this.outerHTML=\'<span>Photo non chargée (connexion ?)</span>\'"><span class="ncf-site">' + _pimEsc(it && it.status === 'Validé' ? '✅ Photo validée' : it && it.status === 'Trouvé' ? '👀 Photo trouvée automatiquement — à vérifier' : 'Photo actuelle') + '</span>'
+      : '<span>' + (c.pending ? '⏳ Recherche en cours…' : sg.length ? 'Pas encore de photo — choisissez-en une ci-dessous' : 'Pas de photo') + '</span>') + '</div>';
+  L += '<div class="ncf-strip">' + (it && !it.url || (it && it.status !== 'Validé') ? sg : []).map((s, i) =>
+      '<button type="button" ' + (busy ? 'disabled ' : '') + 'title="' + _pimEsc(s.site || '') + '" onclick="pimZoom(\'' + _pimEsc(it.barcode) + '\',' + i + ')"><img src="' + _pimEsc(s.thumb || s.img) + '" alt="" loading="lazy" onerror="this.parentNode.style.display=\'none\'"></button>').join('') +
+    '<button type="button" class="nop add" ' + (busy ? 'disabled ' : '') + 'onclick="pimCardLink(\'' + bc + '\')">🔗 Lien</button>' +
+    '<label class="nop add">⬆ Image<input type="file" accept="image/*" hidden onchange="pimCardUpload(\'' + bc + '\',this)"></label></div>';
+  if(sg.length && it && it.status !== 'Validé') L += '<div class="dlv-dim" style="font-size:12px">Touchez une photo pour la voir en grand, puis « Utiliser ».</div>';
+  const name = c.name || (nc && nc.name) || '';
+  let R = '<div class="ncf-top"><span class="ncf-bc">' + bc + '</span>' + (c.already ? '<span class="pls-tag">déjà dans la liste</span>' : '<span class="pls-tag ok">＋ ajouté à « ' + _pimEsc(_pls.active) + ' »</span>') + '</div>';
+  if(c.known){
+    R += '<div class="pls-name">' + _pimEsc(name) + '</div>';
+    R += '<div class="pls-price">' + (price ? formatCFA(price) : '<span class="dlv-dim">Pas de prix</span>') + '</div>';
+    R += '<div class="pls-st">' + (it ? ({ 'Validé': '✅ Photo validée', 'Trouvé': '👀 Photo à vérifier', 'Faux': '✗ Photo marquée fausse', 'Introuvable': 'Pas de photo trouvée en ligne', 'Code interne': 'Code interne — ajoutez une photo vous-même', 'À chercher': (sg.length ? '🔎 Photos proposées' : '⏳ Recherche de photos…') }[it.status] || _pimEsc(it.status)) : (c.pending ? '⏳ Vérification…' : '—')) + '</div>';
+    const b = [];
+    if(it && it.url && it.status !== 'Validé') b.push('<button class="pim-ok" ' + (busy ? 'disabled ' : '') + 'onclick="pimSet(\'' + _pimEsc(it.barcode) + '\',\'Validé\')">✓ Bonne photo</button>');
+    if(it && it.url && it.status !== 'Faux') b.push('<button class="pim-bad" ' + (busy ? 'disabled ' : '') + 'onclick="pimSet(\'' + _pimEsc(it.barcode) + '\',\'Faux\')">✗ Fausse</button>');
+    if(b.length) R += '<div class="pls-btns">' + b.join('') + '</div>';
+  } else {
+    R += '<div class="pls-new">🆕 Code inconnu — pas encore dans la liste des produits.<br><span>Ajouté à « Nouveaux codes » <b>sans stock</b>' + (c.pending ? ' · recherche du nom en cours…' : '') + '</span></div>';
+    const ns = (nc && nc.sugg) || [];
+    if(ns.length) R += '<div class="ncf-lbl">Noms trouvés</div><div class="pls-names">' + ns.slice(0, 3).map(n => '<div>' + _pimEsc(n.name) + ' <i>' + _pimEsc(n.source || '') + '</i></div>').join('') + '</div>';
+    else if(!c.pending) R += '<div class="dlv-dim">Aucun nom trouvé en ligne — nommez-le dans 🆕 Nouveaux.</div>';
+    R += '<div class="pls-btns"><button class="pim-ok" onclick="pimToNew(\'' + bc + '\')">✏ Nommer maintenant</button><button class="pim-lnk" onclick="pimLater()">⏭ Plus tard</button></div>';
+  }
+  if(busy) R += '<div class="dlv-dim">Enregistrement…</div>';
+  R += '<div class="pim-shop">' + _pimShopLinks({ name: name, barcode: c.barcode }) + '</div>';
+  R += '<div class="dlv-dim" style="font-size:12px">Scannez le produit suivant quand vous voulez — la fiche se met à jour.</div>';
+  return '<div class="ncf"><div class="ncf-l">' + L + '</div><div class="ncf-r">' + R + '</div></div>';
+}
+function _plsListHTML(){
+  const l = _plsList(_pls.active);
+  if(!l) return '<div class="pls-empty">Choisissez une liste en haut, ou scannez un produit pour en commencer une.</div>';
+  const rows = l.items.map(x => {
+    const it = _pimItem(x.barcode), url = (it && it.url && it.status !== 'Faux') ? it.url : productPhotoFor(x.barcode);
+    const p = lookupBarcode(x.barcode), known = !!(p && p.name);
+    return { x: x, it: it, url: url, known: known, name: (p && p.name) || x.name || '' };
+  });
+  const F = [['all', 'Tout'], ['nophoto', 'Sans photo validée'], ['new', 'Nouveaux codes'], ['ok', 'Photo validée']];
+  const fl = { all: r => true, nophoto: r => !(r.it && r.it.status === 'Validé') && !(!r.it && r.url), new: r => !r.known, ok: r => (r.it && r.it.status === 'Validé') || (!r.it && r.url) };
+  const shown = rows.filter(fl[_pls.filt] || fl.all);
+  let h = '<div class="pls-filt">' + F.map(f => '<button type="button" class="cat-tab' + (_pls.filt === f[0] ? ' on' : '') + '" onclick="_pls.filt=\'' + f[0] + '\';renderPhotoReview()">' + f[1] + ' (' + rows.filter(fl[f[0]]).length + ')</button>').join('') + '</div>';
+  h += '<div class="pim-grid">' + (shown.length ? shown.map(r => {
+    const st = !r.known ? '🆕 nouveau' : r.it ? r.it.status : (r.url ? 'photo' : '—');
+    return '<div class="pim-tile' + (r.it && r.it.status === 'Validé' ? ' st-ok' : '') + '" style="cursor:pointer" onclick="pimShow(\'' + _pimEsc(r.x.barcode) + '\')">' +
+      '<div class="pim-ph">' + (r.url ? '<img src="' + _pimEsc(r.url) + '" alt="" loading="lazy">' : '<div class="none">' + (r.it && (r.it.sugg || []).length ? '🔎 ' + r.it.sugg.length + ' photos proposées' : 'Pas de photo') + '</div>') + '</div>' +
+      '<div class="pim-nm">' + _pimEsc(r.name || r.x.barcode) + '</div><div class="pim-meta">' + _pimEsc(r.x.barcode) + '<br>' + _pimEsc(st) + '</div>' +
+      '<div class="pim-btns"><button class="pim-lnk" onclick="event.stopPropagation();pimListRemove(\'' + _pimEsc(r.x.barcode) + '\')" title="Retirer de la liste">Retirer</button></div></div>';
+  }).join('') : '<div class="dlv-dim" style="grid-column:1/-1;padding:20px;text-align:center">' + (l.items.length ? 'Rien avec ce filtre 👍' : 'Liste vide — scannez des produits.') + '</div>') + '</div>';
+  return h;
+}
+function pimListRemove(bc){
+  const l = _plsList(_pls.active); if(!l) return;
+  l.items = l.items.filter(x => _bcKeyClient(x.barcode) !== _bcKeyClient(bc));
+  _plsQ.push({ action: 'listRemove', list: l.name, barcode: bc }); _plsSaveQ(); _plsFlush();
+  renderPhotoReview();
+}
+function pimLater(){ _pls.card = null; renderPhotoReview(); const s = document.getElementById('pim-search'); if(s) s.focus(); }
+function pimToNew(bc){
+  const s = document.getElementById('nc-search'); if(s) s.value = bc;
+  try { if(typeof _ncView !== 'undefined' && _ncView !== 'fiche'){ _ncView = 'fiche'; } } catch(e){}
+  openNewCodes();
+}
+function pimCardLink(bc){
+  const u = prompt('Collez l’adresse de l’image (clic droit sur la photo → « Copier l’adresse de l’image ») :', '');
+  if(!u) return;
+  const url = u.trim();
+  if(!/^https?:\/\/\S+$/i.test(url)){ showToast('⚠ Ce n’est pas une adresse web (https://…)', 4000); return; }
+  _pimEnsureItem(bc); _pimPost(bc, { link: url, name: (_pls.card && _pls.card.name) || '' });
+}
+function pimCardUpload(bc, input){
+  const f = input.files && input.files[0]; input.value = '';
+  if(!f) return;
+  if(!/^image\//.test(f.type)){ showToast('⚠ Choisissez une image', 3500); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const max = 1000, sc = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+      const cv = document.createElement('canvas'); cv.width = Math.round(im.naturalWidth * sc); cv.height = Math.round(im.naturalHeight * sc);
+      const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
+      const url = cv.toDataURL('image/jpeg', 0.85);
+      _pimEnsureItem(bc); _pimPost(bc, { data: url.split(',')[1], type: 'image/jpeg', name: (_pls.card && _pls.card.name) || '' });
+    };
+    im.onerror = () => showToast('⚠ Image illisible', 3500);
+    im.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+}
+function _pimEnsureItem(bc){ if(!_pimItem(bc)) _pim.items.push({ barcode: bc, name: (_pls.card && _pls.card.name) || '', status: 'À chercher', source: '', url: '', at: '', sugg: [] }); }
+// Name search in the Scan view: any product of the store (product list), not only those with photo rows.
+function _plsSearchHTML(q){
+  const n = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const words = n(q).split(/\s+/).filter(Boolean);
+  const out = [];
+  for(const bc of Object.keys(BARCODE_DB)){
+    const nm = BARCODE_DB[bc] && BARCODE_DB[bc].name;
+    if(nm && words.every(w => n(nm).indexOf(w) >= 0)){ out.push([bc, nm]); if(out.length >= 60) break; }
+  }
+  if(!out.length) return '<div class="pls-empty">Aucun produit pour « ' + _pimEsc(q) + ' ».</div>';
+  return '<div class="pim-grid">' + out.map(([bc, nm]) => { const u = productPhotoFor(bc), it = _pimItem(bc);
+    return '<div class="pim-tile' + (it && it.status === 'Validé' ? ' st-ok' : '') + '" style="cursor:pointer" onclick="pimScan(\'' + _pimEsc(bc) + '\')"><div class="pim-ph">' + (u ? '<img src="' + _pimEsc(u) + '" alt="" loading="lazy">' : '<div class="none">Pas de photo</div>') + '</div><div class="pim-nm">' + _pimEsc(nm) + '</div><div class="pim-meta">' + _pimEsc(bc) + '</div></div>'; }).join('') + '</div>';
+}
+function pimSearchKey(ev, el){
+  if(ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const q = String(el.value || '').trim();
+  if(isBarcodeQuery(q) && (_pim.tab === 'scan' || _pim.tab === 'list')){ pimScan(q); return; }
+  el.select();
 }
 
 // ══════════════════════════════════════════
@@ -12175,15 +12476,20 @@ closeSale = function(){
 <!-- ══ PRODUCT PHOTO REVIEW (admin) ══ -->
 <div class="modal-bg" id="pim-modal">
   <div class="modal" style="width:min(980px,96vw);max-height:94vh;display:flex;flex-direction:column;padding:14px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <div class="modal-title" style="margin:0;flex:1">📷 Photos produits</div>
-      <button class="btn-cancel" style="width:auto;padding:8px 12px" onclick="loadPhotoReview(true)">↻</button>
+    <div id="pim-head">
+      <div class="modal-title" style="margin:0;flex:1;white-space:nowrap">📷 Photos produits</div>
+      <select id="pim-listsel" class="pls-sel" onchange="pimListChange(this.value)" title="Liste active : chaque produit scanné y est ajouté"></select>
+      <button type="button" class="cat-tab" onclick="pimToNew('')" title="Nommer les codes inconnus">🆕 Nouveaux</button>
+      <button class="btn-cancel" style="width:auto;padding:8px 12px" onclick="loadPhotoReview(true);loadLists()">↻</button>
       <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closePhotoReview()">Fermer</button>
     </div>
     <div class="pim-sum" id="pim-sum"></div>
     <div id="pim-tabs" class="cat-tabs"></div>
-    <input class="dlv-field" id="pim-search" type="search" placeholder="🔍 Nom ou code-barres…" autocomplete="off"
-      oninput="renderPhotoReview()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.select();}" style="margin:6px 0 8px"/>
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0 8px">
+      <input class="dlv-field" id="pim-search" type="search" placeholder="📷 Scannez un code-barres, ou tapez un nom…" autocomplete="off"
+        oninput="renderPhotoReview()" onkeydown="pimSearchKey(event,this)" style="margin:0;flex:1"/>
+      <span id="pim-queue" class="dlv-dim" style="font-size:12px;white-space:nowrap"></span>
+    </div>
     <div id="pim-grid" class="pim-grid"></div>
     <div class="dlv-dim" id="pim-foot" style="margin-top:6px"></div>
   </div>
