@@ -188,6 +188,19 @@ select.t{appearance:auto}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1.5px solid var(--line);background:var(--sunk)}
 .legend i.has{background:var(--brand-soft);border-color:var(--brand)}
 .legend i.sale{background:var(--warn-soft);border-color:var(--warn)}
+.mz.rpart rect{fill:#ffe7c2;stroke:#d97706}
+.mz.rdone rect{fill:#c9f2dc;stroke:#15803d}
+.legend i.rpart{background:#ffe7c2;border-color:#d97706}
+.legend i.rdone{background:#c9f2dc;border-color:#15803d}
+.pbox.r-wait{border:2px solid #fff;background:rgba(255,255,255,.28)}
+.pbox.r-ok,.pbox.r-done{border:2px solid #3fd18a;background:rgba(40,190,110,.25)}
+.pbox.r-warn{border:2px solid #f59e0b;background:rgba(245,158,11,.3)}
+.pbox.r-bad{border:2px solid #ef4444;background:rgba(239,68,68,.3)}
+.plegend i.r-wait{background:#fff;border:1px solid #999}.plegend i.r-warn{background:#f59e0b}.plegend i.r-ok{background:#3fd18a}
+.rchip.r-ok,.rchip.r-done{border-color:#15803d !important;background:#e8f8ef !important}
+.rchip.r-warn{border-color:#d97706 !important;background:#fff4e0 !important}
+.rchip.r-bad{border-color:#dc2626 !important;background:#fde8e8 !important}
+.rchip.r-wait{border-color:var(--ink) !important}
 .zrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer;min-width:0}
 .zrow .code{font:800 17px var(--display);min-width:54px}
 .zrow .nm{flex:1;min-width:0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
@@ -939,7 +952,9 @@ function reorgHTML(){
   const { res, loose, groups } = reMatch(day);
   const n = k => res.filter(r => r.st === k).length;
   h += `<div class="stats"><div class="stat"><b class="num">${res.length}</b><span>étagères repérées</span></div><div class="stat"><b class="num">${groups.length}</b><span>zones scannées à la caisse</span></div><div class="stat"><b class="num">${n('done')}</b><span>validées</span></div></div>`;
-  if(day === reToday()) h += `<button class="recvbtn" data-act="remark"><span class="ic">📍</span><span><b>Repérer l’étagère suivante</b><small>2–3 articles repères + votre total · ordre n°${(res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1}</small></span></button>`;
+  const info = reSpotInfo();
+  h += `<div class="sect">${VIEW.rz ? '<button class="cbtn alt" data-act="remap" style="margin-right:8px">← Plan</button>' : ''}${day === reToday() ? 'Touchez une zone, puis l’étagère à repérer · ordre n°' + ((res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1) : 'Plan'}</div>`;
+  h += VIEW.rz ? reZoneHTML(VIEW.rz, info) : reMapHTML(info);
   h += '<div class="sect">Étagères, dans l’ordre du tour</div>';
   h += res.length ? '<div class="list">' + res.map(r => {
     const m = r.m, s = RE_ST[r.st];
@@ -956,10 +971,65 @@ function bindReorg(){
   document.querySelectorAll('[data-reloc]').forEach(b => b.onclick = () => { RE_LOC = b.dataset.reloc; ls('s1981_reorg_loc', RE_LOC); RE = null; RE_DAY = ''; render(); loadReorg(); });
   document.querySelectorAll('[data-reday]').forEach(b => b.onclick = () => { RE_DAY = b.dataset.reday === reToday() ? '' : b.dataset.reday; render(); });
   const rl = document.querySelector('[data-act="reload-re"]'); if(rl) rl.onclick = loadReorg;
-  const rm = document.querySelector('[data-act="remark"]'); if(rm) rm.onclick = () => rePickZone();
+  document.querySelectorAll('[data-rmz]').forEach(b => { b.onclick = () => { VIEW.rz = b.dataset.rmz; history.pushState(VIEW, ''); render(); }; b.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); b.onclick(); } }; });
+  const rp = document.querySelector('[data-act="remap"]'); if(rp) rp.onclick = () => history.back();
+  document.querySelectorAll('[data-rsp]').forEach(b => b.onclick = () => reTapSpot(VIEW.rz, b.dataset.rsp));
+  const im = document.querySelector('.pzone .pwrap img'); if(im && im.complete && im.naturalWidth) photoLoaded(im);
   document.querySelectorAll('[data-reedit]').forEach(b => b.onclick = () => reEdit(b.dataset.reedit));
   document.querySelectorAll('[data-reval]').forEach(b => b.onclick = () => reValidate(b.dataset.reval));
 }
+// ── 🗺 map + zone photo for the Réorganisation (31 Oct 2026) ──
+// state per shelf: validated (any day) / noted on the chosen day + its match result
+function reSpotInfo(){
+  const info = {};
+  (RE ? RE.marks : []).filter(m => m.location === RE_LOC && m.status === 'Validé').forEach(m => { info[m.spot] = { done: true, m }; });
+  reMatch(RE_DAY || reToday()).res.forEach(r => { info[r.m.spot] = Object.assign(info[r.m.spot] || {}, { r, done: r.st === 'done' || (info[r.m.spot] || {}).done }); });
+  return info;
+}
+const RE_BOX = { ok: 'r-ok', warn: 'r-warn', bad: 'r-bad', wait: 'r-wait', recount: 'r-warn', done: 'r-done' };
+function reZoneState(zone, info){
+  const z = zoneList(RE_LOC).find(q => q.c === zone) || { c: zone, s: '' };
+  const sp = zoneSpots(z), codes = sp.length ? sp.map(s => s.code) : [zone + '-W'];
+  const got = codes.filter(c => info[c]);
+  if(!got.length) return '';
+  return got.length === codes.length && got.every(c => info[c].done) ? 'rdone' : 'rpart';
+}
+function reMapHTML(info){
+  const M = MAPS[RE_LOC];
+  if(!M) return '<div class="chips" style="margin:6px 0 4px">' + zoneList(RE_LOC).map(z => `<button data-rmz="${esc(z.c)}">${esc(z.c)}</button>`).join('') + '</div>';
+  return `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan">${M.deco}` + M.z.map(([c, x, y, w, ht]) => {
+    const st = reZoneState(c, info), small = w < 50 || ht < 34;
+    const n = Object.keys(info).filter(k => (info[k].m || (info[k].r && info[k].r.m) || {}).zone === c).length;
+    return `<g class="mz ${st}" data-rmz="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>`
+      + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(c)}</text>`
+               : `<text x="${x + w / 2}" y="${y + ht / 2 - 7}">${esc(c)}</text><text class="n" x="${x + w / 2}" y="${y + ht / 2 + 8}">${n ? n + ' ét.' : '—'}</text>`) + '</g>';
+  }).join('') + `</svg></div><div class="legend"><span>Touchez une zone.</span><span><i></i>Rien de noté</span><span><i class="rpart"></i>En cours</span><span><i class="rdone"></i>Tout validé</span></div>`;
+}
+function reZoneHTML(zone, info){
+  const z = zoneList(RE_LOC).find(q => q.c === zone) || { c: zone, k: '', s: '' };
+  const spots = zoneSpots(z);
+  const list = spots.length ? spots : [{ code: zone + '-W', label: 'Toute la zone' }];
+  const src = photoFor(RE_LOC, zone), t = traceFor(RE_LOC, zone);
+  const lab = s => { const i = info[s.code]; if(!i) return ''; if(i.done && !(i.r && i.r.st !== 'done')) return '✔'; return i.r ? (RE_ST[i.r.st][0] === '⏳' ? 'n°' + i.r.m.order : RE_ST[i.r.st][0]) : ''; };
+  const cls = s => { const i = info[s.code]; if(!i) return 'todo'; if(i.r) return RE_BOX[i.r.st]; return i.done ? 'r-done' : 'todo'; };
+  let h = `<div class="zhead" style="margin-top:4px"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>`;
+  if(src && t && spots.length){
+    h += `<div class="pzone"><div class="pwrap" data-pw="${t.pw}" data-ph="${t.ph}"><img src="${src}" alt="Photo de la zone ${esc(zone)}" onload="photoLoaded(this)" onerror="this.closest('.pzone').classList.add('nophoto')">`
+      + spots.filter(s => t.spots[s.code]).map(s => { const [x, y, w, hh] = t.spots[s.code]; const l = lab(s);
+        return `<button class="pbox ${cls(s)}" data-rsp="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${hh}%" aria-label="${esc(s.label)}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${l ? `<span class="pn">${esc(l)}</span>` : ''}</button>`; }).join('')
+      + `</div><div class="plegend"><span><i class="todo"></i>pas notée</span><span><i class="r-wait"></i>notée, attend la caisse</span><span><i class="r-warn"></i>à voir</span><span><i class="r-ok"></i>prête / validée</span></div></div>`;
+  }
+  h += '<div class="chips" style="margin-top:10px">' + list.map(s => { const l = lab(s); return `<button data-rsp="${esc(s.code)}" class="rchip ${cls(s)}">${esc(s.label)}${l ? ' · ' + esc(l) : ''}</button>`; }).join('') + '</div>';
+  return h;
+}
+function reTapSpot(zone, code){
+  const i = reSpotInfo()[code];
+  if(i && i.r && i.r.st !== 'done'){ if(i.r.g) return reValidate(i.r.m.id); return reEdit(i.r.m.id); }
+  if(i && i.done){ toast('Étagère déjà validée' + (i.m ? ' le ' + reDayLabel(i.m.day) : '')); return; }
+  if(RE_DAY && RE_DAY !== reToday()){ toast('Revenez sur « Aujourd’hui » pour noter une étagère.'); return; }
+  reStartMark(zone, code);
+}
+
 // ── the walk: pick the shelf, scan 2–3 fingerprints, type the total ──
 function rePickZone(){
   const zs = zoneList(RE_LOC).filter(z => z.c !== UNPLACED);
