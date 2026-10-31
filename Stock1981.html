@@ -1112,7 +1112,7 @@ function bindReorgMark(){
 function rePrint(raw){
   const code = aliasOf(raw);
   if(!code) return;
-  if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier, puis rescannez.'); return; }
+  if(!/^\d{4,14}$/.test(code)){ beep(false); toast(code.length > 14 && /^\d+$/.test(code) ? 'Lecture double — rescannez l’article une fois.' : 'Code illisible : vérifiez la langue du clavier, puis rescannez.'); return; }
   const k = bkey(code);
   if(REM.prints.some(p => bkey(p) === k)){ beep(false); toast('Déjà scanné — prenez un autre article.'); return; }
   const other = (RE ? RE.marks : []).find(m => m.id !== REM.id && m.location === REM.loc && m.day === reToday() && m.status !== 'Validé' && m.status !== 'À recompter' && (m.prints || []).some(p => bkey(p) === k));

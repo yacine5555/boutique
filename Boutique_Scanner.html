@@ -1569,7 +1569,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -12635,6 +12635,8 @@ function reorgKey(ev, el){
 }
 function reorgScan(raw){
   if(!isCleanBarcode(raw) || raw.length < 4){ _reorgBeep(false); _reorgFlash('bad', '⚠ Code illisible — vérifiez le clavier et rescannez'); return; }
+  // no real barcode is longer than 14 digits: two readings glued together (scanner read twice) → rescan
+  if(raw.length > 14){ _reorgBeep(false); _reorgFlash('bad', '⚠ Lecture double (' + raw.length + ' chiffres) — rescannez l\'article une fois'); return; }
   const sess = _reorgSession(); if(!sess) return;
   _reorg.log.scans.push({ b: raw, t: Date.now(), s: sess.id, z: sess.zone || 1 });
   _reorgSave(); _reorgBeep(true); _reorgSendSoon();
