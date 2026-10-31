@@ -187,6 +187,39 @@ input,select{font-family:inherit}
   min-height:68px;padding:8px 4px;border:1.5px solid color-mix(in srgb, var(--c) 40%, #fff);border-radius:10px;
   background:#fff;color:var(--c);cursor:pointer;text-align:center}
 .pos-tile .i{font-size:20px;line-height:1}
+#reorg-tile.paused{background:#c2410c;color:#fff;animation:reorgPulse 1.6s infinite}
+@keyframes reorgPulse{50%{box-shadow:0 0 0 6px rgba(194,65,12,.25)}}
+.reorg-ov{display:none;position:fixed;inset:0;z-index:900;background:#fff7ed;flex-direction:column}
+.reorg-ov.open{display:flex}
+.reorg-head{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#c2410c;color:#fff}
+.reorg-head>div{flex:1;display:flex;flex-direction:column}
+.reorg-head b{font-size:22px}
+.reorg-head span{font-size:13px;opacity:.9}
+.reorg-sale{background:#fff;color:#c2410c;border:none;border-radius:12px;padding:14px 22px;font-size:18px;font-weight:800;cursor:pointer}
+.reorg-body{flex:1;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px;padding:20px;overflow:auto}
+.reorg-box{background:#fff;border:3px solid #fdba74;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center}
+.reorg-box.flash-ok{animation:reorgOk .4s}
+.reorg-box.flash-bad{animation:reorgBad .6s}
+@keyframes reorgOk{0%{background:#bbf7d0}100%{background:#fff}}
+@keyframes reorgBad{0%,50%{background:#fecaca}100%{background:#fff}}
+.reorg-k{font-size:16px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.05em}
+.reorg-n{font-size:120px;font-weight:900;line-height:1;color:#7c2d12;font-variant-numeric:tabular-nums}
+.reorg-in{width:min(420px,90%);font-size:20px;padding:12px 14px;border:2px solid #fb923c;border-radius:12px;text-align:center}
+.reorg-last{font-size:17px;font-weight:700;min-height:1.4em;color:#334155;max-width:95%}
+.reorg-last.ok{color:#166534}
+.reorg-last.bad{color:#b91c1c}
+.reorg-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.reorg-rule{background:#fff;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:15px;color:#334155;border:1px solid #fed7aa}
+.reorg-rule b{font-size:19px;color:#9a3412}
+.reorg-list{display:flex;flex-direction:column;gap:6px}
+.reorg-row{display:flex;gap:10px;align-items:center;background:#fff;border-radius:10px;padding:6px 10px;border:1px solid #fde4cc}
+.reorg-row img,.reorg-row .nop{width:44px;height:44px;object-fit:contain;flex:none;display:flex;align-items:center;justify-content:center;font-size:22px}
+.reorg-row div{display:flex;flex-direction:column;min-width:0}
+.reorg-row b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reorg-row span{font-size:11.5px;color:#64748b}
+.reorg-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.reorg-foot button{background:#fff;border:1.5px solid #fdba74;color:#9a3412;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+@media (max-width:760px){ .reorg-body{grid-template-columns:1fr} .reorg-n{font-size:84px} .reorg-sale{padding:10px 14px;font-size:15px} }
 .pos-tile .l{font-size:11.5px;font-weight:700;line-height:1.15}
 .pos-tile:hover{background:color-mix(in srgb, var(--c) 8%, #fff)}
 .pos-tile .b:empty{display:none}
@@ -1382,6 +1415,7 @@ input,select{font-family:inherit}
             <button class="pos-tile" style="--c:#1d4ed8" onclick="openPinModal('pricesession')"><span class="i">💲</span><span class="l">Prix</span></button>
             <button class="pos-tile" style="--c:#374151" onclick="openPinModal('cashcheck')"><span class="i">💰</span><span class="l">Caisse du soir</span></button>
             <button class="pos-tile" style="--c:#a3165f" onclick="openCustomerDisplay()"><span class="i">🖥</span><span class="l">Écran client</span></button>
+            <button class="pos-tile" id="reorg-tile" style="--c:#c2410c" onclick="reorgStart()"><span class="i">🔄</span><span class="l">Réorganisation</span></button>
           </div>
         </div>
       </div>
@@ -1532,7 +1566,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v30-oct-e</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1682,6 +1716,17 @@ input,select{font-family:inherit}
         </div>
         <div class="pim-sum" id="pim-card-sum"><span>…</span></div>
         <button class="btn-sm" style="background:#0f766e;color:#fff;border:none" onclick="openPhotoReview()">📷 Ouvrir Photos produits</button>
+      </div>
+
+      <!-- 🔄 Réorganisation: scans saved on this computer -->
+      <div class="admin-card" id="reorg-card">
+        <div class="admin-card-title">🔄 Réorganisation — articles scannés</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
+          Articles scannés à la caisse en mode Réorganisation (premier comptage des étagères), gardés sur cet ordinateur.
+          Copie de sécurité en CSV ; la comparaison avec vos repérages arrive dans Stock1981.
+        </div>
+        <div class="pim-sum" id="reorg-adm"><span>…</span></div>
+        <button class="btn-sm" style="background:#c2410c;color:#fff;border:none" onclick="_reorgAdmin();reorgExportCSV()">⬇ Télécharger (CSV)</button>
       </div>
 
       <!-- Catalogue lists (📚 picker at the till) -->
@@ -3192,6 +3237,7 @@ function processScan() {
   let raw = input.value.trim();
   input.value = ""; input.focus();
   if(!raw) return;
+  if(_reorgCatch(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
   raw = resolveAlias(raw);
   if(isNoBarcodeCode(raw)){
@@ -12526,6 +12572,152 @@ function confirmReturn(){
 // ══════════════════════════════════════════
 let _cdChan = null, _cdLast = '', _cdThanks = null, _cdIdle = null;
 try { _cdChan = new BroadcastChannel('be-customer'); } catch(e){}
+// ══════════════════════════════════════════
+//  🔄 RÉORGANISATION (31 Oct 2026) — the till scans every item of the zone
+//  being tidied, one by one. Each scan is saved here with its time (the
+//  shelf's first count, matched later with the admin's fingerprints + totals
+//  in Stock1981). While the mode is on, no sale can be made; 🛒 Retour à la
+//  vente pauses it. Saved on this computer (localStorage reorg_log) and, once
+//  the inventory script supports it, sent automatically.
+// ══════════════════════════════════════════
+let _reorg = { on: false, paused: false, log: { sessions: [], scans: [], events: [] } };
+try { const sv = JSON.parse(localStorage.getItem('reorg_log') || 'null'); if(sv && sv.scans) _reorg.log = sv; } catch(e){}
+try { const st = JSON.parse(localStorage.getItem('reorg_state') || 'null'); if(st){ _reorg.on = !!st.on; _reorg.paused = !!st.paused; } } catch(e){}
+function _reorgSave(){
+  try { localStorage.setItem('reorg_log', JSON.stringify(_reorg.log)); localStorage.setItem('reorg_state', JSON.stringify({ on: _reorg.on, paused: _reorg.paused })); }
+  catch(e){ showToast('⚠ Mémoire de l\'ordinateur pleine — prévenez le patron', 6000); }
+  try { _reorgAdmin(); } catch(e){}
+}
+function _reorgSession(){ const s = _reorg.log.sessions; return s.length ? s[s.length - 1] : null; }
+function _reorgEvent(type){ _reorg.log.events.push({ type: type, t: Date.now(), s: (_reorgSession() || {}).id || '' }); }
+function _reorgToday(){ const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function reorgStart(){
+  if(_reorg.on && _reorg.paused){ reorgResume(); return; }
+  if(_reorg.on){ _reorgShow(); return; }
+  if(typeof currentTxn !== 'undefined' && currentTxn && (currentTxn.items || []).length){ showToast('⚠ Terminez d\'abord la vente en cours', 4000); return; }
+  _reorg.on = true; _reorg.paused = false;
+  _reorg.log.sessions.push({ id: 'R' + Date.now().toString(36), start: Date.now(), by: currentEmployee || '', loc: _defaultPriceLocation() });
+  _reorgEvent('start'); _reorgSave(); _reorgShow();
+}
+function reorgPause(){
+  _reorg.paused = true; _reorgEvent('pause'); _reorgSave();
+  document.getElementById('reorg-ov').classList.remove('open');
+  _reorgTile();
+  const s = document.getElementById('scan-input'); if(s){ s.disabled = false; s.focus(); }
+}
+function reorgResume(){
+  if(typeof currentTxn !== 'undefined' && currentTxn && (currentTxn.items || []).length){ showToast('⚠ Terminez d\'abord la vente en cours', 4000); return; }
+  _reorg.paused = false; _reorgEvent('resume'); _reorgSave(); _reorgShow();
+}
+function reorgEnd(){
+  if(!confirm('Terminer la réorganisation pour aujourd\'hui ?\n(Les articles scannés sont gardés.)')) return;
+  _reorg.on = false; _reorg.paused = false; _reorgEvent('end'); _reorgSave();
+  document.getElementById('reorg-ov').classList.remove('open');
+  _reorgTile();
+  const s = document.getElementById('scan-input'); if(s){ s.disabled = false; s.focus(); }
+}
+function _reorgShow(){
+  document.getElementById('reorg-ov').classList.add('open');
+  const s = document.getElementById('scan-input'); if(s) s.disabled = true;
+  _reorgRender(); _reorgTile(); _reorgFocus();
+}
+function _reorgFocus(){ setTimeout(() => { const i = document.getElementById('reorg-in'); if(i && _reorgOpen()) i.focus({ preventScroll: true }); }, 30); }
+function _reorgOpen(){ const o = document.getElementById('reorg-ov'); return !!(o && o.classList.contains('open')); }
+function reorgKey(ev, el){
+  if(ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const raw = String(el.value || '').trim(); el.value = '';
+  if(!raw) return;
+  reorgScan(raw);
+}
+function reorgScan(raw){
+  if(!isCleanBarcode(raw) || raw.length < 4){ _reorgBeep(false); _reorgFlash('bad', '⚠ Code illisible — vérifiez le clavier et rescannez'); return; }
+  const sess = _reorgSession(); if(!sess) return;
+  _reorg.log.scans.push({ b: raw, t: Date.now(), s: sess.id });
+  _reorgSave(); _reorgBeep(true);
+  const p = lookupBarcode(raw);
+  _reorgFlash('ok', p && p.name ? p.name : 'Article ' + raw);
+  _reorgRender();
+}
+function reorgUndo(){
+  const sc = _reorg.log.scans, sess = _reorgSession();
+  if(!sc.length || !sess || sc[sc.length - 1].s !== sess.id){ showToast('Rien à annuler', 2000); _reorgFocus(); return; }
+  const x = sc.pop(); _reorgEvent('undo:' + x.b); _reorgSave(); _reorgRender();
+  showToast('↩ Dernier article retiré', 2000); _reorgFocus();
+}
+let _reorgAC = null;
+function _reorgBeep(ok){
+  try {
+    _reorgAC = _reorgAC || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = _reorgAC.currentTime;
+    (ok ? [[1200, 0, 0.07]] : [[220, 0, 0.15], [220, 0.2, 0.15], [220, 0.4, 0.15]]).forEach(([f, dt, len]) => {
+      const o = _reorgAC.createOscillator(), g = _reorgAC.createGain();
+      o.type = ok ? 'sine' : 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.2, t0 + dt); g.gain.exponentialRampToValueAtTime(0.001, t0 + dt + len);
+      o.connect(g); g.connect(_reorgAC.destination); o.start(t0 + dt); o.stop(t0 + dt + len + 0.02);
+    });
+  } catch(e){}
+}
+let _reorgFlashT = null;
+function _reorgFlash(kind, txt){
+  const el = document.getElementById('reorg-last'); if(!el) return;
+  el.className = 'reorg-last ' + kind; el.textContent = txt;
+  const box = document.getElementById('reorg-box'); if(box){ box.classList.remove('flash-ok', 'flash-bad'); void box.offsetWidth; box.classList.add(kind === 'ok' ? 'flash-ok' : 'flash-bad'); }
+}
+function _reorgRender(){
+  const sess = _reorgSession(); if(!sess) return;
+  const mine = _reorg.log.scans.filter(x => x.s === sess.id);
+  const today = _reorg.log.scans.filter(x => x.t >= _reorgToday()).length;
+  document.getElementById('reorg-n').textContent = mine.length;
+  document.getElementById('reorg-sub').textContent = today + ' aujourd\'hui · ' + (sess.by || '') + ' · depuis ' + new Date(sess.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('reorg-list').innerHTML = mine.slice(-6).reverse().map(x => {
+    const p = lookupBarcode(x.b), ph = productPhotoFor(x.b);
+    return '<div class="reorg-row">' + (ph ? '<img src="' + _pimEsc(ph) + '" alt="" onerror="this.remove()">' : '<span class="nop">📦</span>') +
+      '<div><b>' + _pimEsc(p && p.name ? p.name : 'Article ' + x.b) + '</b><span>' + _pimEsc(x.b) + ' · ' + new Date(x.t).toLocaleTimeString('fr-FR') + '</span></div></div>';
+  }).join('');
+}
+function _reorgTile(){
+  const t = document.getElementById('reorg-tile'); if(!t) return;
+  t.classList.toggle('paused', _reorg.on && _reorg.paused);
+  t.querySelector('.l').textContent = _reorg.on && _reorg.paused ? '▶ Reprendre' : 'Réorganisation';
+}
+// a stray scan into the sale field while the mode is on goes to the mode instead
+function _reorgCatch(raw){
+  if(!_reorg.on || _reorg.paused) return false;
+  _reorgShow(); reorgScan(raw); return true;
+}
+document.addEventListener('click', ev => { if(_reorgOpen() && !ev.target.closest('button,input,a,label,select')) _reorgFocus(); });
+setInterval(() => { if(_reorgOpen() && document.activeElement && document.activeElement.id !== 'reorg-in' && !document.querySelector('.modal-bg.open')) _reorgFocus(); }, 1500);
+// after a reload the mode comes back paused: the tile pulses « ▶ Reprendre » once someone is signed in
+setTimeout(() => { if(_reorg.on && !_reorg.paused){ _reorg.paused = true; _reorgEvent('pause-reload'); _reorgSave(); } _reorgTile(); _reorgAdmin(); }, 1500);
+
+// Admin card: what has been saved on this computer (safety copy as CSV).
+function _reorgAdmin(){
+  const el = document.getElementById('reorg-adm'); if(!el) return;
+  const sc = _reorg.log.scans;
+  if(!sc.length){ el.innerHTML = '<span>Aucun article enregistré sur cet ordinateur.</span>'; return; }
+  const days = {};
+  sc.forEach(x => { const d = new Date(x.t).toLocaleDateString('fr-FR'); days[d] = (days[d] || 0) + 1; });
+  el.innerHTML = Object.keys(days).map(d => '<span>' + d + ' : ' + days[d] + ' articles</span>').join('') +
+    '<span>Dernier : ' + new Date(sc[sc.length - 1].t).toLocaleString('fr-FR') + '</span>';
+}
+function reorgExportCSV(){
+  const sc = _reorg.log.scans;
+  if(!sc.length){ showToast('Rien à exporter', 2500); return; }
+  const sess = {}; _reorg.log.sessions.forEach(s => sess[s.id] = s);
+  const rows = [['Heure', 'Barcode', 'Produit', 'Session', 'Par', 'Magasin']].concat(sc.map(x => {
+    const p = lookupBarcode(x.b), s = sess[x.s] || {};
+    return [new Date(x.t).toLocaleString('fr-FR'), "'" + x.b, (p && p.name) || '', x.s, s.by || '', s.loc || ''];
+  }));
+  rows.push([]); rows.push(['Événements']);
+  _reorg.log.events.forEach(e => rows.push([new Date(e.t).toLocaleString('fr-FR'), e.type, '', e.s]));
+  const csv = rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'reorganisation_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
 function openCustomerDisplay(){
   const w = window.open('Customer_Display.html', 'be_customer', 'popup,width=1280,height=800');
   if(!w) showToast('⚠ Le navigateur a bloqué la fenêtre : autorisez les fenêtres pop-up pour ce site.', 6000);
@@ -12636,6 +12828,34 @@ closeSale = function(){
       oninput="renderCatalogue()" style="margin:6px 0 8px"/>
     <div id="cat-grid" class="cat-grid"></div>
     <div class="dlv-dim" id="cat-foot" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<!-- ══ RÉORGANISATION (till) ══ -->
+<div id="reorg-ov" class="reorg-ov">
+  <div class="reorg-head">
+    <div><b>🔄 Réorganisation</b><span id="reorg-sub"></span></div>
+    <button type="button" class="reorg-sale" onclick="reorgPause()">🛒 Retour à la vente</button>
+  </div>
+  <div class="reorg-body">
+    <div class="reorg-box" id="reorg-box">
+      <div class="reorg-k">Articles scannés</div>
+      <div class="reorg-n" id="reorg-n">0</div>
+      <input id="reorg-in" class="reorg-in" type="text" autocomplete="off" spellcheck="false" placeholder="Scannez l'article…" onkeydown="reorgKey(event,this)">
+      <div class="reorg-last" id="reorg-last">Prêt</div>
+    </div>
+    <div class="reorg-side">
+      <div class="reorg-rule">
+        <b>1 article à la fois</b>
+        <span>Scannez-le, puis posez-le <u>de l'autre côté</u>.<br>Jamais deux fois le même article.</span>
+        <span>Pas de code-barres ? Mettez-le de côté et prévenez le patron.</span>
+      </div>
+      <div class="reorg-list" id="reorg-list"></div>
+      <div class="reorg-foot">
+        <button type="button" onclick="reorgUndo()">↩ Annuler le dernier</button>
+        <button type="button" onclick="reorgEnd()">■ Terminer pour aujourd'hui</button>
+      </div>
+    </div>
   </div>
 </div>
 
