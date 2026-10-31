@@ -408,6 +408,15 @@ async function flushQueue(){
         if(QUEUE.some(o => !RECV_ACTIONS[o.kind])) progress = true;
       }
       else if(d && d.error){ toast(d.error); if(/Utilisateur|code/i.test(d.error)){ QUEUE.shift(); progress = true; } }
+    } else if(REORG_ACTIONS[first.kind]){
+      const d = await post(Object.assign({ action: REORG_ACTIONS[first.kind], by: first.by, userHash: first.hash }, first.body));
+      if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
+      else if(d && /Missing name or barcode/.test(d.error || '')){
+        toast('Réorganisation gardée sur le téléphone : collez « LATEST - Code GS » et redéployez.');
+        QUEUE.push(QUEUE.shift());
+        if(QUEUE.some(o => !REORG_ACTIONS[o.kind])) progress = true;
+      }
+      else if(d && d.error){ toast(d.error); if(/Utilisateur|code|introuvable/i.test(d.error)){ QUEUE.shift(); progress = true; } }
     } else if(first.kind === 'count'){
       const d = await post(Object.assign({ action:'stock1981Count', by: first.by, userHash: first.hash }, first.body));
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
@@ -431,7 +440,7 @@ async function flushQueue(){
   ls('s1981_queue', JSON.stringify(QUEUE));
   sending = false;
   if(progress && online && QUEUE.length) return flushQueue();
-  if(progress && online) await loadData(); else render();
+  if(progress && online){ await loadData(); if(/^reorg/.test(VIEW.screen)) loadReorg(); } else render();
 }
 window.addEventListener('online', () => { online = true; flushQueue(); loadData(); });
 window.addEventListener('offline', () => { online = false; render(); });
@@ -531,6 +540,8 @@ function render(){
   else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
   else if(v.screen === 'count') t.innerHTML = 'Comptage ' + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
   else if(v.screen === 'recv') t.innerHTML = 'Réception<small>Arrivages → Entrepôt</small>';
+  else if(v.screen === 'reorg') t.innerHTML = 'Réorganisation<small>' + esc(locName(RE_LOC)) + '</small>';
+  else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
@@ -538,6 +549,8 @@ function render(){
   const m = $('#main');
   if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
   if(v.screen === 'unit'){ m.innerHTML = banner() + unitHTML(); bindUnit(); return; }
+  if(v.screen === 'reorg'){ m.innerHTML = banner() + reorgHTML(); bindReorg(); return; }
+  if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
@@ -563,6 +576,7 @@ function homeHTML(){
   }).join('') + '</div>';
   const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
   h += `<button class="recvbtn" data-act="transit"><span class="ic">🚚</span><span><b>En route</b><small>${TR ? trN + ' envoi(s) sur la route' + (trLate ? ' · <span style="color:var(--bad)">en retard</span>' : '') + ' · ' + (TR.requested.length ? new Set(TR.requested.map(l => l.grp || l.id)).size + ' demande(s) à préparer' : 'aucune demande') : 'Transferts entre l’entrepôt et les magasins'}</small></span></button>`;
+  h += `<button class="recvbtn" data-act="reorg"><span class="ic">🔄</span><span><b>Réorganisation</b><small>Repérer les étagères · valider ce que la caisse a scanné</small></span></button>`;
   h += `<button class="recvbtn" data-act="recv"><span class="ic">📦</span><span><b>Réception d’arrivage</b><small>${R ? 'Glacière / carton ' + esc(R.unit) + ' en cours' : 'Vider les glacières et cartons d’un conteneur'}</small></span></button>`;
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
   return h;
@@ -645,6 +659,7 @@ function bindMain(){
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
+  const ro = document.querySelector('[data-act="reorg"]'); if(ro) ro.onclick = () => { go({ screen:'reorg' }); loadReorg(); };
   bindPhoto();
   const q = $('#q');
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; renderResults(); }
@@ -723,6 +738,7 @@ function beep(ok){
 function aliasOf(raw){ const s = String(raw || '').trim(); const a = DATA && DATA.aliases ? DATA.aliases[bkey(s)] : null; return a || s; }
 function addScan(raw){
   if(VIEW.screen === 'unit') return recvScan(raw);
+  if(VIEW.screen === 'reorgmark') return rePrint(raw);
   const code = aliasOf(raw);
   if(!code) return;
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
@@ -811,6 +827,234 @@ let NOEXP = new Set(lsj('s1981_noexp', []));     // products never asked again
 let arrLoading = false, arrErr = '';
 function saveRecv(){ ls('s1981_recv', R ? JSON.stringify(R) : null); }
 function saveDates(){ ls('s1981_recv_dates', JSON.stringify(RDATES)); ls('s1981_noexp', JSON.stringify([...NOEXP])); }
+// ══════════════════════════════════════════════════════════
+//  🔄 RÉORGANISATION (31 Oct 2026) — first count of each shelf done by the
+//  staff: the cashier scans every item at the till (Scanner → 🔄
+//  Réorganisation, ▶ Nouvelle zone between shelves). Here the admin first
+//  « repère » each shelf in walk order (2–3 fingerprint barcodes + the total
+//  he counted), then matches the till's zones with his shelves (order +
+//  fingerprints + totals) and validates: ✓ Valider = an ordinary shelf count.
+// ══════════════════════════════════════════════════════════
+let RE = lsj('s1981_reorg', null);            // { loc, marks:[...], scans:[[t, sess, z, bc, by]], at }
+let REM = lsj('s1981_reorg_draft', null);     // mark being entered { id, loc, zone, spot, prints:[], total, order }
+let RE_LOC = ls('s1981_reorg_loc') || 'Store 1', RE_DAY = '', RE_LOADING = false, RE_ERR = '';
+const REORG_ACTIONS = { reorgmark: 'reorgMark', reorgstatus: 'reorgStatus' };
+function reDay(t){ const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function reToday(){ return reDay(Date.now()); }
+function reSaveDraft(){ ls('s1981_reorg_draft', REM ? JSON.stringify(REM) : null); }
+async function loadReorg(){
+  if(!URL_ || !KEY || RE_LOADING) return;
+  RE_LOADING = true; RE_ERR = ''; if(/^reorg/.test(VIEW.screen)) render();
+  try {
+    const d = await api({ action:'getReorg', location: RE_LOC, days: 14 });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
+    RE = { loc: RE_LOC, marks: d.marks || [], scans: d.scans || [], at: new Date().toISOString() };
+    reApplyQueue();
+    ls('s1981_reorg', JSON.stringify(RE));
+  } catch(e){ RE_ERR = /Invalid|invalide|getReorg/.test(e.message) ? 'Le Sheet ne connaît pas encore la Réorganisation : collez « LATEST - Code GS » et redéployez.' : 'Pas de connexion : données gardées sur ce téléphone.'; }
+  RE_LOADING = false; if(/^reorg/.test(VIEW.screen)) render();
+}
+function reApplyLocal(kind, b){
+  if(!RE || RE.loc !== (b.location || RE.loc)) return;
+  if(kind === 'reorgmark'){
+    const i = RE.marks.findIndex(m => m.id === b.id);
+    if(b.delete){ if(i >= 0) RE.marks.splice(i, 1); return; }
+    const old = i >= 0 ? RE.marks[i] : null;
+    const m = { id: b.id, day: old ? old.day : reDay(b.at || Date.now()), location: b.location, order: b.order, zone: b.zone, spot: b.spot, total: b.total, prints: b.prints, by: b.by || (user && user.name) || '', at: old ? old.at : (b.at || new Date().toISOString()), status: old ? old.status : '', note: old ? old.note : '' };
+    if(i >= 0) RE.marks[i] = m; else RE.marks.push(m);
+  } else if(kind === 'reorgstatus'){
+    const m = RE.marks.find(x => x.id === b.id); if(m){ m.status = b.status; m.note = b.note || ''; }
+  }
+}
+function reApplyQueue(){ QUEUE.filter(o => REORG_ACTIONS[o.kind]).forEach(o => reApplyLocal(o.kind, o.body)); }
+function queueReorg(kind, body){
+  if(!user){ lock(); return; }
+  reApplyLocal(kind, body);
+  QUEUE.push({ kind, body, by: user.name, hash: user.hash });
+  ls('s1981_queue', JSON.stringify(QUEUE)); if(RE) ls('s1981_reorg', JSON.stringify(RE));
+  flushQueue();
+}
+
+// ── matching: till zones ↔ shelves noted by the admin ──
+function reMatch(day){
+  const marks = (RE ? RE.marks : []).filter(m => m.day === day && m.location === RE_LOC).sort((a, b) => (a.order - b.order) || String(a.at).localeCompare(String(b.at)));
+  const gm = {};
+  (RE ? RE.scans : []).forEach(s => {
+    if(reDay(s[0]) !== day) return;
+    const k = s[1] + '|' + s[2];
+    const g = gm[k] || (gm[k] = { key: k, sess: s[1], z: s[2], t0: s[0], t1: s[0], items: [], by: s[4] || '' });
+    g.items.push(s[3]); if(s[0] < g.t0) g.t0 = s[0]; if(s[0] > g.t1) g.t1 = s[0];
+  });
+  const groups = Object.values(gm).sort((a, b) => a.t0 - b.t0);
+  groups.forEach((g, i) => { g.n = i + 1; g.keys = new Set(g.items.map(bkey)); });
+  const res = marks.map(m => ({ m, g: null, hits: 0, how: '' }));
+  const byGroup = {};
+  // 1. groups already tied to a shelf (validated / to recount)
+  res.forEach(r => { const mm = /^g:(.+)$/.exec(r.m.note || ''); if(mm){ const g = groups.find(x => x.key === mm[1]); if(g && !byGroup[g.key]){ r.g = g; r.how = 'lié'; byGroup[g.key] = r; } } });
+  // 2. fingerprints
+  groups.forEach(g => {
+    if(byGroup[g.key]) return;
+    let best = null, bestHits = 0, tie = false;
+    res.forEach(r => { if(r.g) return; const h = (r.m.prints || []).filter(p => g.keys.has(bkey(p))).length; if(h > bestHits){ best = r; bestHits = h; tie = false; } else if(h && h === bestHits) tie = true; });
+    if(best && !tie){ best.g = g; best.hits = bestHits; best.how = 'empreinte'; byGroup[g.key] = best; }
+  });
+  // 3. order, for what is left (same position between two matched neighbours)
+  groups.forEach((g, gi) => {
+    if(byGroup[g.key]) return;
+    const prev = groups.slice(0, gi).reverse().find(x => byGroup[x.key]), next = groups.slice(gi + 1).find(x => byGroup[x.key]);
+    const lo = prev ? res.indexOf(byGroup[prev.key]) : -1, hi = next ? res.indexOf(byGroup[next.key]) : res.length;
+    const cand = res.slice(lo + 1, hi).find(r => !r.g);
+    if(cand){ cand.g = g; cand.how = 'ordre'; byGroup[g.key] = cand; }
+  });
+  res.forEach(r => {
+    const m = r.m, g = r.g, np = (m.prints || []).length;
+    if(r.g && r.how !== 'empreinte') r.hits = (m.prints || []).filter(p => g.keys.has(bkey(p))).length;
+    const elsewhere = groups.filter(x => x !== g && (m.prints || []).some(p => x.keys.has(bkey(p)))).map(x => x.n);
+    r.scanned = g ? g.items.length : 0;
+    if(m.status === 'Validé'){ r.st = 'done'; r.msg = 'Validé'; }
+    else if(!g){ r.st = 'wait'; r.msg = 'Pas encore scanné à la caisse'; }
+    else if(elsewhere.length){ r.st = 'bad'; r.msg = 'Mélangé : ses articles repères sont aussi dans la zone caisse n°' + elsewhere.join(', '); }
+    else if(np && !r.hits){ r.st = 'bad'; r.msg = 'Aucun article repère trouvé dans la zone caisse n°' + g.n; }
+    else if(r.scanned !== m.total){ r.st = 'warn'; r.msg = 'Vous : ' + m.total + ' · caisse : ' + r.scanned + ' (' + (r.scanned > m.total ? '+' : '') + (r.scanned - m.total) + ')'; }
+    else if(np && r.hits < np){ r.st = 'warn'; r.msg = 'Total juste, mais ' + (np - r.hits) + ' article(s) repère(s) pas scanné(s)'; }
+    else { r.st = 'ok'; r.msg = 'Total juste (' + m.total + ') et articles repères trouvés'; }
+    if(m.status === 'À recompter'){ r.st = 'recount'; r.msg = 'À recompter'; }
+  });
+  const loose = groups.filter(g => !byGroup[g.key]);
+  return { res, groups, loose };
+}
+function reDays(){
+  const s = new Set([reToday()]);
+  if(RE){ RE.marks.forEach(m => m.location === RE_LOC && s.add(m.day)); RE.scans.forEach(x => s.add(reDay(x[0]))); }
+  return [...s].sort().reverse();
+}
+function reDayLabel(d){ if(d === reToday()) return 'Aujourd’hui'; const t = new Date(d + 'T12:00:00'); return t.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' }); }
+const RE_ST = { ok: ['✅', 'var(--ok)'], warn: ['⚠', 'var(--warn)'], bad: ['❌', 'var(--bad)'], wait: ['⏳', 'var(--muted)'], done: ['✔', 'var(--ok)'], recount: ['↺', 'var(--warn)'] };
+function reorgHTML(){
+  const day = RE_DAY || reToday();
+  let h = `<div class="chips" style="margin-bottom:10px">${LOCS.map(L => `<button data-reloc="${esc(L.id)}" aria-pressed="${L.id === RE_LOC}">${esc(L.name)}</button>`).join('')}</div>`;
+  h += `<div class="chips" style="margin-bottom:12px">${reDays().slice(0, 7).map(d => `<button data-reday="${d}" aria-pressed="${d === day}">${esc(reDayLabel(d))}</button>`).join('')}</div>`;
+  if(RE_ERR) h += `<div class="notice">${esc(RE_ERR)}<button data-act="reload-re">Réessayer</button></div>`;
+  else if(RE_LOADING) h += `<div class="notice ok">Chargement…</div>`;
+  const { res, loose, groups } = reMatch(day);
+  const n = k => res.filter(r => r.st === k).length;
+  h += `<div class="stats"><div class="stat"><b class="num">${res.length}</b><span>étagères repérées</span></div><div class="stat"><b class="num">${groups.length}</b><span>zones scannées à la caisse</span></div><div class="stat"><b class="num">${n('done')}</b><span>validées</span></div></div>`;
+  if(day === reToday()) h += `<button class="recvbtn" data-act="remark"><span class="ic">📍</span><span><b>Repérer l’étagère suivante</b><small>2–3 articles repères + votre total · ordre n°${(res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1}</small></span></button>`;
+  h += '<div class="sect">Étagères, dans l’ordre du tour</div>';
+  h += res.length ? '<div class="list">' + res.map(r => {
+    const m = r.m, s = RE_ST[r.st];
+    return `<div class="shelf" style="border-left:4px solid ${s[1]}"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${m.order}. ${esc(m.zone)} · ${esc(spotLabelOf(m.location, m.zone, m.spot))}</b>
+      <div style="font-weight:600;font-size:13px;color:${s[1]};margin-top:2px">${s[0]} ${esc(r.msg)}</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:2px">Vous : ${m.total} article(s) · ${(m.prints || []).length} repère(s)${r.g ? ' · zone caisse n°' + r.g.n + ' (' + r.scanned + ')' : ''}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">${r.st !== 'done' && r.g ? `<button class="cbtn" data-reval="${esc(m.id)}">${r.st === 'ok' ? '✓ Valider' : 'Voir'}</button>` : ''}
+      ${r.st !== 'done' ? `<button class="cbtn alt" data-reedit="${esc(m.id)}">Modifier</button>` : ''}</div></div></div>`;
+  }).join('') + '</div>' : `<p class="empty">${day === reToday() ? 'Aucune étagère repérée aujourd’hui.<br>Commencez par « Repérer l’étagère suivante », dans l’ordre où les chariots partiront.' : 'Rien ce jour-là.'}</p>`;
+  if(loose.length) h += '<div class="sect">Zones scannées à la caisse sans étagère</div><div class="list">' + loose.map(g => `<div class="shelf"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">Zone caisse n°${g.n} · ${g.items.length} article(s)</b><div style="color:var(--muted);font-size:12px;margin-top:2px">${new Date(g.t0).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}–${new Date(g.t1).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${g.by ? ' · ' + esc(g.by) : ''} — aucun article repère ne correspond</div></div></div></div>`).join('') + '</div>';
+  return h;
+}
+function bindReorg(){
+  document.querySelectorAll('[data-reloc]').forEach(b => b.onclick = () => { RE_LOC = b.dataset.reloc; ls('s1981_reorg_loc', RE_LOC); RE = null; RE_DAY = ''; render(); loadReorg(); });
+  document.querySelectorAll('[data-reday]').forEach(b => b.onclick = () => { RE_DAY = b.dataset.reday === reToday() ? '' : b.dataset.reday; render(); });
+  const rl = document.querySelector('[data-act="reload-re"]'); if(rl) rl.onclick = loadReorg;
+  const rm = document.querySelector('[data-act="remark"]'); if(rm) rm.onclick = () => rePickZone();
+  document.querySelectorAll('[data-reedit]').forEach(b => b.onclick = () => reEdit(b.dataset.reedit));
+  document.querySelectorAll('[data-reval]').forEach(b => b.onclick = () => reValidate(b.dataset.reval));
+}
+// ── the walk: pick the shelf, scan 2–3 fingerprints, type the total ──
+function rePickZone(){
+  const zs = zoneList(RE_LOC).filter(z => z.c !== UNPLACED);
+  openSheet(`<h3>Quelle zone ?</h3><div class="sub">${esc(locName(RE_LOC))}</div><div class="chips">${zs.map(z => `<button data-rz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>`);
+  document.querySelectorAll('[data-rz]').forEach(b => b.onclick = () => {
+    const z = zs.find(q => q.c === b.dataset.rz), sp = zoneSpots(z);
+    if(sp.length <= 1) return reStartMark(z.c, sp.length ? sp[0].code : z.c + '-W');
+    openSheet(`<h3>Quelle étagère ?</h3><div class="sub">Zone ${esc(z.c)}</div><div class="chips">${sp.map(s => `<button data-rs="${esc(s.code)}">${esc(s.label)}</button>`).join('')}</div>`);
+    document.querySelectorAll('[data-rs]').forEach(x => x.onclick = () => reStartMark(z.c, x.dataset.rs));
+  });
+}
+function reStartMark(zone, spot){
+  closeSheet();
+  const { res } = reMatch(reToday());
+  REM = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), loc: RE_LOC, zone, spot, prints: [], total: '', order: (res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1, isNew: true };
+  reSaveDraft(); go({ screen:'reorgmark' });
+}
+function reEdit(id){
+  const m = RE && RE.marks.find(x => x.id === id); if(!m) return;
+  REM = { id: m.id, loc: m.location, zone: m.zone, spot: m.spot, prints: (m.prints || []).slice(), total: String(m.total), order: m.order, at: m.at };
+  reSaveDraft(); go({ screen:'reorgmark' });
+}
+function reorgMarkHTML(){
+  if(!REM) return '<p class="empty">Aucun repérage en cours.</p>';
+  return `<div class="zhead"><h2>${esc(REM.zone)} · ${esc(spotLabelOf(REM.loc, REM.zone, REM.spot))}</h2><p>${esc(locName(REM.loc))} · ordre n°<input id="rord" type="number" min="1" value="${esc(REM.order)}" style="width:64px;font:inherit;border:1px solid var(--line);border-radius:8px;padding:2px 6px"></p></div>
+    <div class="sect" style="margin-top:8px">1. Scannez 2 ou 3 articles de cette étagère</div>
+    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Article repère (code-barres)"><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
+    <div class="hint">Choisissez des articles qui ne sont que sur cette étagère.</div></div>
+    <div class="list">${REM.prints.map((p, i) => `<div class="citem">${thumb(p, productName(p))}<div class="nm"><strong>${esc(productName(p) || 'Produit inconnu')}</strong><small class="num">${esc(p)}</small></div><button data-rpx="${i}" aria-label="Retirer">×</button></div>`).join('') || '<p class="empty" style="padding:10px">Aucun article repère.</p>'}</div>
+    <div class="sect">2. Combien d’articles au total sur l’étagère ?</div>
+    <input id="rtot" type="number" inputmode="numeric" min="0" value="${esc(REM.total)}" placeholder="Total compté" style="width:100%;font:700 28px var(--body);text-align:center;border:1.5px solid var(--line);border-radius:14px;padding:12px">
+    <div class="cfoot">${REM.isNew ? '' : '<button class="ghost" id="rdel" style="color:var(--bad)">Supprimer</button>'}<button class="ghost" id="rquit">Annuler</button><button class="go" id="rsave">Enregistrer</button></div>`;
+}
+function bindReorgMark(){
+  const inp = $('#scan'); if(!inp) return;
+  inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); rePrint(inp.value); inp.value = ''; } };
+  $('#camb').onclick = openCamera;
+  $('#rtot').oninput = e => { REM.total = e.target.value; reSaveDraft(); };
+  $('#rord').oninput = e => { REM.order = Number(e.target.value) || REM.order; reSaveDraft(); };
+  document.querySelectorAll('[data-rpx]').forEach(b => b.onclick = () => { REM.prints.splice(+b.dataset.rpx, 1); reSaveDraft(); render(); });
+  $('#rquit').onclick = () => { REM = null; reSaveDraft(); history.back(); };
+  const del = $('#rdel'); if(del) del.onclick = () => { if(!confirm('Supprimer ce repérage ?')) return; queueReorg('reorgmark', { id: REM.id, location: REM.loc, delete: true }); REM = null; reSaveDraft(); history.back(); };
+  $('#rsave').onclick = reSaveMark;
+  setTimeout(() => { if($('#sheet').hidden && document.activeElement !== $('#rtot') && document.activeElement !== $('#rord')) inp.focus({ preventScroll: true }); }, 30);
+}
+function rePrint(raw){
+  const code = aliasOf(raw);
+  if(!code) return;
+  if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier, puis rescannez.'); return; }
+  const k = bkey(code);
+  if(REM.prints.some(p => bkey(p) === k)){ beep(false); toast('Déjà scanné — prenez un autre article.'); return; }
+  const other = (RE ? RE.marks : []).find(m => m.id !== REM.id && m.location === REM.loc && m.day === reToday() && m.status !== 'Validé' && m.status !== 'À recompter' && (m.prints || []).some(p => bkey(p) === k));
+  if(other){ beep(false); toast('Cet article repère déjà l’étagère ' + other.zone + ' · ' + spotLabelOf(other.location, other.zone, other.spot) + ' — prenez-en un autre.'); return; }
+  if(REM.prints.length >= 5){ toast('3 articles repères suffisent.'); return; }
+  REM.prints.push(code); beep(true); reSaveDraft(); render();
+  if(REM.prints.length >= 3) setTimeout(() => { const t = $('#rtot'); if(t && !REM.total) t.focus(); }, 60);
+}
+function reSaveMark(){
+  const tot = Math.round(Number(REM.total));
+  if(!REM.prints.length){ toast('Scannez au moins 1 article repère (2 ou 3 c’est mieux).'); return; }
+  if(!(tot >= 0) || String(REM.total).trim() === ''){ toast('Tapez le total compté sur l’étagère.'); const t = $('#rtot'); if(t) t.focus(); return; }
+  if(tot < REM.prints.length){ toast('Le total ne peut pas être plus petit que le nombre d’articles repères.'); return; }
+  queueReorg('reorgmark', { id: REM.id, location: REM.loc, order: REM.order, zone: REM.zone, spot: REM.spot, total: tot, prints: REM.prints, at: REM.at || new Date().toISOString(), by: user ? user.name : '' });
+  toast('Étagère ' + REM.zone + ' notée (ordre n°' + REM.order + ')');
+  REM = null; reSaveDraft(); history.back();
+}
+// ── validation: becomes an ordinary shelf count (stock1981Count) ──
+function reValidate(id){
+  const { res } = reMatch(RE_DAY || reToday());
+  const r = res.find(x => x.m.id === id); if(!r || !r.g) return;
+  const m = r.m, g = r.g, agg = {};
+  g.items.forEach(b => { const k = bkey(b); (agg[k] = agg[k] || { barcode: b, name: productName(b) || '', count: 0 }).count++; });
+  const items = Object.values(agg).sort((a, b) => b.count - a.count);
+  const unknown = items.filter(it => !it.name).length, s = RE_ST[r.st];
+  openSheet(`<h3>${esc(m.zone)} · ${esc(spotLabelOf(m.location, m.zone, m.spot))}</h3>
+    <div class="sub" style="color:${s[1]};font-weight:700">${s[0]} ${esc(r.msg)}</div>
+    <div class="where"><div class="here"><span>Vous avez compté</span><b class="num">${m.total}</b></div><div class="here"><span>Scanné à la caisse (zone n°${g.n})</span><b class="num">${g.items.length}</b></div></div>
+    <ul style="margin:10px 0;max-height:34vh;overflow:auto;padding:0;list-style:none">${items.map(it => `<li style="display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px solid var(--line)"><span>${esc(it.name || 'Inconnu · ' + it.barcode)}${(m.prints || []).some(p => bkey(p) === bkey(it.barcode)) ? ' 📍' : ''}</span><b>${it.count}</b></li>`).join('')}</ul>
+    ${unknown ? `<div class="sub">${unknown} code(s) inconnu(s) : ils seront enregistrés sans nom — nommez-les ensuite dans 📷 Photos produits.</div>` : ''}
+    <div class="sub">✓ Valider remplace ce qui était enregistré pour cette étagère par ce qui a été scanné.</div>
+    <button class="go" id="rv1">✓ Valider</button><button class="ghost" id="rv2">↺ À recompter</button><button class="ghost" id="rv0">Fermer</button>`);
+  $('#rv0').onclick = closeSheet;
+  $('#rv2').onclick = () => { queueReorg('reorgstatus', { id: m.id, location: m.location, status: 'À recompter', note: 'g:' + g.key }); closeSheet(); render(); toast('À recompter : faites rescanner cette étagère, puis repérez-la de nouveau.'); };
+  $('#rv1').onclick = () => {
+    if(!user){ closeSheet(); lock(); return; }
+    const body = { opId: 'rv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: m.location, zone: m.zone, spot: m.spot, at: new Date(g.t1).toISOString(),
+      items: items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
+    applyCountLocal(Object.assign({ by: user.name }, body));
+    QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+    ls('s1981_cache', JSON.stringify(DATA));
+    queueReorg('reorgstatus', { id: m.id, location: m.location, status: 'Validé', note: 'g:' + g.key });
+    closeSheet(); render(); toast('Étagère validée : stock mis à jour');
+  };
+}
+
 function rid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 async function loadArrivals(){
