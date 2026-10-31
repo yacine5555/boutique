@@ -202,6 +202,9 @@ input,select{font-family:inherit}
 .reorg-box.flash-bad{animation:reorgBad .6s}
 @keyframes reorgOk{0%{background:#bbf7d0}100%{background:#fff}}
 @keyframes reorgBad{0%,50%{background:#fecaca}100%{background:#fff}}
+.reorg-zn{font-size:26px;font-weight:900;color:#fff;background:#c2410c;border-radius:99px;padding:4px 22px}
+.reorg-next{margin-top:8px;background:#c2410c;color:#fff;border:none;border-radius:14px;padding:16px 34px;font-size:22px;font-weight:900;cursor:pointer}
+.reorg-prev{font-size:14px;color:#9a3412;font-weight:700;min-height:1.2em}
 .reorg-k{font-size:16px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.05em}
 .reorg-n{font-size:120px;font-weight:900;line-height:1;color:#7c2d12;font-variant-numeric:tabular-nums}
 .reorg-in{width:min(420px,90%);font-size:20px;padding:12px 14px;border:2px solid #fb923c;border-radius:12px;text-align:center}
@@ -1566,7 +1569,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -12596,8 +12599,8 @@ function reorgStart(){
   if(_reorg.on){ _reorgShow(); return; }
   if(typeof currentTxn !== 'undefined' && currentTxn && (currentTxn.items || []).length){ showToast('⚠ Terminez d\'abord la vente en cours', 4000); return; }
   _reorg.on = true; _reorg.paused = false;
-  _reorg.log.sessions.push({ id: 'R' + Date.now().toString(36), start: Date.now(), by: currentEmployee || '', loc: _defaultPriceLocation() });
-  _reorgEvent('start'); _reorgSave(); _reorgShow();
+  _reorg.log.sessions.push({ id: 'R' + Date.now().toString(36), start: Date.now(), by: currentEmployee || '', loc: _defaultPriceLocation(), zone: 1 });
+  _reorgEvent('start'); _reorgEvent('zone:1'); _reorgSave(); _reorgShow();
 }
 function reorgPause(){
   _reorg.paused = true; _reorgEvent('pause'); _reorgSave();
@@ -12633,11 +12636,19 @@ function reorgKey(ev, el){
 function reorgScan(raw){
   if(!isCleanBarcode(raw) || raw.length < 4){ _reorgBeep(false); _reorgFlash('bad', '⚠ Code illisible — vérifiez le clavier et rescannez'); return; }
   const sess = _reorgSession(); if(!sess) return;
-  _reorg.log.scans.push({ b: raw, t: Date.now(), s: sess.id });
+  _reorg.log.scans.push({ b: raw, t: Date.now(), s: sess.id, z: sess.zone || 1 });
   _reorgSave(); _reorgBeep(true);
   const p = lookupBarcode(raw);
   _reorgFlash('ok', p && p.name ? p.name : 'Article ' + raw);
   _reorgRender();
+}
+// « Nouvelle zone »: the carrier says so when the first cart of the next zone arrives.
+function reorgNextZone(){
+  const sess = _reorgSession(); if(!sess) return;
+  const z = sess.zone || 1;
+  if(!_reorg.log.scans.some(x => x.s === sess.id && (x.z || 1) === z)){ showToast('La zone ' + z + ' est encore vide — scannez d\'abord ses articles', 3500); _reorgFocus(); return; }
+  sess.zone = z + 1; _reorgEvent('zone:' + sess.zone); _reorgSave();
+  _reorgBeep(true); _reorgFlash('ok', '▶ Zone ' + sess.zone + ' commencée'); _reorgRender(); _reorgFocus();
 }
 function reorgUndo(){
   const sc = _reorg.log.scans, sess = _reorgSession();
@@ -12667,10 +12678,14 @@ function _reorgFlash(kind, txt){
 function _reorgRender(){
   const sess = _reorgSession(); if(!sess) return;
   const mine = _reorg.log.scans.filter(x => x.s === sess.id);
+  const z = sess.zone || 1, inZone = mine.filter(x => (x.z || 1) === z);
   const today = _reorg.log.scans.filter(x => x.t >= _reorgToday()).length;
-  document.getElementById('reorg-n').textContent = mine.length;
-  document.getElementById('reorg-sub').textContent = today + ' aujourd\'hui · ' + (sess.by || '') + ' · depuis ' + new Date(sess.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  document.getElementById('reorg-list').innerHTML = mine.slice(-6).reverse().map(x => {
+  document.getElementById('reorg-n').textContent = inZone.length;
+  document.getElementById('reorg-z').textContent = 'Zone ' + z;
+  const prev = []; for(let i = Math.max(1, z - 3); i < z; i++) prev.push('Zone ' + i + ' : ' + mine.filter(x => (x.z || 1) === i).length);
+  document.getElementById('reorg-prev').textContent = prev.join('  ·  ');
+  document.getElementById('reorg-sub').textContent = today + ' articles aujourd\'hui · ' + (sess.by || '') + ' · depuis ' + new Date(sess.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('reorg-list').innerHTML = inZone.slice(-6).reverse().map(x => {
     const p = lookupBarcode(x.b), ph = productPhotoFor(x.b);
     return '<div class="reorg-row">' + (ph ? '<img src="' + _pimEsc(ph) + '" alt="" onerror="this.remove()">' : '<span class="nop">📦</span>') +
       '<div><b>' + _pimEsc(p && p.name ? p.name : 'Article ' + x.b) + '</b><span>' + _pimEsc(x.b) + ' · ' + new Date(x.t).toLocaleTimeString('fr-FR') + '</span></div></div>';
@@ -12705,9 +12720,9 @@ function reorgExportCSV(){
   const sc = _reorg.log.scans;
   if(!sc.length){ showToast('Rien à exporter', 2500); return; }
   const sess = {}; _reorg.log.sessions.forEach(s => sess[s.id] = s);
-  const rows = [['Heure', 'Barcode', 'Produit', 'Session', 'Par', 'Magasin']].concat(sc.map(x => {
+  const rows = [['Heure', 'Barcode', 'Produit', 'Zone (ordre)', 'Session', 'Par', 'Magasin']].concat(sc.map(x => {
     const p = lookupBarcode(x.b), s = sess[x.s] || {};
-    return [new Date(x.t).toLocaleString('fr-FR'), "'" + x.b, (p && p.name) || '', x.s, s.by || '', s.loc || ''];
+    return [new Date(x.t).toLocaleString('fr-FR'), "'" + x.b, (p && p.name) || '', x.z || 1, x.s, s.by || '', s.loc || ''];
   }));
   rows.push([]); rows.push(['Événements']);
   _reorg.log.events.forEach(e => rows.push([new Date(e.t).toLocaleString('fr-FR'), e.type, '', e.s]));
@@ -12839,15 +12854,19 @@ closeSale = function(){
   </div>
   <div class="reorg-body">
     <div class="reorg-box" id="reorg-box">
+      <div class="reorg-zn" id="reorg-z">Zone 1</div>
       <div class="reorg-k">Articles scannés</div>
       <div class="reorg-n" id="reorg-n">0</div>
       <input id="reorg-in" class="reorg-in" type="text" autocomplete="off" spellcheck="false" placeholder="Scannez l'article…" onkeydown="reorgKey(event,this)">
       <div class="reorg-last" id="reorg-last">Prêt</div>
+      <button type="button" class="reorg-next" onclick="reorgNextZone()">▶ Nouvelle zone</button>
+      <div class="reorg-prev" id="reorg-prev"></div>
     </div>
     <div class="reorg-side">
       <div class="reorg-rule">
         <b>1 article à la fois</b>
         <span>Scannez-le, puis posez-le <u>de l'autre côté</u>.<br>Jamais deux fois le même article.</span>
+        <span>Nouvelle zone qui arrive ? Touchez <b style="font-size:inherit">▶ Nouvelle zone</b> avant de scanner.</span>
         <span>Pas de code-barres ? Mettez-le de côté et prévenez le patron.</span>
       </div>
       <div class="reorg-list" id="reorg-list"></div>
