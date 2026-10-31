@@ -861,6 +861,8 @@ async function loadReorg(){
   try {
     const d = await api({ action:'getReorg', location: RE_LOC, days: 14 });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
+    // the Sheet may hand the day back as a full date (« Sat Oct 31 2026 00:00:00 GMT-0700 ») — bring it back to 2026-10-31
+    (d.marks || []).forEach(m => { if(!/^\d{4}-\d{2}-\d{2}$/.test(String(m.day))){ const t = Date.parse(m.day); m.day = isNaN(t) ? String(m.day).slice(0, 10) : reDay(t + 12 * 3600e3); } m.order = Number(m.order) || 0; m.total = Number(m.total) || 0; });
     RE = { loc: RE_LOC, marks: d.marks || [], scans: d.scans || [], at: new Date().toISOString() };
     reApplyQueue();
     ls('s1981_reorg', JSON.stringify(RE));
