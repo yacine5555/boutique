@@ -189,6 +189,11 @@ select.t{appearance:auto}
 .legend i.has{background:var(--brand-soft);border-color:var(--brand)}
 .legend i.sale{background:var(--warn-soft);border-color:var(--warn)}
 .mz.rpart rect{fill:#ffe7c2;stroke:#d97706}
+.mz.boxz rect{stroke-dasharray:6 4;stroke:#d97706;stroke-width:2.5}
+.mz.boxz.has rect{fill:#ffe7c2}
+.me-z.box rect{stroke-dasharray:6 4;stroke:#d97706;fill:#fff4e0}
+.boxbar{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}
+.boxrow .code{font-size:20px}
 .medit{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}
 .me-top{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--plum,#2b1622);color:#fff}
 .me-top b{flex:1;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -612,7 +617,7 @@ function render(){
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
-  else t.innerHTML = 'Zone ' + esc(v.zone) + '<small>' + esc(locName(v.loc)) + '</small>';
+  else t.innerHTML = (isBox(v.loc, v.zone) ? '📦 ' + esc(boxName(v.loc, v.zone)) : 'Zone ' + esc(v.zone)) + '<small>' + esc(locName(v.loc)) + '</small>';
   const m = $('#main');
   if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
   if(v.screen === 'unit'){ m.innerHTML = banner() + unitHTML(); bindUnit(); return; }
@@ -660,17 +665,18 @@ function storeHTML(loc){
   if(meIsAdmin()) h += `<button class="cbtn alt" data-act="medit" style="margin:0 0 12px">✏ ${MAPS[loc] ? 'Modifier le plan' : 'Créer le plan'}</button>`;
   const un = totals(rows.filter(r => r[1] === UNPLACED));
   if(un.units) h += `<button class="zrow unplaced" data-zone="${esc(UNPLACED)}" style="margin-bottom:12px"><span class="code">À ranger</span><span class="nm">${fmt(un.products)} produits sans rayon</span><span class="u">${fmt(un.units)}</span></button>`;
+  h += boxesHTMLList(loc);
   if(view === 'plan'){
     const M = MAPS[loc];
     const [, , vw, vh] = M.vb.split(' ').map(Number);
     h += `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan de ${esc(locName(loc))}">${M.deco}` + M.z.map(([c, x, y, w, ht]) => {
       const z = listed.find(q => q.c === c) || {};
       const t = totals(rowsAt(loc, c));
-      const cls = 'mz' + (z.x ? ' sale' : t.units ? ' has' : '');
-      const small = w < 50 || ht < 34;
+      const cls = 'mz' + (z.b ? ' boxz' : '') + (z.x ? ' sale' : t.units ? ' has' : '');
+      const small = w < 50 || ht < 34, lab = z.b ? '📦 ' + (z.k || c) : c;
       return `<g class="${cls}" data-zone="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}, ${t.units} articles"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>`
-        + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(c)}</text>`
-                 : `<text x="${x + w / 2}" y="${y + ht / 2 - 7}">${esc(c)}</text><text class="n" x="${x + w / 2}" y="${y + ht / 2 + 8}">${t.units ? fmt(t.units) : '—'}</text>`) + '</g>';
+        + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(lab)}</text>`
+                 : `<text x="${x + w / 2}" y="${y + ht / 2 - 7}">${esc(lab)}</text><text class="n" x="${x + w / 2}" y="${y + ht / 2 + 8}">${t.units ? fmt(t.units) : '—'}</text>`) + '</g>';
     }).join('') + `</svg></div><div class="legend"><span>Glissez le plan pour voir toute la boutique.</span><span><i></i>Vide / pas compté</span><span><i class="has"></i>En stock</span><span><i class="sale"></i>Solde</span></div>`;
   } else {
     const groups = [];
@@ -690,9 +696,10 @@ function zoneHTML(loc, zone, tab){
   const rows = rowsAt(loc, zone).filter(r => r[4] !== 0).sort((a, b) => b[4] - a[4]);
   const t = totals(rows);
   const ph = zone === UNPLACED ? '' : photoFor(loc, zone);
-  let h = (zone === UNPLACED ? '' : photoHTML(loc, zone, z)) + `
-    <div class="zhead"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>
-    ${meIsAdmin() && zone !== UNPLACED ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
+  let h = (zone === UNPLACED || z.b ? '' : photoHTML(loc, zone, z)) + `
+    <div class="zhead"><h2>${z.b ? '📦 ' + esc(z.k || zone) : esc(zone)}</h2><p>${z.b ? 'Boîte' + (z.g && z.g !== 'Boîtes' ? ' · ' + esc(z.g.replace(/^Boîtes · /, '')) : '') : esc(z.k || z.g || '')}</p></div>
+    ${z.b ? boxZoneActions(loc, zone) : ''}
+    ${meIsAdmin() && zone !== UNPLACED && !z.b ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
   h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button></div>`;
@@ -711,8 +718,8 @@ function zoneHTML(loc, zone, tab){
     h += rows.length ? '<div class="list">' + rows.map(r => {
       const p = priceOf(r[2]);
       return `<button class="row" data-bc="${esc(r[2])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || 'Sans nom')}</strong><small class="num">${esc(r[2])}${p ? ' · ' + fmt(p) + ' F' : ''}</small></div><div class="qty num ${r[4] < 0 ? 'neg' : ''}">${fmt(r[4])}</div></button>`;
-    }).join('') + '</div>' : `<p class="empty">Aucun produit en stock dans cette zone.<br><button class="cbtn" data-tab="shelves" style="margin-top:12px">Compter les étagères</button></p>`;
-    if(zone !== UNPLACED) h += `<button class="addbtn" data-act="add">+ Ajouter un produit à ${esc(zone)}</button>`;
+    }).join('') + '</div>' : (z.b ? `<p class="empty">La boîte est vide.<br>Touchez « Compter la boîte » et scannez chaque article.</p>` : `<p class="empty">Aucun produit en stock dans cette zone.<br><button class="cbtn" data-tab="shelves" style="margin-top:12px">Compter les étagères</button></p>`);
+    if(zone !== UNPLACED && !z.b) h += `<button class="addbtn" data-act="add">+ Ajouter un produit à ${esc(zone)}</button>`;
   }
   return h;
 }
@@ -726,6 +733,11 @@ function bindMain(){
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const bxn = document.querySelector('[data-act="boxnew"]'); if(bxn) bxn.onclick = () => boxCreate(VIEW.loc);
+  const bxc = document.querySelector('[data-act="boxcount"]'); if(bxc) bxc.onclick = () => startCount(VIEW.loc, VIEW.zone, VIEW.zone + '-W');
+  const bxa = document.querySelector('[data-act="boxadd"]'); if(bxa) bxa.onclick = () => boxAdd(VIEW.loc, VIEW.zone);
+  const bxo = document.querySelector('[data-act="boxout"]'); if(bxo) bxo.onclick = () => boxOut(VIEW.loc, VIEW.zone);
+  const bxx = document.querySelector('[data-act="boxclose"]'); if(bxx) bxx.onclick = () => boxClose(VIEW.loc, VIEW.zone);
   const me = document.querySelector('[data-act="medit"]'); if(me) me.onclick = () => openMapEditor(VIEW.loc, VIEW.screen === 'zone' ? VIEW.zone : '');
   const mb = document.querySelector('[data-act="mboxes"]'); if(mb) mb.onclick = () => { openViewer(VIEW.loc, VIEW.zone); if(PV){ PV.edit = true; PV.sel = null; drawViewer(); } };
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
@@ -741,7 +753,7 @@ function renderResults(){
   if(q.length < 2){ box.innerHTML = ''; return; }
   if(/^\d{6,}$/.test(q)) q = aliasOf(q);
   const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
-  box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · zone ${esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
+  box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · ${isBox(r[0], r[1]) ? '📦 boîte ' + esc(boxName(r[0], r[1])) : 'zone ' + esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
   box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
 }
 
@@ -1752,7 +1764,7 @@ function meIsAdmin(){ return !!(user && user.role === 'Admin'); }
 function meItemsFromMap(loc){
   const L = (lsj('s1981_maps', {}) || {})[loc];
   const zdef = c => zoneList(loc).find(z => z.c === c) || {};
-  const withDefs = it => { const z = zdef(it.code); return Object.assign({ k: z.k || '', g: z.g || '', s: z.s || '', sale: !!z.x }, it); };
+  const withDefs = it => { const z = zdef(it.code); return Object.assign({ k: z.k || '', g: z.g || '', s: z.s || '', sale: !!z.x, box: !!z.b }, it); };
   if(MAPS[loc] && MAPS[loc].sheet && L && L.layout && Array.isArray(L.layout.items)){
     const [, , w, h] = String(L.layout.viewBox || '0 0 1000 700').split(/\s+/).map(Number);
     return { items: JSON.parse(JSON.stringify(L.layout.items)).map(i => i.t === 'zone' ? withDefs(i) : i), vw: w || 1000, vh: h || 700 };
@@ -1797,7 +1809,7 @@ function meSvgItem(it, i){
   const sel = i === ME.sel ? ' sel' : '';
   if(it.t === 'zone'){
     const small = it.w < 50 || it.h < 34;
-    return `<g class="me-z${sel}${it.sale ? ' sale' : ''}" data-mi="${i}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="5"/><text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}">${esc(it.code)}</text>${small ? '' : `<text class="n" x="${it.x + it.w / 2}" y="${it.y + it.h / 2 + 15}">${shapeSpots(it.code, it.s).length} ét.</text>`}</g>`;
+    return `<g class="me-z${sel}${it.sale ? ' sale' : ''}${it.box ? ' box' : ''}" data-mi="${i}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="5"/><text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}">${esc(it.box ? '📦 ' + (it.k || it.code) : it.code)}</text>${small ? '' : `<text class="n" x="${it.x + it.w / 2}" y="${it.y + it.h / 2 + 15}">${shapeSpots(it.code, it.s).length} ét.</text>`}</g>`;
   }
   if(it.t === 'line') return `<g class="me-x${sel}" data-mi="${i}"><line x1="${it.x}" y1="${it.y}" x2="${it.x + it.w}" y2="${it.y + it.h}" stroke="#8a7d6c" stroke-width="2" stroke-dasharray="6 4"/><rect class="hit" x="${Math.min(it.x, it.x + it.w) - 6}" y="${Math.min(it.y, it.y + it.h) - 6}" width="${Math.abs(it.w) + 12}" height="${Math.abs(it.h) + 12}"/></g>`;
   if(it.t === 'box') return `<g class="me-x${sel}" data-mi="${i}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" class="box"/><text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}">${esc(it.text || '')}</text></g>`;
@@ -1913,20 +1925,129 @@ async function meSave(){
   if(!user || !user.hash){ toast('Reconnectez-vous.'); return; }
   const zones = ME.items.filter(i => i.t === 'zone');
   if(!zones.length){ toast('Le plan doit garder au moins une zone.'); return; }
-  const r = n => Math.round(n * 10) / 10;
-  const items = ME.items.map(i => i.t === 'zone'
-    ? Object.assign({ t:'zone', code: i.code, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.k ? { k: i.k } : {}, i.g ? { g: i.g } : {}, i.s ? { s: i.s } : {}, i.sale ? { sale: true } : {})
-    : Object.assign({ t: i.t, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.t !== 'line' ? { text: i.text || '' } : {}));
-  // grow the canvas if something was dragged past the edge
-  const maxX = Math.max(ME.vw, ...ME.items.map(i => Math.max(i.x, i.x + i.w) + 20)), maxY = Math.max(ME.vh, ...ME.items.map(i => Math.max(i.y, i.y + i.h) + 20));
-  const layout = { viewBox: `0 0 ${Math.round(maxX)} ${Math.round(maxY)}`, items, zonesDefined: true };
   const btn = document.querySelector('[data-me="save"]'); if(btn){ btn.disabled = true; btn.textContent = 'Envoi…'; }
   try {
-    const d = await post({ action:'setMapLayout', location: ME.loc, layout, adminName: user.name, adminHash: user.hash });
-    if(!d || !d.success) throw new Error((d && d.error) || 'Refusé');
-    ls('s1981_maps', JSON.stringify(d.layouts)); applySheetMaps(d.layouts);
+    await meSaveLayout(ME.loc, ME.items, ME.vw, ME.vh);
     ME.dirty = false; toast('Plan enregistré pour tout le monde'); closeMapEditor(true);
   } catch(e){ toast('Plan non enregistré : ' + (e.message || 'pas de connexion') + '. Réessayez.'); if(btn){ btn.disabled = false; btn.textContent = 'Enregistrer'; } }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  📦 BOÎTES (1 Nov 2026) — temporary holding boxes in a store (« Montres »,
+//  « Maquillage à ranger ») while a department is rearranged. A box is a
+//  zone flagged `box` in the store's plan (code BOX1, BOX2…, name in its
+//  description): counted, sold from and moved like any zone. 📤 Ranger moves
+//  its products to a real zone; an empty box can be closed.
+// ══════════════════════════════════════════════════════════════════
+function isBox(loc, code){ const z = zoneList(loc).find(q => q.c === code); return !!(z && z.b); }
+function boxName(loc, code){ const z = zoneList(loc).find(q => q.c === code); return z && z.b ? (z.k || code) : code; }
+function boxesOf(loc){ return zoneList(loc).filter(z => z.b); }
+async function meSaveLayout(loc, items, vw, vh){
+  const r = n => Math.round(n * 10) / 10;
+  const out = items.map(i => i.t === 'zone'
+    ? Object.assign({ t:'zone', code: i.code, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.k ? { k: i.k } : {}, i.g ? { g: i.g } : {}, i.s ? { s: i.s } : {}, i.sale ? { sale: true } : {}, i.box ? { box: true } : {})
+    : Object.assign({ t: i.t, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.t !== 'line' ? { text: i.text || '' } : {}));
+  const maxX = Math.max(vw, ...items.map(i => Math.max(i.x, i.x + i.w) + 20)), maxY = Math.max(vh, ...items.map(i => Math.max(i.y, i.y + i.h) + 20));
+  const layout = { viewBox: `0 0 ${Math.round(maxX)} ${Math.round(maxY)}`, items: out, zonesDefined: true };
+  const d = await post({ action:'setMapLayout', location: loc, layout, adminName: user.name, adminHash: user.hash });
+  if(!d || !d.success) throw new Error((d && d.error) || 'Refusé');
+  ls('s1981_maps', JSON.stringify(d.layouts)); applySheetMaps(d.layouts);
+}
+function boxCreate(loc){
+  if(!meIsAdmin()){ toast('Réservé aux administrateurs.'); return; }
+  openSheet(`<h3>📦 Nouvelle boîte</h3><div class="sub">${esc(locName(loc))} · une boîte garde des articles semblables en attendant leur place.</div>
+    <label class="f" for="bxn">Nom de la boîte</label><input class="t" id="bxn" placeholder="ex. Montres, Maquillage à ranger" maxlength="40">
+    <label class="f" for="bxw">Où est-elle ? (facultatif)</label><input class="t" id="bxw" placeholder="ex. derrière la caisse" maxlength="60">
+    <button class="go" id="bxgo">Créer la boîte</button><button class="ghost" id="bxno">Annuler</button>`);
+  setTimeout(() => $('#bxn').focus(), 60);
+  $('#bxno').onclick = closeSheet;
+  $('#bxgo').onclick = async () => {
+    const name = $('#bxn').value.trim(); if(!name){ toast('Donnez un nom à la boîte.'); return; }
+    if(!online){ toast('Il faut une connexion pour créer une boîte.'); return; }
+    const src = meItemsFromMap(loc);
+    let n = 1; while(src.items.some(i => i.t === 'zone' && i.code === 'BOX' + n) || zoneList(loc).some(z => z.c === 'BOX' + n)) n++;
+    const nb = src.items.filter(i => i.box).length;
+    src.items.push({ t:'zone', code: 'BOX' + n, x: 20 + (nb % 6) * 90, y: Math.max(0, src.vh - 70), w: 80, h: 50, k: name, g: 'Boîtes' + ($('#bxw').value.trim() ? ' · ' + $('#bxw').value.trim() : ''), s: '', box: true });
+    const b = $('#bxgo'); b.disabled = true; b.textContent = 'Création…';
+    try { await meSaveLayout(loc, src.items, src.vw, src.vh + (nb ? 0 : 80)); closeSheet(); toast('Boîte « ' + name + ' » créée — déplacez-la sur le plan si besoin.'); go({ screen:'zone', loc, zone: 'BOX' + n, tab:'products' }); }
+    catch(e){ toast('Boîte non créée : ' + (e.message || 'pas de connexion')); b.disabled = false; b.textContent = 'Créer la boîte'; }
+  };
+}
+function boxesHTMLList(loc){
+  const bx = boxesOf(loc);
+  if(!bx.length && !meIsAdmin()) return '';
+  let h = `<div class="sect">📦 Boîtes</div>`;
+  h += bx.length ? '<div class="list">' + bx.map(z => { const t = totals(rowsAt(loc, z.c));
+    return `<button class="zrow boxrow" data-zone="${esc(z.c)}"><span class="code">📦</span><span class="nm"><b>${esc(z.k || z.c)}</b>${z.g && z.g !== 'Boîtes' ? ' · ' + esc(z.g.replace(/^Boîtes · /, '')) : ''}</span><span class="u">${t.units ? fmt(t.units) : '—'}</span></button>`; }).join('') + '</div>' : '';
+  if(meIsAdmin()) h += `<button class="cbtn alt" data-act="boxnew" style="margin:8px 0 14px">＋ Nouvelle boîte</button>`;
+  return h;
+}
+function boxZoneActions(loc, zone){
+  const t = totals(rowsAt(loc, zone));
+  return `<div class="boxbar"><button class="cbtn" data-act="boxcount">${t.units ? 'Recompter la boîte' : 'Compter la boîte'}</button>${t.units ? '<button class="cbtn" data-act="boxadd">＋ Ajouter des articles</button><button class="cbtn" data-act="boxout">📤 Ranger la boîte</button>' : ''}${meIsAdmin() && !t.units ? '<button class="cbtn alt" data-act="boxclose">Fermer la boîte</button>' : ''}</div>`;
+}
+// ＋ Ajouter: a count that starts from what the box already holds
+function boxAdd(loc, zone){
+  const spot = zone + '-W';
+  const cur = spotsAt(loc, zone).filter(r => r[2] === spot);
+  const base = cur.length ? cur.map(r => ({ barcode: r[3], name: r[4] || productName(r[3]), count: Number(r[5]) || 0 })) : rowsAt(loc, zone).filter(r => r[4] > 0).map(r => ({ barcode: r[2], name: r[3] || productName(r[2]), count: r[4] }));
+  C = { loc, zone, spot, items: base.filter(i => i.count > 0), startedAt: new Date().toISOString(), adding: true };
+  saveDraft(); go({ screen:'count', loc, zone, spot });
+  toast('Le contenu actuel est déjà compté : scannez seulement les articles ajoutés.');
+}
+let BXO = null;   // { loc, zone, pick:{bc:true}, to, toZone }
+function boxOut(loc, zone){
+  const rows = rowsAt(loc, zone).filter(r => r[4] > 0);
+  BXO = { loc, zone, pick: {}, to: loc, toZone: '' };
+  rows.forEach(r => BXO.pick[bkey(r[2])] = true);
+  drawBoxOut();
+}
+function drawBoxOut(){
+  const o = BXO, rows = rowsAt(o.loc, o.zone).filter(r => r[4] > 0).sort((a, b) => b[4] - a[4]);
+  const zs = o.to === 'Warehouse' ? ['Entrepôt'] : zoneList(o.to).filter(z => !z.b).map(z => z.c);
+  if(!zs.includes(o.toZone)) o.toZone = '';
+  const n = rows.filter(r => o.pick[bkey(r[2])]).reduce((a, r) => a + r[4], 0);
+  openSheet(`<h3>📤 Ranger « ${esc(boxName(o.loc, o.zone))} »</h3>
+    <div class="sub">Choisissez les produits, puis leur nouvelle zone.</div>
+    <div class="chips" style="margin:8px 0"><button data-bxall="1">Tout</button><button data-bxall="0">Rien</button></div>
+    <div class="list" style="max-height:34vh;overflow:auto">${rows.map(r => `<label class="citem" style="cursor:pointer"><input type="checkbox" data-bxp="${esc(bkey(r[2]))}" ${o.pick[bkey(r[2])] ? 'checked' : ''} style="width:22px;height:22px">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])}</small></div><span class="c num">${fmt(r[4])}</span></label>`).join('')}</div>
+    <label class="f">Vers</label>
+    <div class="chips">${LOCS.map(l => `<button data-bxto="${esc(l.id)}" aria-pressed="${o.to === l.id}">${esc(l.name)}</button>`).join('')}</div>
+    <label class="f" for="bxz">Zone d’arrivée</label>
+    <select class="t" id="bxz"><option value="">— choisir —</option>${zs.map(z => `<option value="${esc(z)}"${z === o.toZone ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>
+    <button class="go" id="bxgo" ${n && o.toZone ? '' : 'disabled'}>Ranger ${fmt(n)} article(s)</button><button class="ghost" id="bxno">Annuler</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-bxp]').forEach(x => x.onchange = () => { o.pick[x.dataset.bxp] = x.checked; drawBoxOut(); });
+  sh.querySelectorAll('[data-bxall]').forEach(b => b.onclick = () => { rows.forEach(r => o.pick[bkey(r[2])] = b.dataset.bxall === '1'); drawBoxOut(); });
+  sh.querySelectorAll('[data-bxto]').forEach(b => b.onclick = () => { o.to = b.dataset.bxto; o.toZone = o.to === 'Warehouse' ? 'Entrepôt' : ''; drawBoxOut(); });
+  $('#bxz').onchange = e => { o.toZone = e.target.value; drawBoxOut(); };
+  $('#bxno').onclick = closeSheet;
+  $('#bxgo').onclick = () => {
+    const moving = rows.filter(r => o.pick[bkey(r[2])]);
+    const ops = [];
+    moving.forEach(r => {
+      const base = { barcode: r[2], name: r[3], mode:'delta', reason:'Transfert' };
+      ops.push(Object.assign({}, base, { location: o.loc, zone: o.zone, qty: -r[4], note: 'boîte ' + boxName(o.loc, o.zone) + ' → ' + locName(o.to) + ' · ' + o.toZone }));
+      ops.push(Object.assign({}, base, { location: o.to, zone: o.toZone, qty: r[4], note: 'depuis la boîte ' + boxName(o.loc, o.zone) }));
+    });
+    const left = rows.filter(r => !o.pick[bkey(r[2])]);
+    queueWork(ops, [], fmt(moving.reduce((a, r) => a + r[4], 0)) + ' article(s) rangé(s) dans ' + o.toZone);
+    // the box's content (its single « -W » spot) = what is left in it
+    const body = { opId: 'bx' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: o.loc, zone: o.zone, spot: o.zone + '-W', at: new Date().toISOString(),
+      items: left.map(r => ({ barcode: r[2], name: r[3], count: r[4] })) };
+    applyCountLocal(Object.assign({ by: user.name }, body));
+    QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+    ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+    flushQueue(); render();
+    if(!left.length && meIsAdmin()) setTimeout(() => toast('La boîte est vide : vous pouvez la fermer.'), 2700);
+  };
+}
+async function boxClose(loc, zone){
+  if(totals(rowsAt(loc, zone)).units){ toast('La boîte contient encore des articles : rangez-les d’abord.'); return; }
+  if(!confirm('Fermer la boîte « ' + boxName(loc, zone) + ' » ? Elle disparaît du plan et de la liste.')) return;
+  const src = meItemsFromMap(loc);
+  try { await meSaveLayout(loc, src.items.filter(i => !(i.t === 'zone' && i.code === zone)), src.vw, src.vh); toast('Boîte fermée'); go({ screen:'store', loc }); }
+  catch(e){ toast('Non fermée : ' + (e.message || 'pas de connexion')); }
 }
 
 function applySheetMaps(layouts){
@@ -1944,7 +2065,7 @@ function applySheetMaps(layouts){
       zones.forEach(i => {
         let z = ZONES[loc].find(q => q.c === i.code);
         if(!z){ z = { c: i.code }; ZONES[loc].push(z); }
-        z.g = i.g || ''; z.k = i.k || ''; z.s = i.s || ''; if(i.sale) z.x = 1; else delete z.x;
+        z.g = i.g || ''; z.k = i.k || ''; z.s = i.s || ''; if(i.sale) z.x = 1; else delete z.x; if(i.box) z.b = 1; else delete z.b;
       });
     }
     const deco = L.layout.items.filter(i => i.t !== 'zone').map(i => {
