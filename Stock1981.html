@@ -192,6 +192,7 @@ select.t{appearance:auto}
 .mz.boxz rect{stroke-dasharray:6 4;stroke:#d97706;stroke-width:2.5}
 .mz.boxz.has rect{fill:#ffe7c2}
 .me-z.box rect{stroke-dasharray:6 4;stroke:#d97706;fill:#fff4e0}
+.bilan{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;font-size:14.5px;line-height:1.55;white-space:normal;overflow-wrap:anywhere}
 .boxbar{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}
 .boxrow .code{font-size:20px}
 .medit{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}
@@ -610,8 +611,10 @@ function render(){
   const t = $('#title');
   if(v.screen === 'home') t.innerHTML = 'Stock<b>1981</b><small>Beauty Empire · ' + (DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : 'pas encore chargé') + '</small>';
   else if(v.screen === 'store') t.innerHTML = esc(locName(v.loc)) + '<small>Zones et rayons</small>';
-  else if(v.screen === 'count') t.innerHTML = 'Comptage ' + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
+  else if(v.screen === 'count') t.innerHTML = (C && C.control ? 'Contrôle ' : 'Comptage ') + esc(v.zone) + '<small>' + esc(spotLabelOf(v.loc, v.zone, v.spot)) + '</small>';
   else if(v.screen === 'recv') t.innerHTML = 'Réception<small>Arrivages → Entrepôt</small>';
+  else if(v.screen === 'ctl') t.innerHTML = 'Contrôle du jour<small>' + esc(locName(CTL_LOC)) + '</small>';
+  else if(v.screen === 'bilan') t.innerHTML = 'Bilan du jour<small>Les deux magasins</small>';
   else if(v.screen === 'reorg') t.innerHTML = 'Réorganisation<small>' + esc(locName(RE_LOC)) + '</small>';
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
@@ -622,6 +625,8 @@ function render(){
   if(v.screen === 'count'){ m.innerHTML = banner() + countHTML(); bindCount(); return; }
   if(v.screen === 'unit'){ m.innerHTML = banner() + unitHTML(); bindUnit(); return; }
   if(v.screen === 'reorg'){ m.innerHTML = banner() + reorgHTML(); bindReorg(); return; }
+  if(v.screen === 'ctl'){ m.innerHTML = banner() + ctlHTML(); bindCtl(); return; }
+  if(v.screen === 'bilan'){ m.innerHTML = banner() + bilanHTML(); bindBilan(); return; }
   if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
@@ -648,6 +653,8 @@ function homeHTML(){
   }).join('') + '</div>';
   const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
   h += `<button class="recvbtn" data-act="transit"><span class="ic">🚚</span><span><b>En route</b><small>${TR ? trN + ' envoi(s) sur la route' + (trLate ? ' · <span style="color:var(--bad)">en retard</span>' : '') + ' · ' + (TR.requested.length ? new Set(TR.requested.map(l => l.grp || l.id)).size + ' demande(s) à préparer' : 'aucune demande') : 'Transferts entre l’entrepôt et les magasins'}</small></span></button>`;
+  h += `<button class="recvbtn" data-act="ctl"><span class="ic">🔍</span><span><b>Contrôle du jour</b><small>4 étagères tirées au sort, comptées à l’aveugle</small></span></button>`;
+  if(meIsAdmin()) h += `<button class="recvbtn" data-act="bilan"><span class="ic">📊</span><span><b>Bilan du jour</b><small>Ventes, caisse, contrôles, stock négatif, codes inconnus</small></span></button>`;
   h += `<button class="recvbtn" data-act="reorg"><span class="ic">🔄</span><span><b>Réorganisation</b><small>Repérer les étagères · valider ce que la caisse a scanné</small></span></button>`;
   h += `<button class="recvbtn" data-act="recv"><span class="ic">📦</span><span><b>Réception d’arrivage</b><small>${R ? 'Glacière / carton ' + esc(R.unit) + ' en cours' : 'Vider les glacières et cartons d’un conteneur'}</small></span></button>`;
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
@@ -742,6 +749,8 @@ function bindMain(){
   const mb = document.querySelector('[data-act="mboxes"]'); if(mb) mb.onclick = () => { openViewer(VIEW.loc, VIEW.zone); if(PV){ PV.edit = true; PV.sel = null; drawViewer(); } };
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
+  const ct = document.querySelector('[data-act="ctl"]'); if(ct) ct.onclick = () => { go({ screen:'ctl' }); loadCtl(); };
+  const bl = document.querySelector('[data-act="bilan"]'); if(bl) bl.onclick = () => { go({ screen:'bilan' }); loadBilan(ctlToday()); };
   const ro = document.querySelector('[data-act="reorg"]'); if(ro) ro.onclick = () => { go({ screen:'reorg' }); loadReorg(); };
   bindPhoto();
   const q = $('#q');
@@ -832,6 +841,7 @@ function addScan(raw){
   C.flash = true; beep(true); saveDraft(); render();
 }
 function finishCount(){
+  if(C && C.control) return ctlFinish();
   const unnamed = C.items.filter(it => !it.name);
   if(unnamed.length){
     C.items.forEach(it => { if(!it.name && it.pendingName && it.pendingName.trim()){ it.name = it.pendingName.trim(); delete it.pendingName; } });
@@ -2048,6 +2058,148 @@ async function boxClose(loc, zone){
   const src = meItemsFromMap(loc);
   try { await meSaveLayout(loc, src.items.filter(i => !(i.t === 'zone' && i.code === zone)), src.vw, src.vh); toast('Boîte fermée'); go({ screen:'store', loc }); }
   catch(e){ toast('Non fermée : ' + (e.message || 'pas de connexion')); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  🔍 CONTRÔLE DU JOUR (1 Nov 2026) — Stock1981 front for the daily shelf
+//  spot-check that already lives in Code GS (getControlPlan / controlCount /
+//  resolveEcart): 4 shelves drawn each morning (same on every phone),
+//  counted blind; gaps vs « last count − sales since » are kept in « Écarts »
+//  and come back here to be marked. Stock is only changed on « Appliquer ».
+//  📊 BILAN DU JOUR: the evening summary (getBilan), also emailed at 21:00.
+// ══════════════════════════════════════════════════════════════════
+let CTL = lsj('s1981_ctl', null), CTL_LOC = ls('s1981_ctl_loc') || 'Store 1', CTL_BUSY = false, CTL_ERR = '', CTL_LAST = null;
+function ctlToday(){ return reDay(Date.now()); }
+function ctlCandidates(loc){
+  const by = {};
+  (DATA ? DATA.spots : []).forEach(r => {
+    if(r[0] !== loc || r[1] === UNPLACED || isBox(loc, r[1])) return;
+    const u = by[r[2]] || (by[r[2]] = { id: r[2], zone: r[1], label: r[1] + ' · ' + spotLabelOf(loc, r[1], r[2]), value: 0 });
+    u.value += (Number(r[5]) || 0) * (priceOf(r[3]) || 0);
+  });
+  return Object.values(by).map(u => ({ id: u.id, zone: u.zone, label: u.label, risk: u.value >= 60000 }));
+}
+async function loadCtl(){
+  if(!URL_ || !KEY || CTL_BUSY) return;
+  CTL_BUSY = true; CTL_ERR = ''; if(VIEW.screen === 'ctl') render();
+  try {
+    const d = await post({ action:'getControlPlan', location: CTL_LOC, date: ctlToday(), candidates: ctlCandidates(CTL_LOC) });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
+    CTL = Object.assign({ loc: CTL_LOC }, d); ls('s1981_ctl', JSON.stringify(CTL));
+  } catch(e){ CTL_ERR = online ? 'Contrôle indisponible : ' + e.message : 'Pas de connexion.'; }
+  CTL_BUSY = false; if(VIEW.screen === 'ctl') render();
+}
+function ctlHTML(){
+  let h = `<div class="chips" style="margin-bottom:12px">${LOCS.map(L => `<button data-ctloc="${esc(L.id)}" aria-pressed="${L.id === CTL_LOC}">${esc(L.name)}</button>`).join('')}</div>`;
+  if(CTL_ERR) h += `<div class="notice">${esc(CTL_ERR)}<button data-act="ctlre">Réessayer</button></div>`;
+  else if(CTL_BUSY) h += `<div class="notice ok">Tirage du jour…</div>`;
+  const P = CTL && CTL.loc === CTL_LOC && CTL.date === ctlToday() ? CTL : null;
+  if(!P) return h + (CTL_BUSY ? '' : '<p class="empty">Pas encore de tirage pour aujourd’hui.</p>');
+  const done = {}; (P.controls || []).forEach(c => done[c.unit] = c);
+  h += `<div class="sect">Les ${P.units.length} étagères du jour</div>`;
+  h += P.units.length ? '<div class="list">' + P.units.map(u => {
+    const c = done[u.id];
+    const st = !c ? ['⏳', 'À contrôler', 'var(--muted)'] : c.first ? ['🆕', 'Référence posée (premier comptage)', 'var(--ok)'] : c.missingUnits ? ['⚠', c.missingUnits + ' manquant(s) · ' + fmt(c.missingValue) + ' F', 'var(--bad)'] : ['✅', 'Juste' + (c.lines && c.lines.some(l => l.diff > 0) ? ' (quelques articles en plus)' : ''), 'var(--ok)'];
+    return `<div class="shelf" style="border-left:4px solid ${st[2]}"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${esc(u.label)}</b>
+      <div style="font-weight:600;font-size:13px;color:${st[2]};margin-top:2px">${st[0]} ${esc(st[1])}${c ? ' · ' + esc(c.time) + (c.by ? ' · ' + esc(c.by) : '') : ''}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><button class="cbtn${c ? ' alt' : ''}" data-ctlgo="${esc(u.id)}">${c ? 'Recontrôler' : 'Contrôler'}</button>${c && c.lines && c.lines.length ? `<button class="cbtn alt" data-ctlsee="${esc(u.id)}">Voir</button>` : ''}</div></div></div>`;
+  }).join('') + '</div>' : '<p class="empty">Aucune étagère comptée dans ce magasin : le tirage commence après les premiers comptages.</p>';
+  h += `<button class="cbtn alt" data-act="ctlpick" style="margin:10px 0 4px">＋ Contrôler une autre étagère</button>`;
+  const pend = (P.pending || []).filter(e => e.diff < 0);
+  if(pend.length){
+    h += `<div class="sect">Écarts à vérifier (14 derniers jours)</div><div class="list">` + pend.map(e => `<div class="shelf"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(e.name || e.barcode)}</b>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(e.date)} · ${esc(e.label)} · attendu ${e.expected}${e.approx ? ' ≈' : ''}, compté ${e.counted} → <b style="color:var(--bad)">${e.diff}</b>${e.value ? ' · ' + fmt(e.value) + ' F' : ''}${e.cashiers ? ' · caisse : ' + esc(e.cashiers) : ''}</div></div></div>
+      <div class="chips" style="margin-top:8px">${[['retrouve', 'Retrouvé ailleurs'], ['perte', 'Perte connue'], ['non_explique', 'Non expliqué']].map(([k, l]) => `<button data-ctlres="${esc(e.id)}" data-st="${k}">${l}</button>`).join('')}</div></div>`).join('') + '</div>';
+  }
+  return h;
+}
+function bindCtl(){
+  document.querySelectorAll('[data-ctloc]').forEach(b => b.onclick = () => { CTL_LOC = b.dataset.ctloc; ls('s1981_ctl_loc', CTL_LOC); render(); loadCtl(); });
+  const re = document.querySelector('[data-act="ctlre"]'); if(re) re.onclick = loadCtl;
+  const pk = document.querySelector('[data-act="ctlpick"]'); if(pk) pk.onclick = ctlPick;
+  document.querySelectorAll('[data-ctlgo]').forEach(b => b.onclick = () => { const u = CTL.units.find(x => x.id === b.dataset.ctlgo); if(u) ctlStart(Object.assign({ kind:'Tirage' }, u)); });
+  document.querySelectorAll('[data-ctlsee]').forEach(b => b.onclick = () => { const c = (CTL.controls || []).find(x => x.unit === b.dataset.ctlsee); if(c) ctlResult(c); });
+  document.querySelectorAll('[data-ctlres]').forEach(b => b.onclick = () => ctlResolve(b.dataset.ctlres, b.dataset.st));
+}
+function ctlPick(){
+  const zs = zoneList(CTL_LOC).filter(z => !z.b && z.c !== UNPLACED);
+  openSheet(`<h3>Quelle zone ?</h3><div class="chips">${zs.map(z => `<button data-cz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>`);
+  document.querySelectorAll('[data-cz]').forEach(b => b.onclick = () => {
+    const z = zs.find(q => q.c === b.dataset.cz), sp = zoneSpots(z);
+    const start = code => { closeSheet(); ctlStart({ id: code, zone: z.c, label: z.c + ' · ' + spotLabelOf(CTL_LOC, z.c, code), kind:'Choisi' }); };
+    if(sp.length === 1) return start(sp[0].code);
+    openSheet(`<h3>Quelle étagère ?</h3><div class="sub">Zone ${esc(z.c)}</div><div class="chips">${sp.map(s => `<button data-cs="${esc(s.code)}">${esc(s.label)}</button>`).join('')}</div>`);
+    document.querySelectorAll('[data-cs]').forEach(x => x.onclick = () => start(x.dataset.cs));
+  });
+}
+function ctlStart(unit){
+  if(C && C.items.length && !(C.control && C.spot === unit.id)){ toast('Un comptage est en cours : terminez-le ou annulez-le d’abord.'); return; }
+  C = { loc: CTL_LOC, zone: unit.zone, spot: unit.id, items: [], startedAt: new Date().toISOString(), control: { unit: { id: unit.id, zone: unit.zone, label: unit.label, kind: unit.kind || 'Tirage' }, date: ctlToday() } };
+  saveDraft(); go({ screen:'count', loc: C.loc, zone: C.zone, spot: C.spot });
+}
+async function ctlSend(c){
+  const body = { action:'controlCount', location: c.loc, date: c.control.date, unit: c.control.unit, by: user ? user.name : '',
+    spots: { [c.spot]: { zone: c.zone, at: new Date().toISOString(), items: c.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) } } };
+  const d = await post(body);
+  if(!d || !d.success) throw new Error((d && d.error) || 'Refusé');
+  return Object.assign({ unit: c.control.unit.id, label: c.control.unit.label, items: body.spots[c.spot].items, loc: c.loc, zone: c.zone, spot: c.spot }, d);
+}
+function ctlFinish(){
+  const n = C.items.reduce((a, i) => a + i.count, 0), u = C.control.unit;
+  openSheet(`<h3>Terminer le contrôle ?</h3><div class="sub">${esc(locName(C.loc))} · ${esc(u.label)}</div>
+    <div class="where"><div class="here"><span>${C.items.length} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div></div>
+    <div class="sub">L’application compare avec ce qui devrait être sur l’étagère. Le stock ne change pas.</div>
+    <button class="go" id="cok">Comparer</button><button class="ghost" id="cno">Revenir au comptage</button>`);
+  $('#cno').onclick = closeSheet;
+  $('#cok').onclick = async () => {
+    const b = $('#cok'); b.disabled = true; b.textContent = 'Comparaison…';
+    try {
+      const r = await ctlSend(C);
+      C = null; saveDraft(); closeSheet();
+      history.back(); setTimeout(() => { loadCtl(); ctlResult(r); }, 120);
+    } catch(e){ b.disabled = false; b.textContent = 'Comparer'; toast('Pas envoyé (' + (e.message || 'pas de connexion') + ') : le comptage reste sur le téléphone, réessayez.'); }
+  };
+}
+function ctlResult(r){
+  const lines = (r.lines || []).filter(l => l.diff !== 0).sort((a, b) => a.diff - b.diff);
+  openSheet(`<h3>${esc(r.label || r.unit)}</h3>
+    <div class="sub" style="font-weight:700;color:${r.firstCount || r.first ? 'var(--ok)' : r.missingUnits ? 'var(--bad)' : 'var(--ok)'}">${r.firstCount || r.first ? '🆕 Premier comptage : il devient la référence de cette étagère.' : r.missingUnits ? '⚠ ' + r.missingUnits + ' article(s) manquant(s) · ' + fmt(r.missingValue) + ' F' : '✅ Tout est là.'}</div>
+    ${lines.length ? `<ul style="margin:10px 0;padding:0;list-style:none;max-height:40vh;overflow:auto">${lines.map(l => `<li style="display:flex;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px solid var(--line)"><span>${esc(l.name || l.barcode)}<small style="display:block;color:var(--muted)">attendu ${l.expected}${l.approx ? ' ≈' : ''} · compté ${l.counted}${l.cashiers ? ' · caisse : ' + esc(l.cashiers) : ''}</small></span><b style="color:${l.diff < 0 ? 'var(--bad)' : 'var(--ok)'}">${l.diff > 0 ? '+' : ''}${l.diff}</b></li>`).join('')}</ul>` : ''}
+    ${r.missingUnits ? '<div class="sub">Les manquants sont dans « Écarts à vérifier » : marquez-les quand vous savez (retrouvé, perte, non expliqué).</div>' : ''}
+    ${r.items ? `<button class="go" id="ctapply">Appliquer ce comptage au stock</button>` : ''}<button class="ghost" id="ctok">Fermer</button>`);
+  $('#ctok').onclick = closeSheet;
+  const ap = $('#ctapply'); if(ap) ap.onclick = () => {
+    if(!user){ closeSheet(); lock(); return; }
+    const body = { opId: 'ct' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: r.loc, zone: r.zone, spot: r.spot, at: new Date().toISOString(), items: r.items };
+    applyCountLocal(Object.assign({ by: user.name }, body));
+    QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+    ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+    closeSheet(); flushQueue(); toast('Stock de l’étagère mis à jour');
+  };
+}
+async function ctlResolve(id, st){
+  try { const d = await post({ action:'resolveEcart', id, status: st, by: user ? user.name : '' }); if(!d || !d.success) throw new Error((d && d.error) || 'Refusé'); toast('Écart marqué : ' + d.status); loadCtl(); }
+  catch(e){ toast('Non enregistré : ' + (e.message || 'pas de connexion')); }
+}
+// ── 📊 Bilan du jour ──
+let BIL = { date: '', text: '', busy: false, err: '' };
+async function loadBilan(date){
+  BIL.date = date || BIL.date || ctlToday(); BIL.busy = true; BIL.err = ''; if(VIEW.screen === 'bilan') render();
+  try { const d = await post({ action:'getBilan', date: BIL.date }); if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide'); BIL.text = d.text; }
+  catch(e){ BIL.err = /Missing name|invalide/i.test(e.message) ? 'Le Sheet ne connaît pas encore le Bilan : collez « LATEST - Code GS » et redéployez.' : (online ? e.message : 'Pas de connexion.'); BIL.text = ''; }
+  BIL.busy = false; if(VIEW.screen === 'bilan') render();
+}
+function bilanHTML(){
+  const days = [0, 1, 2, 3, 4, 5, 6].map(k => reDay(Date.now() - k * 864e5));
+  let h = `<div class="chips" style="margin-bottom:12px">${days.map(d => `<button data-bday="${d}" aria-pressed="${d === BIL.date}">${esc(reDayLabel(d))}</button>`).join('')}</div>`;
+  if(BIL.err) h += `<div class="notice">${esc(BIL.err)}<button data-act="bilre">Réessayer</button></div>`;
+  if(BIL.busy) h += `<div class="notice ok">Préparation du bilan…</div>`;
+  if(BIL.text) h += `<div class="bilan">${esc(BIL.text).replace(/\n/g, '<br>')}</div>`;
+  return h;
+}
+function bindBilan(){
+  document.querySelectorAll('[data-bday]').forEach(b => b.onclick = () => loadBilan(b.dataset.bday));
+  const r = document.querySelector('[data-act="bilre"]'); if(r) r.onclick = () => loadBilan(BIL.date);
 }
 
 function applySheetMaps(layouts){
