@@ -189,6 +189,46 @@ select.t{appearance:auto}
 .legend i.has{background:var(--brand-soft);border-color:var(--brand)}
 .legend i.sale{background:var(--warn-soft);border-color:var(--warn)}
 .mz.rpart rect{fill:#ffe7c2;stroke:#d97706}
+.medit{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}
+.me-top{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--plum,#2b1622);color:#fff}
+.me-top b{flex:1;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me-top button{border:0;border-radius:10px;padding:9px 12px;font:700 14px var(--body);background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+.me-top button.go2{background:#ff8cc0;color:#2b1622}
+.me-top button:disabled{opacity:.4}
+.me-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.me-add button{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:7px 10px;font:700 13px var(--body);cursor:pointer;color:var(--ink)}
+.me-add span{font-size:12px;color:var(--muted)}
+.me-canvas{flex:1;overflow:auto;padding:8px;background:var(--sunk);touch-action:pan-x pan-y}
+.me-canvas svg{display:block;background:var(--surface);border-radius:10px}
+.me-bg{fill:var(--surface)}
+.me-z rect{fill:var(--brand-soft);stroke:var(--brand);stroke-width:1.5}
+.me-z.sale rect{fill:var(--warn-soft);stroke:var(--warn)}
+.me-z.sel rect,.me-x.sel rect.box{stroke:#ff3d8b;stroke-width:3.5}
+.me-x.sel .hit{fill:rgba(255,61,139,.12);stroke:#ff3d8b;stroke-dasharray:4 3}
+.me-z text,.me-x text{fill:var(--ink);font:800 15px var(--body);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.me-z text.n{font:600 11px var(--body);fill:var(--muted)}
+.me-x text.lbl{text-anchor:start;dominant-baseline:auto;font:700 14px var(--body)}
+.me-x rect.box{fill:none;stroke:#8a7d6c;stroke-dasharray:5 4}
+.me-x .hit{fill:transparent}
+.me-z,.me-x{cursor:move}
+.me-h{fill:#ff3d8b;stroke:#fff;stroke-width:2;cursor:nwse-resize}
+.me-panel{max-height:46vh;overflow:auto;padding:12px;border-top:1px solid var(--line);background:var(--surface)}
+.me-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.me-row{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.me-row label,.me-sect{font:700 11px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.me-sect{margin:8px 0 6px}
+.me-row input{font:600 16px var(--body);border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--bg);color:var(--ink)}
+.me-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.me-step{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:12px;padding:4px 6px}
+.me-step span{font-size:12px;color:var(--muted);margin-right:2px}
+.me-step button{width:34px;height:34px;border-radius:9px;border:0;background:var(--brand);color:var(--brand-ink);font:800 18px var(--body);cursor:pointer}
+.me-step b{min-width:20px;text-align:center}
+.me-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.me-acts button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:700 14px var(--body);cursor:pointer;color:var(--ink)}
+.me-acts button.bad{color:var(--bad);border-color:var(--bad)}
+.me-hint{font-size:13px;color:var(--muted);margin:4px 0}
+.me-warn{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:10px;padding:8px 10px;margin:4px 0 8px}
+.me-chk{display:flex;gap:8px;align-items:center;font-size:14px;margin-top:4px}
 .rord{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
 .rord button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--sunk);font:800 18px var(--body);cursor:pointer}
 .rord b{min-width:22px;text-align:center;color:var(--ink);font-size:17px}
@@ -542,7 +582,7 @@ function shapeSpots(zone, shape){
   if(!out.length) out.push({ code: zone, label: 'Toute la zone' });
   return out;
 }
-function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1027` : ''; }
+function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1101` : ''; }
 function locName(id){ const L = LOCS.find(l => l.id === id); return L ? L.name : id; }
 function ago(iso){
   if(!iso) return '';
@@ -617,6 +657,7 @@ function storeHTML(loc){
   const view = storeView(loc);
   let h = '';
   if(MAPS[loc]) h += `<div class="viewsw" role="group" aria-label="Affichage"><button data-view="plan" aria-pressed="${view === 'plan'}">Plan</button><button data-view="list" aria-pressed="${view === 'list'}">Liste</button></div>`;
+  if(meIsAdmin()) h += `<button class="cbtn alt" data-act="medit" style="margin:0 0 12px">✏ ${MAPS[loc] ? 'Modifier le plan' : 'Créer le plan'}</button>`;
   const un = totals(rows.filter(r => r[1] === UNPLACED));
   if(un.units) h += `<button class="zrow unplaced" data-zone="${esc(UNPLACED)}" style="margin-bottom:12px"><span class="code">À ranger</span><span class="nm">${fmt(un.products)} produits sans rayon</span><span class="u">${fmt(un.units)}</span></button>`;
   if(view === 'plan'){
@@ -651,6 +692,7 @@ function zoneHTML(loc, zone, tab){
   const ph = zone === UNPLACED ? '' : photoFor(loc, zone);
   let h = (zone === UNPLACED ? '' : photoHTML(loc, zone, z)) + `
     <div class="zhead"><h2>${esc(zone)}</h2><p>${esc(z.k || z.g || '')}</p></div>
+    ${meIsAdmin() && zone !== UNPLACED ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
   h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button></div>`;
@@ -684,6 +726,8 @@ function bindMain(){
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const me = document.querySelector('[data-act="medit"]'); if(me) me.onclick = () => openMapEditor(VIEW.loc, VIEW.screen === 'zone' ? VIEW.zone : '');
+  const mb = document.querySelector('[data-act="mboxes"]'); if(mb) mb.onclick = () => { openViewer(VIEW.loc, VIEW.zone); if(PV){ PV.edit = true; PV.sel = null; drawViewer(); } };
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const ro = document.querySelector('[data-act="reorg"]'); if(ro) ro.onclick = () => { go({ screen:'reorg' }); loadReorg(); };
@@ -1693,15 +1737,219 @@ async function saveTrace(){
 // A map saved in the Sheet after MAP_SHEET_AFTER replaces the built-in one.
 const MAP_SHEET_AFTER = '2026-10-29';
 const MAPS_BUILTIN = JSON.parse(JSON.stringify(MAPS));
+// ══════════════════════════════════════════════════════════════════
+//  ✏ PLAN EDITOR (1 Nov 2026) — admin only. Move / resize / add / remove
+//  zones and labels on a store's plan, and edit each zone (code,
+//  description, group, shelves). Saved to the Sheet (setMapLayout, same
+//  format as the Inventory Counter's editor) — zone details ride along in
+//  the zone items (k, g, s, sale), so no script change was needed.
+// ══════════════════════════════════════════════════════════════════
+const ZONES_BUILTIN = JSON.parse(JSON.stringify(ZONES));
+let ME = null;   // { loc, items, vw, vh, sel, undo:[], dirty, zoom, drag }
+const ME_SNAP = 5;
+function meSnap(v){ return Math.round(v / ME_SNAP) * ME_SNAP; }
+function meIsAdmin(){ return !!(user && user.role === 'Admin'); }
+function meItemsFromMap(loc){
+  const L = (lsj('s1981_maps', {}) || {})[loc];
+  const zdef = c => zoneList(loc).find(z => z.c === c) || {};
+  const withDefs = it => { const z = zdef(it.code); return Object.assign({ k: z.k || '', g: z.g || '', s: z.s || '', sale: !!z.x }, it); };
+  if(MAPS[loc] && MAPS[loc].sheet && L && L.layout && Array.isArray(L.layout.items)){
+    const [, , w, h] = String(L.layout.viewBox || '0 0 1000 700').split(/\s+/).map(Number);
+    return { items: JSON.parse(JSON.stringify(L.layout.items)).map(i => i.t === 'zone' ? withDefs(i) : i), vw: w || 1000, vh: h || 700 };
+  }
+  const M = MAPS[loc];
+  if(M){
+    const [, , w, h] = M.vb.split(' ').map(Number);
+    const items = M.z.map(([code, x, y, ww, hh]) => withDefs({ t:'zone', code, x, y, w: ww, h: hh }));
+    try {
+      const doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg">' + M.deco + '</svg>', 'image/svg+xml');
+      doc.documentElement.childNodes.forEach(n => {
+        if(n.nodeType !== 1) return;
+        const a = k => Number(n.getAttribute(k)) || 0;
+        if(n.tagName === 'text'){ const t = n.textContent.trim(), mid = n.getAttribute('text-anchor') === 'middle', ww = Math.max(30, t.length * 8.5); items.push({ t:'label', text: t, x: Math.round(mid ? a('x') - ww / 2 : a('x') - 2), y: Math.round(a('y') - 15), w: Math.round(ww), h: 20 }); }
+        else if(n.tagName === 'rect') items.push({ t:'box', text:'', x: a('x'), y: a('y'), w: a('width'), h: a('height') });
+        else if(n.tagName === 'line') items.push({ t:'line', x: a('x1'), y: a('y1'), w: a('x2') - a('x1'), h: a('y2') - a('y1') });
+      });
+    } catch(e){}
+    return { items, vw: w, vh: h };
+  }
+  // no plan yet (Entrepôt): lay its zones out in a grid
+  const zs = zoneList(loc);
+  return { items: zs.map((z, i) => withDefs({ t:'zone', code: z.c, x: 40 + (i % 6) * 150, y: 40 + Math.floor(i / 6) * 110, w: 120, h: 80 })), vw: 1000, vh: Math.max(400, 80 + Math.ceil(zs.length / 6) * 110) };
+}
+function openMapEditor(loc, selCode){
+  if(!meIsAdmin()){ toast('Réservé aux administrateurs.'); return; }
+  const src = meItemsFromMap(loc);
+  ME = { loc, items: src.items, vw: src.vw, vh: src.vh, sel: -1, undo: [], dirty: false, zoom: 1 };
+  if(selCode) ME.sel = ME.items.findIndex(i => i.t === 'zone' && i.code === selCode);
+  let v = $('#medit');
+  if(!v){ v = document.createElement('div'); v.id = 'medit'; v.className = 'medit'; document.body.appendChild(v); }
+  v.hidden = false; meDraw();
+  setTimeout(() => { const c = $('#me-canvas'); if(c) ME.zoom = Math.max(0.75, Math.min(1.6, (c.clientWidth - 16) / ME.vw)); meDraw(); if(ME.sel >= 0) meScrollTo(ME.items[ME.sel]); }, 30);
+}
+function closeMapEditor(force){
+  if(ME && ME.dirty && !force && !confirm('Quitter sans enregistrer les changements du plan ?')) return;
+  const v = $('#medit'); if(v){ v.hidden = true; v.innerHTML = ''; }
+  ME = null; render();
+}
+function mePush(){ ME.undo.push(JSON.stringify(ME.items)); if(ME.undo.length > 80) ME.undo.shift(); ME.dirty = true; }
+function meSvgItem(it, i){
+  const sel = i === ME.sel ? ' sel' : '';
+  if(it.t === 'zone'){
+    const small = it.w < 50 || it.h < 34;
+    return `<g class="me-z${sel}${it.sale ? ' sale' : ''}" data-mi="${i}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="5"/><text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}">${esc(it.code)}</text>${small ? '' : `<text class="n" x="${it.x + it.w / 2}" y="${it.y + it.h / 2 + 15}">${shapeSpots(it.code, it.s).length} ét.</text>`}</g>`;
+  }
+  if(it.t === 'line') return `<g class="me-x${sel}" data-mi="${i}"><line x1="${it.x}" y1="${it.y}" x2="${it.x + it.w}" y2="${it.y + it.h}" stroke="#8a7d6c" stroke-width="2" stroke-dasharray="6 4"/><rect class="hit" x="${Math.min(it.x, it.x + it.w) - 6}" y="${Math.min(it.y, it.y + it.h) - 6}" width="${Math.abs(it.w) + 12}" height="${Math.abs(it.h) + 12}"/></g>`;
+  if(it.t === 'box') return `<g class="me-x${sel}" data-mi="${i}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" class="box"/><text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}">${esc(it.text || '')}</text></g>`;
+  return `<g class="me-x${sel}" data-mi="${i}"><rect class="hit" x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}"/><text class="lbl" x="${it.x + 2}" y="${it.y + it.h * 0.75}">${esc(it.text || '')}</text></g>`;
+}
+function meDraw(){
+  const v = $('#medit'); if(!v || !ME) return;
+  const it = ME.sel >= 0 ? ME.items[ME.sel] : null;
+  const handle = it ? `<rect class="me-h" data-mh="1" x="${it.x + it.w - 9}" y="${it.y + it.h - 9}" width="18" height="18" rx="4"/>` : '';
+  v.innerHTML = `<div class="me-top"><b>✏ Plan · ${esc(locName(ME.loc))}</b>
+      <button data-me="undo" ${ME.undo.length ? '' : 'disabled'}>↶</button><button data-me="zo">−</button><button data-me="zi">+</button>
+      <button data-me="close">Fermer</button><button data-me="save" class="go2" ${ME.dirty ? '' : 'disabled'}>Enregistrer</button></div>
+    <div class="me-add"><button data-me="addz">＋ Zone</button><button data-me="addl">＋ Texte</button><button data-me="addb">＋ Repère</button><button data-me="addline">＋ Trait</button><span>Touchez un élément pour le choisir, puis glissez-le · coin rose = agrandir · touchez le fond pour faire défiler</span></div>
+    <div class="me-canvas" id="me-canvas"><svg id="me-svg" style="touch-action:${ME.sel >= 0 ? 'none' : 'pan-x pan-y'}" viewBox="0 0 ${ME.vw} ${ME.vh}" width="${Math.round(ME.vw * ME.zoom)}" height="${Math.round(ME.vh * ME.zoom)}"><rect class="me-bg" x="0" y="0" width="${ME.vw}" height="${ME.vh}"/>${ME.items.map(meSvgItem).join('')}${handle}</svg></div>
+    <div class="me-panel">${mePanelHTML(it)}</div>`;
+  meBind();
+}
+function meShapeParts(s){ const o = parseShape(s); const uni = o.rows.length && o.rows.every(r => r === o.rows[0]); return { o, levels: o.rows.length, per: uni ? o.rows[0] : 0 }; }
+function meShapeStr(o){ return [o.rows.join(','), o.T ? 'T' + o.T : '', o.C ? 'C' + o.C : '', o.G ? 'G' + o.G : '', o.D ? 'D' + o.D : ''].filter(Boolean).join(' '); }
+function mePanelHTML(it){
+  if(!it) return `<p class="me-hint">Choisissez une zone ou un texte sur le plan.${ME.dirty ? ' <b>Changements non enregistrés.</b>' : ''}</p>`;
+  if(it.t !== 'zone') return `<div class="me-row"><label>${it.t === 'line' ? 'Trait' : it.t === 'box' ? 'Repère' : 'Texte'}</label>${it.t === 'line' ? '' : `<input id="me-text" value="${esc(it.text || '')}" placeholder="ex. Entrée, Porte, Caisse">`}</div>
+    <div class="me-acts"><button data-me="rot">↻ Tourner</button><button data-me="dup">⧉ Dupliquer</button><button data-me="del" class="bad">🗑 Retirer</button></div>`;
+  const sp = meShapeParts(it.s), stock = totals(rowsAt(ME.loc, it.code)).units;
+  const groups = [...new Set(ME.items.filter(x => x.t === 'zone' && x.g).map(x => x.g))];
+  const step = (k, v, lbl) => `<div class="me-step"><span>${lbl}</span><button data-ms="${k}" data-d="-1">−</button><b>${v}</b><button data-ms="${k}" data-d="1">+</button></div>`;
+  const spots = shapeSpots(it.code, it.s);
+  return `<div class="me-grid">
+      <div class="me-row"><label>Code</label><input id="me-code" value="${esc(it.code)}" maxlength="12" autocapitalize="characters"></div>
+      <div class="me-row"><label>Description</label><input id="me-k" value="${esc(it.k || '')}" placeholder="ex. vitrine fermée, gondole"></div>
+      <div class="me-row"><label>Groupe</label><input id="me-g" value="${esc(it.g || '')}" list="me-groups" placeholder="ex. Côté A"><datalist id="me-groups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
+    </div>
+    ${stock ? `<p class="me-warn">${fmt(stock)} article(s) sont enregistrés sous ${esc(it.code)} : si vous changez le code, ils restent sous l’ancien code.</p>` : ''}
+    <div class="me-sect">Étagères</div>
+    <div class="me-steps">${step('lv', sp.levels, 'Niveaux')}${step('pc', sp.per || '≠', 'Cases / niveau')}${step('T', sp.o.T, 'Tiroirs')}${step('C', sp.o.C, 'Côté')}</div>
+    <div class="me-row"><label>Avancé</label><input id="me-s" value="${esc(it.s || '')}" placeholder="vide = un seul bloc (pile, table…)"></div>
+    <p class="me-hint">${spots.length} emplacement(s) : ${esc(spots.slice(0, 8).map(s => s.code.slice(it.code.length + 1) || s.label).join(' · '))}${spots.length > 8 ? ' …' : ''}</p>
+    <label class="me-chk"><input type="checkbox" id="me-sale" ${it.sale ? 'checked' : ''}> Zone de solde</label>
+    <div class="me-acts"><button data-me="rot">↻ Tourner</button><button data-me="dup">⧉ Dupliquer</button><button data-me="del" class="bad">🗑 Retirer du plan</button></div>`;
+}
+function mePoint(ev){ const svg = $('#me-svg'), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
+function meScrollTo(it){ const c = $('#me-canvas'); if(c && it) c.scrollTo({ left: Math.max(0, (it.x + it.w / 2) * ME.zoom - c.clientWidth / 2), top: Math.max(0, (it.y + it.h / 2) * ME.zoom - c.clientHeight / 2) }); }
+function meBind(){
+  const v = $('#medit'), svg = $('#me-svg');
+  v.querySelectorAll('[data-me]').forEach(b => b.onclick = () => meAction(b.dataset.me));
+  svg.onpointerdown = ev => {
+    const h = ev.target.closest('[data-mh]'), g = ev.target.closest('[data-mi]');
+    if(!h && !g){ if(ME.sel >= 0){ ME.sel = -1; meDraw(); } return; }
+    const i = h ? ME.sel : +g.dataset.mi;
+    // on a phone, a first touch only selects (the plan can still be scrolled); once something is selected, it can be dragged
+    if(ev.pointerType === 'touch' && ME.sel < 0){ ME.sel = i; meDraw(); return; }
+    if(i !== ME.sel){ ME.sel = i; meDraw(); }
+    const it = ME.items[i], p = mePoint(ev);
+    ME.drag = { mode: h ? 'size' : 'move', sx: p.x, sy: p.y, ox: it.x, oy: it.y, ow: it.w, oh: it.h, pushed: false, id: ev.pointerId };
+    ev.preventDefault();
+  };
+  svg.onpointermove = ev => {
+    const d = ME && ME.drag; if(!d || d.id !== ev.pointerId) return;
+    const p = mePoint(ev), dx = p.x - d.sx, dy = p.y - d.sy;
+    if(!d.pushed){ if(Math.abs(dx) < 3 && Math.abs(dy) < 3) return; mePush(); d.pushed = true; }
+    const it = ME.items[ME.sel];
+    if(d.mode === 'move'){ it.x = meSnap(d.ox + dx); it.y = meSnap(d.oy + dy); }
+    else if(it.t === 'line'){ it.w = meSnap(d.ow + dx); it.h = meSnap(d.oh + dy); }
+    else { it.w = Math.max(15, meSnap(d.ow + dx)); it.h = Math.max(15, meSnap(d.oh + dy)); }
+    const g = svg.querySelector(`[data-mi="${ME.sel}"]`); if(g) g.outerHTML = meSvgItem(it, ME.sel);
+    const hd = svg.querySelector('[data-mh]'); if(hd){ hd.setAttribute('x', it.x + it.w - 9); hd.setAttribute('y', it.y + it.h - 9); }
+    ev.preventDefault();
+  };
+  svg.onpointerup = svg.onpointercancel = () => { if(ME && ME.drag){ const moved = ME.drag.pushed; ME.drag = null; if(moved) meDraw(); } };
+  const it = ME.sel >= 0 ? ME.items[ME.sel] : null;
+  if(!it) return;
+  const field = (id, fn) => { const x = $('#' + id); if(x) x.onchange = () => { mePush(); fn(x); meDraw(); }; };
+  field('me-text', x => { it.text = x.value.trim(); });
+  field('me-code', x => {
+    const c = x.value.trim().replace(/\s+/g, '');
+    if(!c){ toast('Le code ne peut pas être vide.'); return; }
+    if(ME.items.some(o => o !== it && o.t === 'zone' && o.code.toLowerCase() === c.toLowerCase())){ toast('Le code ' + c + ' existe déjà sur ce plan.'); return; }
+    it.code = c;
+  });
+  field('me-k', x => { it.k = x.value.trim(); });
+  field('me-g', x => { it.g = x.value.trim(); });
+  field('me-s', x => { it.s = meShapeStr(parseShape(x.value)); });
+  field('me-sale', x => { it.sale = x.checked; });
+  v.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => {
+    mePush();
+    const o = parseShape(it.s), d = +b.dataset.d, k = b.dataset.ms;
+    if(k === 'lv'){ const per = o.rows.length ? o.rows[o.rows.length - 1] : 1; if(d > 0 && o.rows.length < 12) o.rows.push(per); else if(d < 0) o.rows.pop(); }
+    else if(k === 'pc'){ const base = o.rows.length ? Math.max(...o.rows) : 0; const n = Math.max(1, Math.min(12, (base || 1) + d)); o.rows = (o.rows.length ? o.rows : [1]).map(() => n); }
+    else o[k] = Math.max(0, Math.min(12, (o[k] || 0) + d));
+    it.s = meShapeStr(o); meDraw();
+  });
+}
+function meAction(a){
+  const it = ME.sel >= 0 ? ME.items[ME.sel] : null;
+  const c = $('#me-canvas'), cx = c ? (c.scrollLeft + c.clientWidth / 2) / ME.zoom : ME.vw / 2, cy = c ? (c.scrollTop + Math.min(c.clientHeight, 400) / 2) / ME.zoom : ME.vh / 2;
+  if(a === 'close') return closeMapEditor();
+  if(a === 'save') return meSave();
+  if(a === 'undo'){ if(ME.undo.length){ ME.items = JSON.parse(ME.undo.pop()); ME.sel = -1; ME.dirty = true; meDraw(); } return; }
+  if(a === 'zo' || a === 'zi'){ ME.zoom = Math.max(0.3, Math.min(3, ME.zoom * (a === 'zi' ? 1.25 : 0.8))); meDraw(); return; }
+  if(a === 'addz'){
+    let n = 1, code; do { code = 'Z' + n++; } while(ME.items.some(o => o.t === 'zone' && o.code === code));
+    mePush(); ME.items.push({ t:'zone', code, x: meSnap(cx - 40), y: meSnap(cy - 25), w: 80, h: 50, k:'', g:'', s:'1,1,1,1', sale:false });
+    ME.sel = ME.items.length - 1; meDraw(); toast('Nouvelle zone ' + code + ' : changez son code en bas.'); return;
+  }
+  if(a === 'addl' || a === 'addb'){ mePush(); ME.items.push(a === 'addb' ? { t:'box', text:'Repère', x: meSnap(cx - 40), y: meSnap(cy - 20), w: 80, h: 40 } : { t:'label', text:'Texte', x: meSnap(cx - 40), y: meSnap(cy - 10), w: 80, h: 20 }); ME.sel = ME.items.length - 1; meDraw(); return; }
+  if(a === 'addline'){ mePush(); ME.items.push({ t:'line', x: meSnap(cx - 100), y: meSnap(cy), w: 200, h: 0 }); ME.sel = ME.items.length - 1; meDraw(); return; }
+  if(!it) return;
+  if(a === 'rot'){ mePush(); const mx = it.x + it.w / 2, my = it.y + it.h / 2, w = it.h, h = it.w; it.w = w; it.h = h; if(it.t !== 'line'){ it.x = meSnap(mx - w / 2); it.y = meSnap(my - h / 2); } meDraw(); }
+  else if(a === 'dup'){ mePush(); const cp = JSON.parse(JSON.stringify(it)); cp.x += 20; cp.y += 20; if(cp.t === 'zone'){ let n = 2; while(ME.items.some(o => o.t === 'zone' && o.code === it.code + '-' + n)) n++; cp.code = it.code + '-' + n; } ME.items.push(cp); ME.sel = ME.items.length - 1; meDraw(); }
+  else if(a === 'del'){ if(!confirm('Retirer « ' + (it.t === 'zone' ? it.code : (it.text || 'cet élément')) + ' » du plan ?' + (it.t === 'zone' ? '\n(Le stock enregistré sous ce code n’est pas touché.)' : ''))) return; mePush(); ME.items.splice(ME.sel, 1); ME.sel = -1; meDraw(); }
+}
+async function meSave(){
+  if(!user || !user.hash){ toast('Reconnectez-vous.'); return; }
+  const zones = ME.items.filter(i => i.t === 'zone');
+  if(!zones.length){ toast('Le plan doit garder au moins une zone.'); return; }
+  const r = n => Math.round(n * 10) / 10;
+  const items = ME.items.map(i => i.t === 'zone'
+    ? Object.assign({ t:'zone', code: i.code, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.k ? { k: i.k } : {}, i.g ? { g: i.g } : {}, i.s ? { s: i.s } : {}, i.sale ? { sale: true } : {})
+    : Object.assign({ t: i.t, x: r(i.x), y: r(i.y), w: r(i.w), h: r(i.h) }, i.t !== 'line' ? { text: i.text || '' } : {}));
+  // grow the canvas if something was dragged past the edge
+  const maxX = Math.max(ME.vw, ...ME.items.map(i => Math.max(i.x, i.x + i.w) + 20)), maxY = Math.max(ME.vh, ...ME.items.map(i => Math.max(i.y, i.y + i.h) + 20));
+  const layout = { viewBox: `0 0 ${Math.round(maxX)} ${Math.round(maxY)}`, items, zonesDefined: true };
+  const btn = document.querySelector('[data-me="save"]'); if(btn){ btn.disabled = true; btn.textContent = 'Envoi…'; }
+  try {
+    const d = await post({ action:'setMapLayout', location: ME.loc, layout, adminName: user.name, adminHash: user.hash });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Refusé');
+    ls('s1981_maps', JSON.stringify(d.layouts)); applySheetMaps(d.layouts);
+    ME.dirty = false; toast('Plan enregistré pour tout le monde'); closeMapEditor(true);
+  } catch(e){ toast('Plan non enregistré : ' + (e.message || 'pas de connexion') + '. Réessayez.'); if(btn){ btn.disabled = false; btn.textContent = 'Enregistrer'; } }
+}
+
 function applySheetMaps(layouts){
   Object.keys(MAPS_BUILTIN).forEach(k => { MAPS[k] = MAPS_BUILTIN[k]; });
+  Object.keys(MAPS).forEach(k => { if(!MAPS_BUILTIN[k]) delete MAPS[k]; });
+  Object.keys(ZONES_BUILTIN).forEach(k => { ZONES[k].length = 0; ZONES_BUILTIN[k].forEach(z => ZONES[k].push(JSON.parse(JSON.stringify(z)))); });
   Object.keys(layouts || {}).forEach(loc => {
     const L = layouts[loc];
     if(!L || !L.layout || !Array.isArray(L.layout.items) || String(L.at || '') < MAP_SHEET_AFTER) return;
     const zones = L.layout.items.filter(i => i.t === 'zone' && i.code);
     if(!zones.length) return;
+    // zone details edited in Stock1981 (1 Nov 2026) travel inside the zone items
+    if(L.layout.zonesDefined){
+      if(!ZONES[loc]) ZONES[loc] = [];
+      zones.forEach(i => {
+        let z = ZONES[loc].find(q => q.c === i.code);
+        if(!z){ z = { c: i.code }; ZONES[loc].push(z); }
+        z.g = i.g || ''; z.k = i.k || ''; z.s = i.s || ''; if(i.sale) z.x = 1; else delete z.x;
+      });
+    }
     const deco = L.layout.items.filter(i => i.t !== 'zone').map(i => {
       const txt = esc(i.text || ''), cx = i.x + i.w / 2, cy = i.y + i.h / 2;
+      if(i.t === 'line') return `<line x1="${i.x}" y1="${i.y}" x2="${i.x + i.w}" y2="${i.y + i.h}" stroke="#8a7d6c" stroke-width="1.5" stroke-dasharray="6 4"/>`;
       return i.t === 'box' ? `<rect x="${i.x}" y="${i.y}" width="${i.w}" height="${i.h}" rx="3" fill="none" stroke="#8a7d6c" stroke-dasharray="5 4"/><text class="map-deco-text strong" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${txt}</text>`
         : `<text class="map-deco-text strong" x="${i.x + 2}" y="${i.y + i.h * 0.75}">${txt}</text>`;
     }).join(' ');
