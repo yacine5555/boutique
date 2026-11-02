@@ -618,6 +618,7 @@ function render(){
   else if(v.screen === 'reorg') t.innerHTML = 'Réorganisation<small>' + esc(locName(RE_LOC)) + '</small>';
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
+  else if(v.screen === 'boxput') t.innerHTML = 'Ranger en scannant<small>' + (BP && BP.toZone ? 'vers ' + esc(BP.toZone) : esc(locName(v.loc))) + '</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
   else t.innerHTML = (isBox(v.loc, v.zone) ? '📦 ' + esc(boxName(v.loc, v.zone)) : 'Zone ' + esc(v.zone)) + '<small>' + esc(locName(v.loc)) + '</small>';
@@ -628,6 +629,7 @@ function render(){
   if(v.screen === 'ctl'){ m.innerHTML = banner() + ctlHTML(); bindCtl(); return; }
   if(v.screen === 'bilan'){ m.innerHTML = banner() + bilanHTML(); bindBilan(); return; }
   if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
+  if(v.screen === 'boxput'){ m.innerHTML = banner() + boxPutHTML(); bindBoxPut(); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
@@ -744,6 +746,7 @@ function bindMain(){
   const bxc = document.querySelector('[data-act="boxcount"]'); if(bxc) bxc.onclick = () => startCount(VIEW.loc, VIEW.zone, VIEW.zone + '-W');
   const bxa = document.querySelector('[data-act="boxadd"]'); if(bxa) bxa.onclick = () => boxAdd(VIEW.loc, VIEW.zone);
   const bxo = document.querySelector('[data-act="boxout"]'); if(bxo) bxo.onclick = () => boxOut(VIEW.loc, VIEW.zone);
+  const bxp = document.querySelector('[data-act="boxput"]'); if(bxp) bxp.onclick = () => boxPut(VIEW.loc, VIEW.zone);
   const bxx = document.querySelector('[data-act="boxclose"]'); if(bxx) bxx.onclick = () => boxClose(VIEW.loc, VIEW.zone);
   const me = document.querySelector('[data-act="medit"]'); if(me) me.onclick = () => openMapEditor(VIEW.loc, VIEW.screen === 'zone' ? VIEW.zone : '');
   const mb = document.querySelector('[data-act="mboxes"]'); if(mb) mb.onclick = () => { openViewer(VIEW.loc, VIEW.zone); if(PV){ PV.edit = true; PV.sel = null; drawViewer(); } };
@@ -830,6 +833,7 @@ function beep(ok){
 function aliasOf(raw){ const s = String(raw || '').trim(); const a = DATA && DATA.aliases ? DATA.aliases[bkey(s)] : null; return a || s; }
 function addScan(raw){
   if(VIEW.screen === 'unit') return recvScan(raw);
+  if(VIEW.screen === 'boxput') return bpScan(raw);
   if(VIEW.screen === 'reorgmark') return rePrint(raw);
   const code = aliasOf(raw);
   if(!code) return;
@@ -2072,7 +2076,7 @@ function boxesHTMLList(loc){
 }
 function boxZoneActions(loc, zone){
   const t = totals(rowsAt(loc, zone));
-  return `<div class="boxbar"><button class="cbtn" data-act="boxcount">${t.units ? 'Recompter la boîte' : 'Compter la boîte'}</button>${t.units ? '<button class="cbtn" data-act="boxadd">＋ Ajouter des articles</button><button class="cbtn" data-act="boxout">📤 Ranger la boîte</button>' : ''}${meIsAdmin() && !t.units ? '<button class="cbtn alt" data-act="boxclose">Fermer la boîte</button>' : ''}</div>`;
+  return `<div class="boxbar"><button class="cbtn" data-act="boxcount">${t.units ? 'Recompter la boîte' : 'Compter la boîte'}</button>${t.units ? '<button class="cbtn" data-act="boxadd">＋ Ajouter des articles</button><button class="cbtn" data-act="boxput">📲 Ranger en scannant</button><button class="cbtn" data-act="boxout">📤 Ranger (liste)</button>' : ''}${meIsAdmin() && !t.units ? '<button class="cbtn alt" data-act="boxclose">Fermer la boîte</button>' : ''}</div>`;
 }
 // ＋ Ajouter: a count that starts from what the box already holds
 function boxAdd(loc, zone){
@@ -2083,52 +2087,147 @@ function boxAdd(loc, zone){
   saveDraft(); go({ screen:'count', loc, zone, spot });
   toast('Le contenu actuel est déjà compté : scannez seulement les articles ajoutés.');
 }
-let BXO = null;   // { loc, zone, pick:{bc:true}, to, toZone }
+// ── 📤 Ranger la boîte, produit par produit (note 5, 2 Nov 2026) ──
+// Each product of the box gets its own zone and quantity; the zone is
+// pre-filled with where the product already sits in the store. Products
+// left without a zone stay in the box. 📲 Ranger en scannant (below) does
+// the same one scan at a time, at the shelf.
+function bxDests(loc){
+  const out = zoneList(loc).filter(z => !z.b).map(z => ({ v: loc + '|' + z.c, t: z.c + (z.k ? ' · ' + z.k : '') }));
+  if(loc !== 'Warehouse') out.push({ v: 'Warehouse|Entrepôt', t: 'Entrepôt (réserve)' });
+  return out;
+}
+// Where this product already is in the store (biggest stock first), box and « Non placé » left out.
+function bxSuggest(loc, bc, box){
+  const k = bkey(bc);
+  const r = rowsAt(loc).filter(x => bkey(x[2]) === k && x[4] > 0 && x[1] !== box && x[1] !== UNPLACED && !isBox(loc, x[1])).sort((a, b) => b[4] - a[4])[0];
+  return r ? r[1] : '';
+}
+// moves: [{ barcode, name, qty, to, toZone }] → stock moves + the box's new content
+function bxSend(loc, box, moves, msg){
+  moves = moves.filter(m => m.qty > 0 && m.toZone);
+  if(!moves.length) return false;
+  const ops = [];
+  moves.forEach(m => {
+    const base = { barcode: m.barcode, name: m.name, mode:'delta', reason:'Transfert' };
+    ops.push(Object.assign({}, base, { location: loc, zone: box, qty: -m.qty, note: 'boîte ' + boxName(loc, box) + ' → ' + locName(m.to) + ' · ' + m.toZone }));
+    ops.push(Object.assign({}, base, { location: m.to, zone: m.toZone, qty: m.qty, note: 'depuis la boîte ' + boxName(loc, box) }));
+  });
+  const out = {}; moves.forEach(m => { const k = bkey(m.barcode); out[k] = (out[k] || 0) + m.qty; });
+  const left = rowsAt(loc, box).filter(r => r[4] > 0).map(r => ({ barcode: r[2], name: r[3], count: r[4] - (out[bkey(r[2])] || 0) })).filter(i => i.count > 0);
+  queueWork(ops, [], msg || fmt(moves.reduce((a, m) => a + m.qty, 0)) + ' article(s) rangé(s)');
+  // the box's content (its single « -W » spot) = what is left in it
+  const body = { opId: 'bx' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: loc, zone: box, spot: box + '-W', at: new Date().toISOString(), items: left };
+  applyCountLocal(Object.assign({ by: user.name }, body));
+  QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+  ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+  flushQueue(); render();
+  if(!left.length && meIsAdmin()) setTimeout(() => toast('La boîte est vide : vous pouvez la fermer.'), 2700);
+  return true;
+}
+let BXO = null;   // { loc, zone, dest:{bkey:'loc|zone'}, qty:{bkey:n} }
 function boxOut(loc, zone){
-  const rows = rowsAt(loc, zone).filter(r => r[4] > 0);
-  BXO = { loc, zone, pick: {}, to: loc, toZone: '' };
-  rows.forEach(r => BXO.pick[bkey(r[2])] = true);
+  BXO = { loc, zone, dest: {}, qty: {} };
+  rowsAt(loc, zone).filter(r => r[4] > 0).forEach(r => { const k = bkey(r[2]), sg = bxSuggest(loc, r[2], zone); BXO.dest[k] = sg ? loc + '|' + sg : ''; BXO.qty[k] = r[4]; });
   drawBoxOut();
 }
 function drawBoxOut(){
   const o = BXO, rows = rowsAt(o.loc, o.zone).filter(r => r[4] > 0).sort((a, b) => b[4] - a[4]);
-  const zs = o.to === 'Warehouse' ? ['Entrepôt'] : zoneList(o.to).filter(z => !z.b).map(z => z.c);
-  if(!zs.includes(o.toZone)) o.toZone = '';
-  const n = rows.filter(r => o.pick[bkey(r[2])]).reduce((a, r) => a + r[4], 0);
+  const dests = bxDests(o.loc);
+  const opts = cur => '<option value="">— reste dans la boîte —</option>' + dests.map(d => `<option value="${esc(d.v)}"${d.v === cur ? ' selected' : ''}>${esc(d.t)}</option>`).join('');
+  const going = rows.filter(r => o.dest[bkey(r[2])]), n = going.reduce((a, r) => a + Math.min(r[4], o.qty[bkey(r[2])] || 0), 0);
   openSheet(`<h3>📤 Ranger « ${esc(boxName(o.loc, o.zone))} »</h3>
-    <div class="sub">Choisissez les produits, puis leur nouvelle zone.</div>
-    <div class="chips" style="margin:8px 0"><button data-bxall="1">Tout</button><button data-bxall="0">Rien</button></div>
-    <div class="list" style="max-height:34vh;overflow:auto">${rows.map(r => `<label class="citem" style="cursor:pointer"><input type="checkbox" data-bxp="${esc(bkey(r[2]))}" ${o.pick[bkey(r[2])] ? 'checked' : ''} style="width:22px;height:22px">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])}</small></div><span class="c num">${fmt(r[4])}</span></label>`).join('')}</div>
-    <label class="f">Vers</label>
-    <div class="chips">${LOCS.map(l => `<button data-bxto="${esc(l.id)}" aria-pressed="${o.to === l.id}">${esc(l.name)}</button>`).join('')}</div>
-    <label class="f" for="bxz">Zone d’arrivée</label>
-    <select class="t" id="bxz"><option value="">— choisir —</option>${zs.map(z => `<option value="${esc(z)}"${z === o.toZone ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>
-    <button class="go" id="bxgo" ${n && o.toZone ? '' : 'disabled'}>Ranger ${fmt(n)} article(s)</button><button class="ghost" id="bxno">Annuler</button>`);
+    <div class="sub">Une zone par produit. La zone proposée est celle où le produit est déjà rangé : vérifiez-la. Sans zone, le produit reste dans la boîte.</div>
+    <div style="display:flex;gap:6px;align-items:center;margin:8px 0"><select class="t" id="bxall" style="flex:1;margin:0"><option value="">Mettre les produits sans zone vers…</option>${dests.map(d => `<option value="${esc(d.v)}">${esc(d.t)}</option>`).join('')}</select></div>
+    <div class="list" style="max-height:46vh;overflow:auto">${rows.map(r => { const k = bkey(r[2]), q = Math.min(r[4], o.qty[k] || 0), sg = bxSuggest(o.loc, r[2], o.zone);
+      return `<div class="citem" style="flex-wrap:wrap;gap:6px">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])} · ${fmt(r[4])} dans la boîte${sg ? ' · déjà en ' + esc(sg) : ''}</small></div>
+        <div style="display:flex;gap:6px;align-items:center;width:100%"><select class="t" data-bxd="${esc(k)}" style="flex:1;margin:0;${o.dest[k] ? '' : 'color:var(--muted)'}">${opts(o.dest[k])}</select>
+        <button data-bxq="${esc(k)}" data-d="-1" aria-label="Moins">−</button><span class="c num" style="min-width:28px;text-align:center">${q}</span><button data-bxq="${esc(k)}" data-d="1" aria-label="Plus">+</button></div></div>`; }).join('')}</div>
+    <button class="go" id="bxgo" ${n ? '' : 'disabled'}>Ranger ${fmt(n)} article(s)${going.length ? ' · ' + going.length + ' produit(s)' : ''}</button><button class="ghost" id="bxno">Annuler</button>`);
   const sh = $('#sheet');
-  sh.querySelectorAll('[data-bxp]').forEach(x => x.onchange = () => { o.pick[x.dataset.bxp] = x.checked; drawBoxOut(); });
-  sh.querySelectorAll('[data-bxall]').forEach(b => b.onclick = () => { rows.forEach(r => o.pick[bkey(r[2])] = b.dataset.bxall === '1'); drawBoxOut(); });
-  sh.querySelectorAll('[data-bxto]').forEach(b => b.onclick = () => { o.to = b.dataset.bxto; o.toZone = o.to === 'Warehouse' ? 'Entrepôt' : ''; drawBoxOut(); });
-  $('#bxz').onchange = e => { o.toZone = e.target.value; drawBoxOut(); };
+  sh.querySelectorAll('[data-bxd]').forEach(x => x.onchange = () => { o.dest[x.dataset.bxd] = x.value; drawBoxOut(); });
+  sh.querySelectorAll('[data-bxq]').forEach(b => b.onclick = () => { const k = b.dataset.bxq, r = rows.find(x => bkey(x[2]) === k); o.qty[k] = Math.max(0, Math.min(r ? r[4] : 0, (o.qty[k] || 0) + Number(b.dataset.d))); drawBoxOut(); });
+  $('#bxall').onchange = e => { const v = e.target.value; if(!v) return; rows.forEach(r => { const k = bkey(r[2]); if(!o.dest[k]) o.dest[k] = v; }); drawBoxOut(); };
   $('#bxno').onclick = closeSheet;
   $('#bxgo').onclick = () => {
-    const moving = rows.filter(r => o.pick[bkey(r[2])]);
-    const ops = [];
-    moving.forEach(r => {
-      const base = { barcode: r[2], name: r[3], mode:'delta', reason:'Transfert' };
-      ops.push(Object.assign({}, base, { location: o.loc, zone: o.zone, qty: -r[4], note: 'boîte ' + boxName(o.loc, o.zone) + ' → ' + locName(o.to) + ' · ' + o.toZone }));
-      ops.push(Object.assign({}, base, { location: o.to, zone: o.toZone, qty: r[4], note: 'depuis la boîte ' + boxName(o.loc, o.zone) }));
-    });
-    const left = rows.filter(r => !o.pick[bkey(r[2])]);
-    queueWork(ops, [], fmt(moving.reduce((a, r) => a + r[4], 0)) + ' article(s) rangé(s) dans ' + o.toZone);
-    // the box's content (its single « -W » spot) = what is left in it
-    const body = { opId: 'bx' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: o.loc, zone: o.zone, spot: o.zone + '-W', at: new Date().toISOString(),
-      items: left.map(r => ({ barcode: r[2], name: r[3], count: r[4] })) };
-    applyCountLocal(Object.assign({ by: user.name }, body));
-    QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
-    ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
-    flushQueue(); render();
-    if(!left.length && meIsAdmin()) setTimeout(() => toast('La boîte est vide : vous pouvez la fermer.'), 2700);
+    const moves = going.map(r => { const k = bkey(r[2]), d = o.dest[k].split('|'); return { barcode: r[2], name: r[3], qty: Math.min(r[4], o.qty[k] || 0), to: d[0], toZone: d[1] }; });
+    const zs = new Set(moves.filter(m => m.qty > 0).map(m => m.toZone));
+    bxSend(o.loc, o.zone, moves, fmt(n) + ' article(s) rangé(s) dans ' + (zs.size === 1 ? [...zs][0] : zs.size + ' zones'));
   };
+}
+
+// ── 📲 Ranger en scannant (note 5): at the shelf, pick the zone, scan each
+//    article put there. Not in the box → refused. Already kept in another
+//    zone → warned. « Terminer » (or changing zone) sends what was put.
+let BP = lsj('s1981_boxput', null);   // { loc, box, to, toZone, items:[{barcode,name,n}], last }
+function bpSave(){ ls('s1981_boxput', JSON.stringify(BP)); }
+function bpLeft(bc){ const k = bkey(bc), r = rowsAt(BP.loc, BP.box).find(x => bkey(x[2]) === k); const put = (BP.items.find(i => bkey(i.barcode) === k) || {}).n || 0; return (r ? r[4] : 0) - put; }
+function boxPut(loc, box){
+  if(BP && (BP.loc !== loc || BP.box !== box) && BP.items.length){ toast('Terminez d’abord le rangement de « ' + boxName(BP.loc, BP.box) + ' ».'); go({ screen:'boxput', loc: BP.loc, zone: BP.box }); return; }
+  if(!BP || BP.loc !== loc || BP.box !== box) BP = { loc, box, to: loc, toZone: '', items: [], last: null };
+  bpSave(); go({ screen:'boxput', loc, zone: box });
+}
+function bpFlush(){
+  if(!BP || !BP.items.length) return;
+  const n = BP.items.reduce((a, i) => a + i.n, 0);
+  bxSend(BP.loc, BP.box, BP.items.map(i => ({ barcode: i.barcode, name: i.name, qty: i.n, to: BP.to, toZone: BP.toZone })), fmt(n) + ' article(s) rangé(s) dans ' + BP.toZone);
+  BP.items = []; BP.last = null; bpSave();
+}
+function bpScan(raw){
+  if(!BP || !BP.toZone){ beep(false); toast('Choisissez d’abord la zone où vous rangez.'); return; }
+  const code = aliasOf(raw); if(!code) return;
+  if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
+  const sh = lblShared(code);
+  if(sh){ lblAsk(sh, c2 => bpPut(c2)); return; }
+  bpPut(code);
+}
+function bpPut(code){
+  const k = bkey(code), r = rowsAt(BP.loc, BP.box).find(x => bkey(x[2]) === k);
+  if(!r){ beep(false); BP.last = { barcode: code, bad: '❌ Pas dans cette boîte : ne le rangez pas ici, mettez-le de côté.' }; bpSave(); render(); return; }
+  if(bpLeft(code) <= 0){ beep(false); BP.last = { barcode: code, bad: '❌ Déjà tout rangé : la boîte n’en contient plus. Recomptez la boîte.' }; bpSave(); render(); return; }
+  let it = BP.items.find(i => bkey(i.barcode) === k);
+  if(!it){ it = { barcode: r[2], name: r[3] || productName(r[2]), n: 0 }; BP.items.unshift(it); } else { BP.items.splice(BP.items.indexOf(it), 1); BP.items.unshift(it); }
+  it.n++;
+  const sg = bxSuggest(BP.loc, r[2], BP.box);
+  BP.last = { barcode: r[2], warn: sg && sg !== BP.toZone && BP.to === BP.loc ? '⚠ Ce produit est déjà rangé en ' + sg + '. Vérifiez que ' + BP.toZone + ' est la bonne zone.' : '' };
+  if(BP.last.warn){ beep(false); } else beep(true);
+  bpSave(); render();
+}
+function boxPutHTML(){
+  if(!BP) return '<p class="empty">Aucun rangement en cours.</p>';
+  const rows = rowsAt(BP.loc, BP.box).filter(r => r[4] > 0);
+  const left = rows.reduce((a, r) => a + Math.max(0, bpLeft(r[2])), 0), put = BP.items.reduce((a, i) => a + i.n, 0);
+  let h = `<div class="zhead"><h2>📦 ${esc(boxName(BP.loc, BP.box))}</h2><p>${fmt(left)} article(s) encore dans la boîte</p></div>`;
+  if(!BP.toZone){
+    // zones where the box's products already are come first
+    const want = {}; rows.forEach(r => { const sg = bxSuggest(BP.loc, r[2], BP.box); if(sg) want[sg] = (want[sg] || 0) + r[4]; });
+    const dests = bxDests(BP.loc).map(d => Object.assign(d, { z: d.v.split('|')[1], w: want[d.v.split('|')[1]] || 0 })).sort((a, b) => b.w - a.w);
+    h += `<div class="sect">1. Où rangez-vous ? Touchez la zone devant vous</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">` +
+      dests.map(d => `<button class="cbtn${d.w ? '' : ' alt'}" data-bpz="${esc(d.v)}" style="min-height:58px;font-size:16px;font-weight:800">${esc(d.z)}${d.w ? `<br><small style="font-weight:600">${fmt(d.w)} article(s) à y mettre</small>` : ''}</button>`).join('') + '</div>';
+    h += `<div class="cfoot"><button class="ghost" id="bpquit">Retour</button></div>`;
+    return h;
+  }
+  h += `<div class="sect" style="margin-top:6px">2. Scannez chaque article que vous posez en <b style="font-size:18px">${esc(BP.toZone)}</b></div>
+    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez l’article posé" aria-label="Code-barres"><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
+    <div class="hint">Chaque scan : −1 dans la boîte, +1 en ${esc(BP.toZone)}.</div></div>`;
+  const L = BP.last;
+  if(L && L.bad) h += `<div class="notice" style="background:#fee2e2;color:#991b1b;font-weight:700">${esc(L.bad)}<br><small>${esc(productName(L.barcode) || L.barcode)}</small></div>`;
+  else if(L){ const it = BP.items.find(i => bkey(i.barcode) === bkey(L.barcode)); h += lastCard(L.barcode, it ? it.name : productName(L.barcode), it ? it.n : 1, ' · reste ' + fmt(Math.max(0, bpLeft(L.barcode))) + ' dans la boîte'); if(L.warn) h += `<div class="notice" style="background:#fef3c7;color:#92400e;font-weight:700">${esc(L.warn)}</div>`; }
+  h += `<div class="sect">${BP.items.length} produit(s) · ${fmt(put)} article(s) posé(s) en ${esc(BP.toZone)}</div>`;
+  h += `<div class="list">${BP.items.map((it, i) => `<div class="citem">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Sans nom')}</strong><small class="num">${esc(it.barcode)}</small></div><button data-bpdec="${i}" aria-label="Moins">−</button><span class="c num">${it.n}</span></div>`).join('') || '<p class="empty">Scannez le premier article posé.</p>'}</div>`;
+  h += `<div class="cfoot"><button class="ghost" id="bpzone">Autre zone</button><button class="go" id="bpdone">Terminer${put ? ' (' + fmt(put) + ')' : ''}</button></div>`;
+  return h;
+}
+function bindBoxPut(){
+  document.querySelectorAll('[data-bpz]').forEach(b => b.onclick = () => { const d = b.dataset.bpz.split('|'); BP.to = d[0]; BP.toZone = d[1]; BP.last = null; bpSave(); render(); });
+  const q = $('#bpquit'); if(q) q.onclick = () => { if(!BP.items.length) BP = null; bpSave(); history.back(); };
+  document.querySelectorAll('[data-bpdec]').forEach(b => b.onclick = () => { const it = BP.items[+b.dataset.bpdec]; it.n--; if(it.n <= 0) BP.items.splice(+b.dataset.bpdec, 1); BP.last = null; bpSave(); render(); });
+  const z = $('#bpzone'); if(z) z.onclick = () => { bpFlush(); if(BP){ BP.toZone = ''; bpSave(); } render(); };
+  const dn = $('#bpdone'); if(dn) dn.onclick = () => { bpFlush(); const loc = BP.loc, box = BP.box; BP = null; bpSave(); VIEW = { screen:'zone', loc, zone: box, tab:'shelves' }; history.replaceState(VIEW, ''); render(); };
+  const inp = $('#scan'); if(!inp) return;
+  inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); bpScan(inp.value); inp.value = ''; } };
+  $('#camb').onclick = openCamera;
+  setTimeout(() => { if($('#sheet').hidden) inp.focus({ preventScroll: true }); }, 30);
 }
 async function boxClose(loc, zone){
   if(totals(rowsAt(loc, zone)).units){ toast('La boîte contient encore des articles : rangez-les d’abord.'); return; }
