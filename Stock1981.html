@@ -859,12 +859,12 @@ function lblShared(code){
 function lblAsk(sh, cb){
   beep(false);
   openSheet(`<h3 style="color:var(--bad)">⚠ Ce code est sur ${sh.products.length} produits</h3><div class="sub">Regardez la bouteille. Lequel est-ce ?</div>` +
-    sh.products.map((p, i) => `<button class="${p.name === sh.keeper ? 'go' : 'ghost'}" data-lbl="${i}" style="text-align:left;margin:6px 0;border:2px solid ${p.name === sh.keeper ? 'transparent' : '#d97706'};background:${p.name === sh.keeper ? '' : '#fef3c7'};color:#111">${esc(p.name)}<br><small>${p.name === sh.keeper ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette'}</small></button>`).join('') +
+    sh.products.map((p, i) => `<button class="${p.name === sh.keeper ? 'go' : 'ghost'}" data-lbl="${i}" style="text-align:left;margin:6px 0;border:2px solid ${p.name === sh.keeper ? 'transparent' : '#d97706'};background:${p.name === sh.keeper ? '' : '#fef3c7'};color:#111">${esc(p.name)}<br><small>${sh.labels === false ? '' : p.name === sh.keeper ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette'}</small></button>`).join('') +
     `<button class="ghost" id="lblx">Annuler</button>`);
   $('#lblx').onclick = closeSheet;
   document.querySelectorAll('[data-lbl]').forEach(b => b.onclick = () => {
     const p = sh.products[+b.dataset.lbl];
-    if(p.name === sh.keeper || !p.code){ closeSheet(); cb(p.code || sh.code, p.name); return; }
+    if(p.name === sh.keeper || !p.code || sh.labels === false){ closeSheet(); cb(p.code || sh.code, p.name); return; }
     openSheet(`<h3>🏷 Collez l'étiquette sur ce produit</h3><div class="where"><div class="here"><span>${esc(p.name)}</span><b class="num">${esc(p.code)}</b></div></div><div class="sub">Ne le comptez pas sans étiquette.</div><button class="go" id="lblok">Étiquette collée ✔</button><button class="ghost" id="lblx">Annuler</button>`);
     $('#lblx').onclick = closeSheet;
     $('#lblok').onclick = () => { closeSheet(); cb(p.code, p.name); };

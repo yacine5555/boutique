@@ -1569,7 +1569,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -12798,7 +12798,7 @@ function _lblShared(code){
 // Products that must carry their own label (everything but the keeper)
 function _lblRelabel(){
   const out = [];
-  ((_lbl && _lbl.shared) || []).forEach(s => (s.products || []).forEach(p => { if(p.name !== s.keeper) out.push(Object.assign({ shared: s.code }, p)); }));
+  ((_lbl && _lbl.shared) || []).forEach(s => { if(s.labels !== false) (s.products || []).forEach(p => { if(p.name !== s.keeper) out.push(Object.assign({ shared: s.code }, p)); }); });
   return out;
 }
 function _lblIsRelabel(bc, name){
@@ -12820,8 +12820,9 @@ function lblAsk(sh, ctx, cb){
     '<div style="font-size:16px;opacity:.9;margin-bottom:14px">Regardez la bouteille. Lequel est-ce ?</div>' +
     '<div id="lbl-ch">' + prods.map((p, i) => {
       const keep = p.name === sh.keeper;
-      return '<button data-i="' + i + '" style="display:block;width:100%;margin:8px 0;padding:16px;border-radius:12px;border:0;font-size:18px;font-weight:700;background:' + (keep ? '#fff' : '#fde68a') + ';color:#111;cursor:pointer;text-align:left">' +
-        esc(p.name) + '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#444">' + (keep ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette') + '</div></button>';
+      const sub = sh.labels === false ? '' : (keep ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette');
+      return '<button data-i="' + i + '" style="display:block;width:100%;margin:8px 0;padding:16px;border-radius:12px;border:0;font-size:18px;font-weight:700;background:' + (keep || sh.labels === false ? '#fff' : '#fde68a') + ';color:#111;cursor:pointer;text-align:left">' +
+        esc(p.name) + (sub ? '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#444">' + sub + '</div>' : '') + '</button>';
     }).join('') + '</div>' +
     '<button id="lbl-x" style="margin-top:10px;background:none;border:1px solid rgba(255,255,255,.6);color:#fff;border-radius:10px;padding:10px 18px;font-size:15px;cursor:pointer">Annuler</button></div>';
   document.body.appendChild(ov);
@@ -12829,10 +12830,10 @@ function lblAsk(sh, ctx, cb){
   ov.querySelector('#lbl-x').onclick = close;
   ov.querySelectorAll('#lbl-ch button').forEach(b => b.onclick = () => {
     const p = prods[+b.dataset.i];
-    if(p.name === sh.keeper || !p.code){
+    if(p.name === sh.keeper || !p.code || sh.labels === false){
       close();
-      if(p.name !== sh.keeper && !p.code) showToast('🏷 « ' + p.name + ' » n’a pas encore d’étiquette — mettez-le de côté pour 1981.', 6000);
-      cb(p.code || sh.code, p.name, !p.code && p.name !== sh.keeper);
+      if(sh.labels !== false && p.name !== sh.keeper && !p.code) showToast('🏷 « ' + p.name + ' » n’a pas encore d’étiquette — mettez-le de côté pour 1981.', 6000);
+      cb(p.code || sh.code, p.name, sh.labels !== false && !p.code && p.name !== sh.keeper);
       return;
     }
     // Needs its own label: stick it first
