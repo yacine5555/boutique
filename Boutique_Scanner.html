@@ -1572,7 +1572,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -12862,6 +12862,7 @@ function _lblIsRelabel(bc, name){
   return _lblRelabel().find(p => (p.code && _lblDigits(p.code) === k) || (name && p.name === name)) || null;
 }
 // cb(code, name) runs once the person has said which product it is.
+const _LBL_COLS = ['#b45309', '#1d4ed8', '#047857', '#7c3aed', '#be123c', '#0f766e'];
 function lblAsk(sh, ctx, cb){
   const old = document.getElementById('lbl-ov'); if(old) old.remove();
   try { _reorgBeep(false); } catch(e){}
@@ -12870,15 +12871,26 @@ function lblAsk(sh, ctx, cb){
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(127,29,29,.96);color:#fff;display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
   const prods = sh.products || [];
-  ov.innerHTML = '<div style="max-width:520px;width:100%;text-align:center">' +
+  ov.style.overflowY = 'auto';
+  ov.innerHTML = '<div style="max-width:640px;width:100%;text-align:center;margin:auto">' +
     '<div style="font-size:54px;line-height:1">⚠️</div>' +
     '<div style="font-size:24px;font-weight:800;margin:8px 0 4px">Ce code est sur ' + prods.length + ' produits</div>' +
     '<div style="font-size:16px;opacity:.9;margin-bottom:14px">Regardez la bouteille. Lequel est-ce ?</div>' +
-    '<div id="lbl-ch">' + prods.map((p, i) => {
+    '<div id="lbl-ch" style="display:grid;grid-template-columns:repeat(' + (prods.length > 1 ? 2 : 1) + ',1fr);gap:10px">' + prods.map((p, i) => {
+      // v2-nov-c (note 4): a big photo of each bottle + short name, so staff
+      // pick by looking, not by reading. Photo from etiquettes.json, else the
+      // product's own photo; no photo → a coloured card with the short name.
       const keep = p.name === sh.keeper;
       const sub = sh.labels === false ? '' : (keep ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette');
-      return '<button data-i="' + i + '" style="display:block;width:100%;margin:8px 0;padding:16px;border-radius:12px;border:0;font-size:18px;font-weight:700;background:' + (keep || sh.labels === false ? '#fff' : '#fde68a') + ';color:#111;cursor:pointer;text-align:left">' +
-        esc(p.name) + (sub ? '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#444">' + sub + '</div>' : '') + '</button>';
+      let src = p.photo ? 'images/products/' + encodeURIComponent(p.photo) : '';
+      if(!src){ try { src = productPhotoFor(p.code || sh.code) || ''; } catch(e){} }
+      const col = _LBL_COLS[i % _LBL_COLS.length];
+      const fb = '<div class="lblfb" style="' + (src ? 'display:none;' : 'display:flex;') + 'height:150px;border-radius:10px;background:' + col + ';color:#fff;align-items:center;justify-content:center;font-size:22px;font-weight:900;padding:8px;text-align:center">' + esc(p.short || p.name) + '</div>';
+      return '<button data-i="' + i + '" style="display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:14px;border:4px solid ' + (keep || sh.labels === false ? '#fff' : '#f59e0b') + ';font-size:15px;background:' + (keep || sh.labels === false ? '#fff' : '#fde68a') + ';color:#111;cursor:pointer;text-align:center">' +
+        (src ? '<img src="' + esc(src) + '" alt="" style="width:100%;height:150px;object-fit:contain;background:#fff;border-radius:10px" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' : '') + fb +
+        '<b style="font-size:18px;line-height:1.2">' + esc(p.short || p.name) + '</b>' +
+        (p.short ? '<span style="font-size:11.5px;color:#555;line-height:1.25">' + esc(p.name) + '</span>' : '') +
+        (sub ? '<span style="font-size:12.5px;font-weight:600;color:#444">' + sub + '</span>' : '') + '</button>';
     }).join('') + '</div>' +
     '<button id="lbl-x" style="margin-top:10px;background:none;border:1px solid rgba(255,255,255,.6);color:#fff;border-radius:10px;padding:10px 18px;font-size:15px;cursor:pointer">Annuler</button></div>';
   document.body.appendChild(ov);

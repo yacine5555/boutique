@@ -859,7 +859,17 @@ function lblShared(code){
 function lblAsk(sh, cb){
   beep(false);
   openSheet(`<h3 style="color:var(--bad)">⚠ Ce code est sur ${sh.products.length} produits</h3><div class="sub">Regardez la bouteille. Lequel est-ce ?</div>` +
-    sh.products.map((p, i) => `<button class="${p.name === sh.keeper ? 'go' : 'ghost'}" data-lbl="${i}" style="text-align:left;margin:6px 0;border:2px solid ${p.name === sh.keeper ? 'transparent' : '#d97706'};background:${p.name === sh.keeper ? '' : '#fef3c7'};color:#111">${esc(p.name)}<br><small>${sh.labels === false ? '' : p.name === sh.keeper ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette'}</small></button>`).join('') +
+    `<div style="display:grid;grid-template-columns:repeat(${sh.products.length > 1 ? 2 : 1},1fr);gap:8px;margin:8px 0">` +
+    sh.products.map((p, i) => {
+      // note 4 (2 Nov): photo of each bottle + short name, picked by looking
+      const keep = p.name === sh.keeper || sh.labels === false, col = ['#b45309', '#1d4ed8', '#047857', '#7c3aed', '#be123c', '#0f766e'][i % 6];
+      const src = p.photo ? 'images/products/' + encodeURIComponent(p.photo) : '';
+      const fb = `<div style="${src ? 'display:none;' : 'display:flex;'}height:130px;border-radius:10px;background:${col};color:#fff;align-items:center;justify-content:center;font-size:20px;font-weight:900;padding:6px;text-align:center">${esc(p.short || p.name)}</div>`;
+      return `<button data-lbl="${i}" style="display:flex;flex-direction:column;gap:5px;padding:8px;margin:0;border-radius:14px;border:3px solid ${keep ? '#e5e7eb' : '#d97706'};background:${keep ? '#fff' : '#fef3c7'};color:#111;text-align:center;font-size:14px">` +
+        (src ? `<img src="${esc(src)}" alt="" style="width:100%;height:130px;object-fit:contain;background:#fff;border-radius:10px" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : '') + fb +
+        `<b style="font-size:16px;line-height:1.2">${esc(p.short || p.name)}</b>` + (p.short ? `<small style="color:#555;line-height:1.25">${esc(p.name)}</small>` : '') +
+        (sh.labels === false ? '' : `<small>${p.name === sh.keeper ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette'}</small>`) + `</button>`;
+    }).join('') + `</div>` +
     `<button class="ghost" id="lblx">Annuler</button>`);
   $('#lblx').onclick = closeSheet;
   document.querySelectorAll('[data-lbl]').forEach(b => b.onclick = () => {

@@ -1,5 +1,5 @@
 {
-  "note": "Codes-barres partagés par plusieurs produits. labels:false = pas d'étiquettes, le personnel choisit le produit à l'écran à chaque scan. code = le code 0610 propre à chaque produit (utilisé pour les ventes et le stock).",
+  "note": "Codes-barres partagés par plusieurs produits. labels:false = pas d'étiquettes, le personnel choisit le produit à l'écran à chaque scan. code = le code 0610 propre à chaque produit (utilisé pour les ventes et le stock). short = nom court affiché en gros ; photo = fichier dans images/products/ montré sur l'écran de choix.",
   "shared": [
     {
       "code": "6925267306822",
@@ -7,19 +7,27 @@
       "products": [
         {
           "name": "Lansyade Vitamin C Body Lotion Strong Whitening - 500ml",
-          "code": "0610000010079"
+          "code": "0610000010079",
+          "short": "Lansyade · Vit C",
+          "photo": "lansyade-vitamin-c-body-lotion-500ml.jpg"
         },
         {
           "name": "Dr-Meinaer Alpha Arbutin Face & Body Serum - Cho7X20 - 500ml",
-          "code": "0610000010161"
+          "code": "0610000010161",
+          "short": "Dr Meinaier · Alpha Arbutin",
+          "photo": "dr-meinaier-alpha-arbutin-face-body-serum-500ml.jpg"
         },
         {
           "name": "LanSYade AHA White Body Lotion Alpha Hydroxy Acids + Vitamin C & E",
-          "code": "0610000010154"
+          "code": "0610000010154",
+          "short": "Lansyade · AHA",
+          "photo": "lansyade-aha-white-body-lotion-500ml.jpg"
         },
         {
           "name": "Dr-Meinaer AHA White Body Serum Plus Alpha Hydroxy Acids + Vitamin C&E",
-          "code": "0610000010024"
+          "code": "0610000010024",
+          "short": "Dr Meinaier · AHA 90 %",
+          "photo": "dr-meinaier-aha-body-serum-vitamin-c-e-500ml.jpg"
         }
       ],
       "labels": false
