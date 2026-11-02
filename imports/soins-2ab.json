@@ -1,0 +1,102 @@
+{
+ "name": "Soins 2AB",
+ "loc": "Store 1",
+ "where": "à ranger en 2A-2B",
+ "items": [
+  {
+   "barcode": "0610000010079",
+   "name": "Lansyade Vitamin C lotion",
+   "count": 11
+  },
+  {
+   "barcode": "0610000010161",
+   "name": "Dr Meinaier Alpha Arbutin serum",
+   "count": 14
+  },
+  {
+   "barcode": "0610000010154",
+   "name": "Lansyade AHA lotion",
+   "count": 10
+  },
+  {
+   "barcode": "0610000010024",
+   "name": "Dr Meinaier AHA 90% serum",
+   "count": 14
+  },
+  {
+   "barcode": "0610000010086",
+   "name": "Miss Mari Hyaluronic & Alpha Arbutin Body Lotion",
+   "count": 6
+  },
+  {
+   "barcode": "0610000010109",
+   "name": "Miss Mari AHA White Body Lotion",
+   "count": 5
+  },
+  {
+   "barcode": "0610000010093",
+   "name": "Miss Mari Hyaluronic & Alpha Arbutin Body Serum",
+   "count": 6
+  },
+  {
+   "barcode": "0610000010147",
+   "name": "Miss Mari Kojic Acid Extra Whitening Serum",
+   "count": 3
+  },
+  {
+   "barcode": "0610000010062",
+   "name": "Miss Mari AHA White Body Serum",
+   "count": 6
+  },
+  {
+   "barcode": "0610000010116",
+   "name": "Miss Mari Alpha Arbutin lotion + tomato",
+   "count": 5
+  },
+  {
+   "barcode": "0610000010055",
+   "name": "Miss Mari Alpha Arbutin serum + tomato",
+   "count": 7
+  },
+  {
+   "barcode": "0610000010031",
+   "name": "Tomato Lycopene & Collagen Shower Gel 1000ml",
+   "count": 3
+  },
+  {
+   "barcode": "0610000010048",
+   "name": "Gluta White Magic White",
+   "count": 14
+  },
+  {
+   "barcode": "0610000010017",
+   "name": "Luffa Whitening Shower Gel 1000ml",
+   "count": 14
+  },
+  {
+   "barcode": "8850369542534",
+   "name": "Supreme Gluta White 1500000 mg",
+   "count": 1
+  },
+  {
+   "barcode": "8850369542536",
+   "name": "Bloom Gluta Berry 1000 ml",
+   "count": 8
+  },
+  {
+   "barcode": "0610000033672",
+   "name": "Turmeric Vitamin C Shower Gel 1000 ml",
+   "count": 3
+  },
+  {
+   "barcode": "0610000010178",
+   "name": "Miss Mari Whitening Shower Cream",
+   "count": 2
+  },
+  {
+   "barcode": "0610000010000",
+   "name": "Miss Mari Carrot Papaya Kojic 1000 ml",
+   "count": 10
+  }
+ ]
+}

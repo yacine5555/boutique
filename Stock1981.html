@@ -2004,13 +2004,43 @@ function boxCreate(loc){
   $('#bxgo').onclick = async () => {
     const name = $('#bxn').value.trim(); if(!name){ toast('Donnez un nom à la boîte.'); return; }
     if(!online){ toast('Il faut une connexion pour créer une boîte.'); return; }
-    const src = meItemsFromMap(loc);
-    let n = 1; while(src.items.some(i => i.t === 'zone' && i.code === 'BOX' + n) || zoneList(loc).some(z => z.c === 'BOX' + n)) n++;
-    const nb = src.items.filter(i => i.box).length;
-    src.items.push({ t:'zone', code: 'BOX' + n, x: 20 + (nb % 6) * 90, y: Math.max(0, src.vh - 70), w: 80, h: 50, k: name, g: 'Boîtes' + ($('#bxw').value.trim() ? ' · ' + $('#bxw').value.trim() : ''), s: '', box: true });
     const b = $('#bxgo'); b.disabled = true; b.textContent = 'Création…';
-    try { await meSaveLayout(loc, src.items, src.vw, src.vh + (nb ? 0 : 80)); closeSheet(); toast('Boîte « ' + name + ' » créée — déplacez-la sur le plan si besoin.'); go({ screen:'zone', loc, zone: 'BOX' + n, tab:'products' }); }
+    try { const code = await boxMake(loc, name, $('#bxw').value.trim()); closeSheet(); toast('Boîte « ' + name + ' » créée — déplacez-la sur le plan si besoin.'); go({ screen:'zone', loc, zone: code, tab:'products' }); }
     catch(e){ toast('Boîte non créée : ' + (e.message || 'pas de connexion')); b.disabled = false; b.textContent = 'Créer la boîte'; }
+  };
+}
+async function boxMake(loc, name, where){
+  const src = meItemsFromMap(loc);
+  let n = 1; while(src.items.some(i => i.t === 'zone' && i.code === 'BOX' + n) || zoneList(loc).some(z => z.c === 'BOX' + n)) n++;
+  const nb = src.items.filter(i => i.box).length;
+  src.items.push({ t:'zone', code: 'BOX' + n, x: 20 + (nb % 6) * 90, y: Math.max(0, src.vh - 70), w: 80, h: 50, k: name, g: 'Boîtes' + (where ? ' · ' + where : ''), s: '', box: true });
+  await meSaveLayout(loc, src.items, src.vw, src.vh + (nb ? 0 : 80));
+  return 'BOX' + n;
+}
+// ── Import a ready list into a new box (2 Nov 2026): open Stock1981.html#import=<name>
+//    → reads imports/<name>.json from the site {name, loc, where, items:[{barcode,name,count}]},
+//    asks the admin, creates the box and opens its count already filled: check, then « Terminer ».
+async function checkImport(){
+  const m = /#import=([\w-]+)/.exec(location.hash || ''); if(!m || !user) return;
+  history.replaceState(history.state, '', location.pathname + location.search);
+  if(!meIsAdmin()){ toast('Import réservé aux administrateurs.'); return; }
+  let d; try { const r = await fetch('imports/' + m[1] + '.json?t=' + Date.now(), { cache: 'no-store' }); d = await r.json(); } catch(e){ toast('Liste introuvable : ' + m[1]); return; }
+  const items = (d.items || []).filter(i => i.barcode && Number(i.count) > 0);
+  const n = items.reduce((a, i) => a + Number(i.count), 0);
+  const ex = boxesOf(d.loc).find(z => z.k === d.name);
+  openSheet(`<h3>📦 ${ex ? 'Remplir' : 'Créer'} la boîte « ${esc(d.name)} »</h3><div class="sub">${esc(locName(d.loc))}${d.where ? ' · ' + esc(d.where) : ''}</div>
+    <div class="where"><div class="here"><span>${items.length} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div></div>
+    <div class="sub">Le comptage s'ouvre déjà rempli : vérifiez, puis « Terminer l'étagère ».</div>
+    <button class="go" id="imgo">Ouvrir le comptage</button><button class="ghost" id="imno">Annuler</button>`);
+  $('#imno').onclick = closeSheet;
+  $('#imgo').onclick = async () => {
+    const b = $('#imgo'); b.disabled = true; b.textContent = 'Création…';
+    try {
+      const zone = ex ? ex.c : await boxMake(d.loc, d.name, d.where || '');
+      closeSheet();
+      C = { loc: d.loc, zone, spot: zone + '-W', items: items.map(i => ({ barcode: String(i.barcode), name: productName(i.barcode) || i.name, count: Number(i.count) })), startedAt: new Date().toISOString() };
+      saveDraft(); go({ screen:'count', loc: d.loc, zone, spot: zone + '-W' });
+    } catch(e){ toast('Boîte non créée : ' + (e.message || 'pas de connexion')); b.disabled = false; b.textContent = 'Ouvrir le comptage'; }
   };
 }
 function boxesHTMLList(loc){
@@ -2570,6 +2600,7 @@ function signIn(u){
   render();
   if(!DATA || !DATA.generatedAt) loadData();
   flushQueue();
+  setTimeout(checkImport, 300);
 }
 ['pointerdown', 'keydown', 'scroll'].forEach(ev => window.addEventListener(ev, () => {
   if(!user) return;
@@ -2588,7 +2619,7 @@ setInterval(() => {
   if(u && Date.now() - a.at < IDLE_MS){ user = { name: u.name, role: u.role, hash: u.hash }; lastActive = a.at; }
   else lock();
   render();
-  if(URL_ && KEY){ refreshUsers(); loadTraces(); loadMaps(); loadTransit(); await loadData(); flushQueue(); }
+  if(URL_ && KEY){ refreshUsers(); loadTraces(); loadMaps(); loadTransit(); await loadData(); flushQueue(); checkImport(); }
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
