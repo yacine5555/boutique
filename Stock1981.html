@@ -1065,6 +1065,7 @@ function reDays(){
 }
 function reDayLabel(d){ if(d === reToday()) return 'Aujourd’hui'; const t = new Date(d + 'T12:00:00'); return t.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' }); }
 const RE_ST = { ok: ['✅', 'var(--ok)'], warn: ['⚠', 'var(--warn)'], bad: ['❌', 'var(--bad)'], wait: ['⏳', 'var(--muted)'], done: ['✔', 'var(--ok)'], recount: ['↺', 'var(--warn)'] };
+let RE_SHOW_DONE = false;
 function reorgHTML(){
   const day = RE_DAY || reToday();
   let h = `<div class="chips" style="margin-bottom:10px">${LOCS.map(L => `<button data-reloc="${esc(L.id)}" aria-pressed="${L.id === RE_LOC}">${esc(L.name)}</button>`).join('')}</div>`;
@@ -1077,15 +1078,21 @@ function reorgHTML(){
   const info = reSpotInfo();
   h += `<div class="sect">${VIEW.rz ? '<button class="cbtn alt" data-act="remap" style="margin-right:8px">← Plan</button>' : ''}${day === reToday() ? 'Touchez une zone, puis l’étagère à repérer · ordre n°' + ((res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1) : 'Plan'}</div>`;
   h += VIEW.rz ? reZoneHTML(VIEW.rz, info) : reMapHTML(info);
-  h += '<div class="sect">Étagères, dans l’ordre du tour</div>';
-  h += res.length ? '<div class="list">' + res.map(r => {
+  // 2 Nov: validated shelves go in a folded section at the bottom, so the
+  // list shows only what still needs attention.
+  const reTodo = res.filter(r => r.st !== 'done'), reDone = res.filter(r => r.st === 'done');
+  const reRow = r => {
     const m = r.m, s = RE_ST[r.st];
     return `<div class="shelf" style="border-left:4px solid ${s[1]}"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${m.order}. ${esc(m.zone)} · ${esc(spotLabelOf(m.location, m.zone, m.spot))}</b>
       <div style="font-weight:600;font-size:13px;color:${s[1]};margin-top:2px">${s[0]} ${esc(r.msg)}</div>
       <div style="color:var(--muted);font-size:12px;margin-top:2px">Vous : ${m.total} article(s) · ${(m.prints || []).length} repère(s)${r.g ? ' · zone caisse n°' + r.g.n + ' (' + r.scanned + ')' : ''}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px">${r.st !== 'done' && r.g ? `<button class="cbtn" data-reval="${esc(m.id)}">${r.st === 'ok' ? '✓ Valider' : 'Voir'}</button>` : ''}
       ${r.st !== 'done' ? `<button class="cbtn alt" data-reedit="${esc(m.id)}">Modifier</button>` : ''}</div></div></div>`;
-  }).join('') + '</div>' : `<p class="empty">${day === reToday() ? 'Aucune étagère repérée aujourd’hui.<br>Commencez par « Repérer l’étagère suivante », dans l’ordre où les chariots partiront.' : 'Rien ce jour-là.'}</p>`;
+  };
+  h += '<div class="sect">Étagères à traiter, dans l’ordre du tour' + (res.length ? ' (' + reTodo.length + ')' : '') + '</div>';
+  h += res.length ? (reTodo.length ? '<div class="list">' + reTodo.map(reRow).join('') + '</div>' : '<p class="empty">Tout est validé 👍</p>') +
+    (reDone.length ? `<button class="cbtn alt" data-act="re-done" style="margin:12px 0 6px;width:100%">${RE_SHOW_DONE ? '▾ Masquer' : '▸ Voir'} les étagères validées (${reDone.length})</button>` +
+      (RE_SHOW_DONE ? '<div class="list" style="opacity:.75">' + reDone.map(reRow).join('') + '</div>' : '') : '') : `<p class="empty">${day === reToday() ? 'Aucune étagère repérée aujourd’hui.<br>Commencez par « Repérer l’étagère suivante », dans l’ordre où les chariots partiront.' : 'Rien ce jour-là.'}</p>`;
   if(loose.length) h += '<div class="sect">Zones scannées à la caisse sans étagère</div><div class="list">' + loose.map(g => `<div class="shelf"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">Zone caisse n°${g.n} · ${g.items.length} article(s)</b><div style="color:var(--muted);font-size:12px;margin-top:2px">${new Date(g.t0).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}–${new Date(g.t1).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${g.by ? ' · ' + esc(g.by) : ''} — aucun article repère ne correspond</div></div></div></div>`).join('') + '</div>';
   return h;
 }
@@ -1093,6 +1100,7 @@ function bindReorg(){
   document.querySelectorAll('[data-reloc]').forEach(b => b.onclick = () => { RE_LOC = b.dataset.reloc; ls('s1981_reorg_loc', RE_LOC); RE = null; RE_DAY = ''; render(); loadReorg(); });
   document.querySelectorAll('[data-reday]').forEach(b => b.onclick = () => { RE_DAY = b.dataset.reday === reToday() ? '' : b.dataset.reday; render(); });
   const rl = document.querySelector('[data-act="reload-re"]'); if(rl) rl.onclick = loadReorg;
+  const rd = document.querySelector('[data-act="re-done"]'); if(rd) rd.onclick = () => { RE_SHOW_DONE = !RE_SHOW_DONE; render(); };
   document.querySelectorAll('[data-rmz]').forEach(b => { b.onclick = () => { VIEW.rz = b.dataset.rmz; history.pushState(VIEW, ''); render(); }; b.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); b.onclick(); } }; });
   const rp = document.querySelector('[data-act="remap"]'); if(rp) rp.onclick = () => history.back();
   document.querySelectorAll('[data-rsp]').forEach(b => b.onclick = () => reTapSpot(VIEW.rz, b.dataset.rsp));
