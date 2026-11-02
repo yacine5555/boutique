@@ -834,11 +834,41 @@ function addScan(raw){
   const code = aliasOf(raw);
   if(!code) return;
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
+  const sh = lblShared(code);
+  if(sh){ lblAsk(sh, (c2, nm) => { addScanCode(c2, nm); }); return; }
+  addScanCode(code);
+}
+function addScanCode(code, nm){
   const k = bkey(code);
   let i = C.items.findIndex(it => bkey(it.barcode) === k);
   if(i >= 0){ const it = C.items.splice(i, 1)[0]; it.count++; C.items.unshift(it); }
-  else C.items.unshift({ barcode: code, name: productName(code), count: 1 });
+  else C.items.unshift({ barcode: code, name: productName(code) || nm || '', count: 1 });
   C.flash = true; beep(true); saveDraft(); render();
+}
+// ── Codes partagés (etiquettes.json in the repo, 2 Nov 2026): a barcode on
+//    several products. Scanning it asks which product it is; a product that
+//    needs its own label must get it before it is counted.
+const LBL_URL = 'https://yacine5555.github.io/boutique/etiquettes.json';
+let LBL = null;
+try { LBL = JSON.parse(localStorage.getItem('lbl_cfg') || 'null'); } catch(e){}
+(async () => { try { const r = await fetch(LBL_URL + '?t=' + Date.now(), { cache: 'no-store' }); if(r.ok){ const d = await r.json(); if(d && Array.isArray(d.shared)){ LBL = d; try { localStorage.setItem('lbl_cfg', JSON.stringify(d)); } catch(e){} } } } catch(e){} })();
+function lblShared(code){
+  const k = bkey(code); if(!LBL || !k) return null;
+  return (LBL.shared || []).find(s => bkey(s.code) === k && (s.products || []).length > 1) || null;
+}
+function lblAsk(sh, cb){
+  beep(false);
+  openSheet(`<h3 style="color:var(--bad)">⚠ Ce code est sur ${sh.products.length} produits</h3><div class="sub">Regardez la bouteille. Lequel est-ce ?</div>` +
+    sh.products.map((p, i) => `<button class="${p.name === sh.keeper ? 'go' : 'ghost'}" data-lbl="${i}" style="text-align:left;margin:6px 0;border:2px solid ${p.name === sh.keeper ? 'transparent' : '#d97706'};background:${p.name === sh.keeper ? '' : '#fef3c7'};color:#111">${esc(p.name)}<br><small>${p.name === sh.keeper ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette'}</small></button>`).join('') +
+    `<button class="ghost" id="lblx">Annuler</button>`);
+  $('#lblx').onclick = closeSheet;
+  document.querySelectorAll('[data-lbl]').forEach(b => b.onclick = () => {
+    const p = sh.products[+b.dataset.lbl];
+    if(p.name === sh.keeper || !p.code){ closeSheet(); cb(p.code || sh.code, p.name); return; }
+    openSheet(`<h3>🏷 Collez l'étiquette sur ce produit</h3><div class="where"><div class="here"><span>${esc(p.name)}</span><b class="num">${esc(p.code)}</b></div></div><div class="sub">Ne le comptez pas sans étiquette.</div><button class="go" id="lblok">Étiquette collée ✔</button><button class="ghost" id="lblx">Annuler</button>`);
+    $('#lblx').onclick = closeSheet;
+    $('#lblok').onclick = () => { closeSheet(); cb(p.code, p.name); };
+  });
 }
 function finishCount(){
   if(C && C.control) return ctlFinish();

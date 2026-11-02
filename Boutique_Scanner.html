@@ -1569,7 +1569,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v31-oct-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3243,6 +3243,7 @@ function processScan() {
   if(_reorgCatch(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
   raw = resolveAlias(raw);
+  if(_lblTill(raw)) return;
   if(isNoBarcodeCode(raw)){
     setFeedback("error","🏷",
       lang==="fr"?"Produit sans code-barres — nom et prix requis":"No-barcode product — enter name and price",
@@ -9149,10 +9150,13 @@ function _txPickHTML(){
   let h = '<div class="tx-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>' + _tfEsc(o.gid) + '</b> · préparer pour <b>' + _txLbl(o.to) + '</b></div>' +
     '<button class="btn-sm btn-outline" onclick="_tx.mode=null;_tx.open=null;renderTx()">← Retour</button></div>';
   if(o.direct) h += '<label style="display:block;margin-top:6px">Envoyer à <select class="dlv-field" style="width:auto" onchange="_tx.open.to=this.value">' + ['Store 1', 'Store 2', 'Warehouse'].map(l => '<option value="' + l + '"' + (l === o.to ? ' selected' : '') + '>' + _txLbl(l) + '</option>').join('') + '</select></label>';
+  const rls = o.lines.filter(l => _lblIsRelabel(l.barcode, l.name));
+  if(rls.length) h += '<div style="background:#b91c1c;color:#fff;border-radius:10px;padding:10px 12px;margin:8px 0;font-weight:700">🏷 Étiquette à coller avant d’envoyer : ' + rls.map(l => _tfEsc(l.name)).join(', ') + '<div style="font-weight:500;font-size:13px;opacity:.9">Ne les mélangez pas avec les autres bouteilles au même code.</div></div>';
   h += '<div class="dlv-dim" style="margin:6px 0">Scannez chaque article en le mettant dans le carton.</div>' + _txScanBar('Scanner un article…', 'txPick');
   h += o.lines.length ? o.lines.map((l, i) => {
     const done = l.picked >= l.req && l.req > 0, over = l.req && l.picked > l.req;
-    return '<div class="tx-line' + (done ? ' ok' : '') + (over ? ' warn' : '') + '"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b><div class="dlv-dim">' + (l.req ? 'demandé ' + l.req : 'hors demande') + ' ' + _txStockLine(l.barcode) + '</div>' +
+    const rl = _lblIsRelabel(l.barcode, l.name);
+    return '<div class="tx-line' + (done ? ' ok' : '') + (over ? ' warn' : '') + '"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b>' + (rl ? '<div style="background:#fde68a;color:#7c2d12;border-radius:6px;padding:3px 7px;margin:3px 0;font-size:13px;font-weight:700">🏷 Coller son étiquette avant de le mettre dans le carton</div>' : '') + '<div class="dlv-dim">' + (l.req ? 'demandé ' + l.req : 'hors demande') + ' ' + _txStockLine(l.barcode) + '</div>' +
       '<label class="dlv-dim">Pris à <select onchange="_tx.open.lines[' + i + '].src=this.value">' + srcs.map(s => '<option value="' + s + '"' + (s === l.src ? ' selected' : '') + '>' + _txLbl(s) + '</option>').join('') + '</select></label></div>' +
       '<div class="tx-qty"><button onclick="txPickQty(' + i + ',-1)">−</button><span class="big">' + l.picked + '</span><button onclick="txPickQty(' + i + ',1)">+</button></div></div>';
   }).join('') : '<div class="dlv-dim" style="padding:8px 2px">Scannez les articles à envoyer.</div>';
@@ -9168,15 +9172,21 @@ function _txPickHTML(){
 function txPickEnter(v){
   const code = resolveAlias(String(v || '').trim()); if(!code) return;
   if(!/^\d+$/.test(code)){ rejectDirtyBarcode(code); return; }
+  const sh = _lblShared(code);
+  if(sh){ lblAsk(sh, 'pick', (c2, nm, rl) => _txPickAdd(c2, (rl && c2 === sh.code) ? nm : null, rl)); return; }
+  _txPickAdd(code);
+}
+function _txPickAdd(code, nm, relabel){
   const o = _tx.open, k = _bcKeyClient(code);
-  let l = o.lines.find(x => _bcKeyClient(x.barcode) === k);
+  let l = o.lines.find(x => _bcKeyClient(x.barcode) === k && (nm ? x.name === nm : !(x.relabel && _lblShared(x.barcode))));
   if(!l){
     const p = lookupBarcode(code);
-    if(!p){ showToast('❓ Code ' + code + ' inconnu.', 3000); try { playErrorBeep && playErrorBeep(); } catch(e){} return; }
-    l = { rec: null, barcode: canonicalBarcode(code), name: p.name, req: 0, picked: 0, src: o.fulfiller };
+    if(!p && !nm){ showToast('❓ Code ' + code + ' inconnu.', 3000); try { playErrorBeep && playErrorBeep(); } catch(e){} return; }
+    l = { rec: null, barcode: canonicalBarcode(code), name: nm || p.name, req: 0, picked: 0, src: o.fulfiller };
     o.lines.push(l);
   }
   l.picked++;
+  if(relabel) l.relabel = true;
   if(l.req && l.picked > l.req) showToast('⚠ Plus que demandé : ' + l.picked + ' / ' + l.req, 2500);
   renderTx();
 }
@@ -9191,6 +9201,7 @@ function txSendPick(){
     const base = l.rec ? Object.assign({}, l.rec) : { uid: o.grp + '-x' + i, grp: o.grp, gid: o.gid, id: o.gid, ts: now.toISOString(), reqTs: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
       to: o.to, fulfiller: o.fulfiller, barcode: l.barcode, name: l.name, reqQty: 0, by: who, qtyReceived: null, zoneIn: 'Non placé', extra: !o.direct };
     Object.assign(base, { from: l.src, qty: l.picked, status: l.picked > 0 ? 'transit' : 'notfound', sentTs: now.toISOString(), sentBy: who, carrier: o.carrier, boxes: o.boxes, pickedBy: who });
+    if(l.relabel || _lblIsRelabel(l.barcode, l.name)){ base.relabel = true; if(l.name) base.name = l.name; }
     _tfSave(base);
   });
   showToast('🚚 ' + o.gid + ' envoyé à ' + _txLbl(o.to) + ' — en transit.', 4000);
@@ -12755,6 +12766,96 @@ function reorgExportCSV(){
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
   a.download = 'reorganisation_' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+// ══════════════════════════════════════════
+//  CODES PARTAGÉS / À ÉTIQUETER (2 Nov 2026)
+//  etiquettes.json (in the repo) lists barcodes shared by several products
+//  (e.g. 6925267306822 for 4 Lansyade / Dr Meinaier bottles). One product
+//  keeps the code; the others get their own label. Scanning a shared code at
+//  the till or while preparing a transfer opens a big screen: « which one is
+//  it? ». Choosing a product that needs its own label asks to stick the label
+//  first, then carries on with that product's own code.
+// ══════════════════════════════════════════
+const LBL_URL = 'https://yacine5555.github.io/boutique/etiquettes.json';
+let _lbl = null;
+try { _lbl = JSON.parse(localStorage.getItem('lbl_cfg') || 'null'); } catch(e){}
+async function _lblLoad(){
+  try {
+    const r = await fetch(LBL_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d && Array.isArray(d.shared)){ _lbl = d; try { localStorage.setItem('lbl_cfg', JSON.stringify(d)); } catch(e){} }
+  } catch(e){}
+}
+setTimeout(_lblLoad, 1500); setInterval(_lblLoad, 30 * 60000);
+function _lblDigits(s){ return String(s || '').replace(/\D/g, '').replace(/^0+/, ''); }
+function _lblShared(code){
+  if(!_lbl || !_lbl.shared) return null;
+  const k = _lblDigits(code); if(!k) return null;
+  return _lbl.shared.find(s => _lblDigits(s.code) === k && (s.products || []).length > 1) || null;
+}
+// Products that must carry their own label (everything but the keeper)
+function _lblRelabel(){
+  const out = [];
+  ((_lbl && _lbl.shared) || []).forEach(s => (s.products || []).forEach(p => { if(p.name !== s.keeper) out.push(Object.assign({ shared: s.code }, p)); }));
+  return out;
+}
+function _lblIsRelabel(bc, name){
+  const k = _lblDigits(bc);
+  return _lblRelabel().find(p => (p.code && _lblDigits(p.code) === k) || (name && p.name === name)) || null;
+}
+// cb(code, name) runs once the person has said which product it is.
+function lblAsk(sh, ctx, cb){
+  const old = document.getElementById('lbl-ov'); if(old) old.remove();
+  try { _reorgBeep(false); } catch(e){}
+  try { navigator.vibrate && navigator.vibrate([200, 80, 200]); } catch(e){}
+  const ov = document.createElement('div'); ov.id = 'lbl-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(127,29,29,.96);color:#fff;display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+  const prods = sh.products || [];
+  ov.innerHTML = '<div style="max-width:520px;width:100%;text-align:center">' +
+    '<div style="font-size:54px;line-height:1">⚠️</div>' +
+    '<div style="font-size:24px;font-weight:800;margin:8px 0 4px">Ce code est sur ' + prods.length + ' produits</div>' +
+    '<div style="font-size:16px;opacity:.9;margin-bottom:14px">Regardez la bouteille. Lequel est-ce ?</div>' +
+    '<div id="lbl-ch">' + prods.map((p, i) => {
+      const keep = p.name === sh.keeper;
+      return '<button data-i="' + i + '" style="display:block;width:100%;margin:8px 0;padding:16px;border-radius:12px;border:0;font-size:18px;font-weight:700;background:' + (keep ? '#fff' : '#fde68a') + ';color:#111;cursor:pointer;text-align:left">' +
+        esc(p.name) + '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#444">' + (keep ? '✔ garde ce code' : '🏷 doit avoir sa propre étiquette') + '</div></button>';
+    }).join('') + '</div>' +
+    '<button id="lbl-x" style="margin-top:10px;background:none;border:1px solid rgba(255,255,255,.6);color:#fff;border-radius:10px;padding:10px 18px;font-size:15px;cursor:pointer">Annuler</button></div>';
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); try { const i = document.getElementById('scan-input'); if(i && ctx === 'till') i.focus(); } catch(e){} };
+  ov.querySelector('#lbl-x').onclick = close;
+  ov.querySelectorAll('#lbl-ch button').forEach(b => b.onclick = () => {
+    const p = prods[+b.dataset.i];
+    if(p.name === sh.keeper || !p.code){
+      close();
+      if(p.name !== sh.keeper && !p.code) showToast('🏷 « ' + p.name + ' » n’a pas encore d’étiquette — mettez-le de côté pour 1981.', 6000);
+      cb(p.code || sh.code, p.name, !p.code && p.name !== sh.keeper);
+      return;
+    }
+    // Needs its own label: stick it first
+    ov.firstChild.innerHTML = '<div style="font-size:54px;line-height:1">🏷</div>' +
+      '<div style="font-size:24px;font-weight:800;margin:8px 0">Collez l’étiquette sur ce produit</div>' +
+      '<div style="font-size:20px;background:#fde68a;color:#111;border-radius:12px;padding:14px;margin:10px 0">' + esc(p.name) + '<div style="font-size:15px;margin-top:4px">code ' + esc(p.code) + '</div></div>' +
+      '<div style="font-size:15px;opacity:.9;margin-bottom:12px">' + (ctx === 'pick' ? 'Ne le mettez pas dans le carton sans étiquette.' : 'Ne le remettez pas en rayon sans étiquette.') + '</div>' +
+      '<button id="lbl-ok" style="display:block;width:100%;padding:18px;border-radius:12px;border:0;font-size:20px;font-weight:800;background:#22c55e;color:#fff;cursor:pointer">Étiquette collée ✔</button>' +
+      '<button id="lbl-x2" style="margin-top:10px;background:none;border:1px solid rgba(255,255,255,.6);color:#fff;border-radius:10px;padding:10px 18px;font-size:15px;cursor:pointer">Annuler</button>';
+    ov.querySelector('#lbl-x2').onclick = close;
+    ov.querySelector('#lbl-ok').onclick = () => { close(); cb(p.code, p.name, true); };
+  });
+}
+// Till: returns true when the scan was taken over by the chooser.
+function _lblTill(raw){
+  const sh = _lblShared(raw); if(!sh) return false;
+  lblAsk(sh, 'till', (code, name, rl) => {
+    let product = lookupBarcode(code);
+    if(product && rl && code === sh.code) product = Object.assign({}, product, { name: name });
+    if(!product) product = Object.assign({}, lookupBarcode(sh.code) || { category:'', brand:'', unit:'', price:0 }, { name: name });
+    doLogScan(code, product, false);
+  });
+  return true;
 }
 
 function openCustomerDisplay(){
