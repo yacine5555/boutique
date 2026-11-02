@@ -328,6 +328,8 @@ input,select{font-family:inherit}
 .ncf>*{min-width:0}
 .ncf-host{overflow-x:hidden}
 @media (max-width:820px){.ncf{grid-template-columns:1fr}.ncf-img{height:48vh}}
+.ncf-pend{margin-top:8px;padding:8px 10px;border-radius:10px;background:#fef3c7;color:#92400e;font-size:13px;font-weight:600}
+.ncf-fail{margin-top:8px;padding:8px 10px;border-radius:10px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:600}
 .ncf-img{position:relative;background:#fff;border:1px solid #e2e8f0;border-radius:14px;height:min(62vh,640px);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .ncf-img img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .ncf-img.none{color:#94a3b8;font-weight:700;background:#f8fafc}
@@ -549,6 +551,7 @@ input,select{font-family:inherit}
    ADMIN SCREEN
 ══════════════════════════════════ */
 #screen-admin{background:var(--paper)}
+.admin-wrap:focus{outline:none}
 .admin-wrap{
   flex:1;padding:16px;max-width:960px;width:100%;
   margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -1569,7 +1572,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-c</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2526,6 +2529,7 @@ function showScreen(s) {
     renderExpensesList();
     renderDailySummary();
     updateShiftCard();
+    _adminFocus();
     const lc = localStorage.getItem("bc_lastclose");
     document.getElementById("last-close").textContent =
       lc ? (lang==="fr"?"Dernière clôture: ":"Last close: ")+lc : (lang==="fr"?"Aucune clôture aujourd'hui":"No close recorded today");
@@ -3857,7 +3861,8 @@ function closePhotoReview(){
   loadProductImages(true); // the scan card picks up the changes right away
 }
 function pimSetTab(t){ _pim.tab = t; renderPhotoReview(); }
-function renderPhotoReview(){
+function renderPhotoReview(){ _keepFocus(_renderPhotoReview); }
+function _renderPhotoReview(){
   const c = _pimCounts();
   const al = _plsList(_pls.active);
   document.getElementById('pim-tabs').innerHTML =
@@ -4934,7 +4939,18 @@ const NC_TABS = [
   ['known', 'Déjà connus (stock appliqué)', it => it.type === 'Connu'],
   ['skip', 'Ignorés', it => it.status === 'Ignoré'],
 ];
-let _nc = { items: [], tab: 'todo', loadedAt: 0, busy: {}, last: null, photo: {}, draft: {}, sum: null };
+let _nc = { items: [], tab: 'todo', loadedAt: 0, busy: {}, err: {}, last: null, photo: {}, draft: {}, sum: null, keep: null, curIdx: 0 };
+function _isShown(el){ try { return !!(el && el.getClientRects().length); } catch(e){ return false; } }
+// Re-render without stealing the field the user is typing in (a slow save that
+// finishes in the background re-draws the screen: the cursor must stay put).
+function _keepFocus(fn){
+  const a = document.activeElement, id = a && a.id;
+  let s0 = null, s1 = null; try { s0 = a.selectionStart; s1 = a.selectionEnd; } catch(e){}
+  fn();
+  if(!id) return;
+  const b = document.getElementById(id);
+  if(b && b !== document.activeElement && _isShown(b)){ try { b.focus({ preventScroll: true }); if(s0 != null) b.setSelectionRange(s0, s1); } catch(e){} }
+}
 function _ncEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 function _ncUrl(q){ return syncUrl + (syncUrl.indexOf('?') >= 0 ? '&' : '?') + q + '&key=' + encodeURIComponent(writeKey); }
 async function _ncPostJ(body){
@@ -4985,9 +5001,10 @@ async function ncProcess(){
 }
 function openNewCodes(){ document.getElementById('nc-modal').classList.add('open'); renderNewCodes(); loadNewCodes(true); }
 function closeNewCodes(){ document.getElementById('nc-modal').classList.remove('open'); }
-function ncSetTab(t){ _nc.tab = t; renderNewCodes(); }
+function ncSetTab(t){ _nc.tab = t; _nc.keep = null; renderNewCodes(); }
 function _ncNorm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
-function renderNewCodes(){
+function renderNewCodes(){ _keepFocus(_renderNewCodes); }
+function _renderNewCodes(){
   const c = _ncCounts();
   document.getElementById('nc-tabs').innerHTML = NC_TABS.map(t => '<button type="button" class="cat-tab' + (t[0] === _nc.tab ? ' on' : '') + '" onclick="ncSetTab(\'' + t[0] + '\')">' + t[1] + ' (' + c[t[0]] + ')</button>').join('');
   const q = String(document.getElementById('nc-search').value || '').trim();
@@ -5136,9 +5153,15 @@ function ncUploadPhoto(bc, input){
 function _ncRenderFiche(list, grid){
   grid.className = 'ncf-host';
   if(!list.length){ grid.innerHTML = '<div class="dlv-dim" style="padding:24px;text-align:center">' + (_nc.loadedAt ? 'Rien ici 👍' : 'Chargement…') + '</div>'; return; }
+  // v2-nov-c: the product on screen only changes on a user action. A product
+  // that was just saved (and so leaves this tab) stays on screen, shown ✅.
+  if(_nc.cur && _nc.keep === _nc.cur && !list.some(x => x.barcode === _nc.cur)){
+    const kept = _nc.items.find(x => x.barcode === _nc.cur);
+    if(kept){ list = list.slice(); list.splice(Math.min(_nc.curIdx || 0, list.length), 0, kept); }
+  }
   let idx = list.findIndex(x => x.barcode === _nc.cur);
-  if(idx < 0) idx = 0;
-  const it = list[idx]; _nc.cur = it.barcode;
+  if(idx < 0) idx = Math.max(0, Math.min(_nc.curIdx || 0, list.length - 1));
+  const it = list[idx]; _nc.cur = it.barcode; _nc.curIdx = idx;
   const bc = _ncEsc(it.barcode), d = _ncD(it.barcode), busy = !!_nc.busy[it.barcode], done = it.status === 'Ajouté';
   const ph = it.photos || [], pi = _ncPhotoIdx(it), main = pi != null ? ph[pi] : null;
   // left: big photo + strip + same line
@@ -5176,10 +5199,11 @@ function _ncRenderFiche(list, grid){
     if(_nc.last) R += '<button type="button" class="nc-same" onclick="ncSame(\'' + bc + '\')">↳ Même produit que le dernier : ' + _ncEsc(_nc.last.product) + (_nc.last.price ? ' · ' + _ncEsc(formatCFA(_nc.last.price)) : '') + ' — il ne reste que la teinte</button>';
     R += '<div class="pim-btns ncf-act"><button class="pim-ok" ' + (busy ? 'disabled ' : '') + 'onclick="ncAdd(\'' + bc + '\')">✓ Ajouter' + (main ? ' avec cette photo' : '') + '</button>' +
          (it.status === 'Ignoré' ? '<button class="pim-lnk" onclick="ncSkip(\'' + bc + '\',true)">↩ Remettre</button>' : '<button class="pim-bad" ' + (busy ? 'disabled ' : '') + 'onclick="ncSkip(\'' + bc + '\')">Ignorer</button>') + '</div>';
-    if(busy) R += '<div class="pim-meta">Enregistrement…</div>';
+    if(busy) R += '<div class="ncf-pend">⏳ Enregistrement en cours… vous pouvez déjà passer au suivant.</div>';
+    else if(_nc.err[it.barcode]) R += '<div class="ncf-fail">❌ Pas enregistré : ' + _ncEsc(_nc.err[it.barcode]) + ' — appuyez encore sur ✓ Ajouter.</div>';
   }
   R += '<div class="pim-shop">' + _pimShopLinks({ name: _ncBaseName(it) || it.barcode, barcode: it.barcode }) + '</div>';
-  R += '<div class="ncf-nav"><button type="button" ' + (idx > 0 ? 'onclick="ncGo(\'' + _ncEsc(list[idx - 1].barcode) + '\')"' : 'disabled') + '>← Précédent</button><span>' + (idx + 1) + ' / ' + list.length + '</span><button type="button" ' + (idx < list.length - 1 ? 'onclick="ncGo(\'' + _ncEsc(list[idx + 1].barcode) + '\')"' : 'disabled') + '>Suivant →</button></div>';
+  R += '<div class="ncf-nav"><button type="button" ' + (idx > 0 ? 'onclick="ncGo(\'' + _ncEsc(list[idx - 1].barcode) + '\')"' : 'disabled') + '>← Précédent</button><span>' + (idx + 1) + ' / ' + list.length + (function(){ const n = Object.keys(_nc.busy).length, f = Object.keys(_nc.err).length; return (n ? ' · ⏳ ' + n + ' en cours' : '') + (f ? ' · <b style="color:var(--red)">❌ ' + f + ' à refaire</b>' : ''); })() + '</span><button type="button" ' + (idx < list.length - 1 ? 'onclick="ncGo(\'' + _ncEsc(list[idx + 1].barcode) + '\')"' : 'disabled') + '>Suivant →</button></div>';
   grid.innerHTML = '<div class="ncf"><div class="ncf-l">' + L + '</div><div class="ncf-r">' + R + '</div></div>';
   _nc.ficheList = list.map(x => x.barcode);
 }
@@ -5190,7 +5214,7 @@ function _ncAdvance(nextBc){
   if(_ncView !== 'fiche') return;
   if(nextBc) _nc.cur = nextBc;
   const s = document.getElementById('nc-search'); if(s && isBarcodeQuery(s.value)){ s.value = ''; }
-  if(s) setTimeout(() => s.focus(), 50);
+  if(s) setTimeout(() => { const a = document.activeElement; if(!a || a === document.body || !_isShown(a) || a.closest('.ncf-act')) s.focus(); }, 50);
 }
 
 // ── 📷 Scan direct (30 Oct 2026): scan the product in hand into a chosen
@@ -5294,7 +5318,9 @@ async function ncAdd(bc){
   const pi = _ncView === 'fiche' ? _ncPhotoIdx(it) : _nc.photo[bc], pp = pi != null ? (it.photos || [])[pi] : null;
   const photo = pp ? (pp.data ? { data: pp.data, type: pp.type || 'image/jpeg', img: '', thumb: '' } : { img: pp.img, thumb: pp.thumb }) : null;
   const nextBc = _ncNext(bc);
-  _nc.busy[bc] = true; renderNewCodes();
+  _nc.busy[bc] = true; delete _nc.err[bc];
+  if(_nc.cur === bc) _ncAdvance(nextBc); // the click moves on now; the save carries on behind
+  renderNewCodes();
   try {
     const r = await _ncPostJ({ action: 'addNewCode', barcode: bc, name: name, price: price || '', photo: photo, by: currentEmployee || 'Admin' });
     if(!r || !r.success) throw new Error((r && r.error) || 'refusé');
@@ -5305,18 +5331,24 @@ async function ncAdd(bc){
     if(price){ try { labelQueueAdd(bc, name, price, 1, true); } catch(e){} }
     showToast('✅ ' + name + ' ajouté (stock ' + (it.store || 'Balkuy') + (it.zone ? ' · ' + it.zone : '') + ' : ' + it.qty + ')' + (price ? ' · étiquette prête à imprimer' : '') + (r.warning ? ' ⚠ ' + r.warning : ''), 4500);
     try { syncProducts(false); } catch(e){}
-    _ncAdvance(nextBc);
-  } catch(e){ showToast('⚠ ' + (e && e.message || e), 7000); }
-  delete _nc.busy[bc]; _ncCard(); renderNewCodes();
+  } catch(e){ _nc.err[bc] = String(e && e.message || e); showToast('❌ ' + name + ' pas enregistré : ' + _nc.err[bc] + ' — revenez-y (❌ à refaire).', 8000); }
+  delete _nc.busy[bc];
+  if(_nc.cur === bc) _nc.keep = bc; // still on screen → keep showing it, never jump
+  _ncCard(); renderNewCodes();
 }
 async function ncSkip(bc, undo){
+  if(_nc.busy[bc]) return;
+  const nextBc = _ncNext(bc);
+  _nc.busy[bc] = true; delete _nc.err[bc];
+  if(!undo && _nc.cur === bc) _ncAdvance(nextBc);
+  renderNewCodes();
   try {
     const r = await _ncPostJ({ action: 'skipNewCode', barcode: bc, undo: !!undo });
     if(!r || !r.success) throw new Error((r && r.error) || 'refusé');
-    const nextBc = _ncNext(bc);
     const it = _nc.items.find(x => x.barcode === bc); if(it) it.status = r.status;
-    if(!undo) _ncAdvance(nextBc);
   } catch(e){ showToast('⚠ ' + (e && e.message || e), 5000); }
+  delete _nc.busy[bc];
+  if(_nc.cur === bc) _nc.keep = bc;
   _ncCard(); renderNewCodes();
 }
 
@@ -6612,6 +6644,29 @@ function buildAdminTabs(){
   let saved = 'today'; try { saved = localStorage.getItem('bc_admin_tab') || 'today'; } catch(e){}
   adminTab(ADMIN_TABS.some(t => t[0] === saved) || saved === 'autres' ? saved : 'today');
 }
+// v2-nov-c: Admin scrolls straight away (mouse wheel, trackpad, ↓ / Page ↓)
+// without a first click: focus is moved off the closed PIN box / hidden scan
+// field onto the Admin page itself.
+function _adminFocus(){
+  const scr = document.getElementById('screen-admin');
+  if(!scr || !scr.classList.contains('active') || document.querySelector('.modal-bg.open')) return;
+  const a = document.activeElement;
+  if(a && a !== document.body && _isShown(a)) return; // a visible field is in use: leave it
+  try { if(a && a !== document.body) a.blur(); } catch(e){}
+  if(document.body.style.overflow === 'hidden' && !_isShown(document.getElementById('sd-ov'))) document.body.style.overflow = '';
+  const w = scr.querySelector('.admin-wrap');
+  if(w){
+    if(!w.hasAttribute('tabindex')) w.setAttribute('tabindex', '-1');
+    try { w.focus({ preventScroll: true }); } catch(e){}
+  }
+  try { window.focus(); } catch(e){}
+}
+// …and again whenever a window (Photos produits, PIN…) closes over the Admin.
+let _adminFocusT = null;
+try {
+  new MutationObserver(() => { if(_adminFocusT) return; _adminFocusT = setTimeout(() => { _adminFocusT = null; _adminFocus(); }, 60); })
+    .observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+} catch(e){}
 function adminTab(t){
   buildAdminTabs();
   document.querySelectorAll('#screen-admin .admin-pane').forEach(p => p.classList.toggle('on', p.dataset.tab === t));
@@ -6620,6 +6675,7 @@ function adminTab(t){
   if(t === 'prix'){ try { loadPhotoReview(false); } catch(e){} try { renderLabelCard(); } catch(e){} try { loadNewCodes(false); } catch(e){} try { if(!_mv || Date.now() - _mv.ts > 10 * 60 * 1000) loadMovements(true); } catch(e){} }
   const w = document.querySelector('#screen-admin .admin-wrap'); if(w) w.scrollTop = 0;
   window.scrollTo(0, 0);
+  _adminFocus();
   _adminTabBadges();
 }
 function _adminTabBadges(){
