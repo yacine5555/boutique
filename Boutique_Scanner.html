@@ -1572,7 +1572,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-e</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -4640,6 +4640,8 @@ async function lblLoadRemote(){
   if(_lblRemoteBusy) return;
   if(!productSyncUrl || !writeKey){ _lblRemoteErr = 'Lien produits ou clé manquant sur cet ordinateur.'; renderLabelCard(); return; }
   _lblRemoteBusy = true; renderLabelCard();
+  // v2-nov-e: 🔄 also reloads the prices, so a price set a minute ago prints
+  try { await loadPriceList(true); } catch(e){}
   try {
     const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPrintQueue&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
     const d = await r.json();
@@ -4672,11 +4674,15 @@ async function lblPrintRemote(gi){
   const group = keys[gi];
   const items = (_lblRemote || []).filter(x => _lblGroupOf(x) === group);
   if(!items.length) return;
-  const list = items.map(x => x.kind === 'box'
+  const mk = () => items.map(x => x.kind === 'box'
     ? { barcode: x.barcode, name: 'CARTON · ' + (x.name || x.barcode), box: x.qty, qty: 1 }
     : { barcode: x.barcode, name: x.name || x.barcode, price: _lblPriceAt(x.barcode, x.store), qty: x.qty });
-  const noPrice = list.filter(x => !x.box && x.price == null).length;
-  if(noPrice && !confirm(noPrice + ' produit(s) sans prix pour ' + group + ' : l’étiquette affichera « — ». Imprimer quand même ?')) return;
+  let list = mk();
+  // a price may have been set since the list was loaded: reload once before asking
+  if(list.some(x => !x.box && x.price == null)){ try { await loadPriceList(true); } catch(e){} list = mk(); }
+  const missing = list.filter(x => !x.box && x.price == null);
+  const noPrice = missing.length;
+  if(noPrice && !confirm(noPrice + ' produit(s) sans prix pour ' + group + ' : ' + missing.slice(0, 5).map(x => x.name).join(', ') + '. L’étiquette affichera « — ». Imprimer quand même ?')) return;
   let ok;
   if(_lblOpt.via === 'window'){ printLabels(list); ok = confirm('Les étiquettes sont-elles bien sorties ? OK = les retirer de la liste.'); }
   else ok = await lblUsbPrint(list);
