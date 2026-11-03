@@ -618,6 +618,7 @@ function render(){
   else if(v.screen === 'reorg') t.innerHTML = 'Réorganisation<small>' + esc(locName(RE_LOC)) + '</small>';
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
+  else if(v.screen === 'sorties') t.innerHTML = 'Sorties<small>' + esc(locName(SOV.loc)) + '</small>';
   else if(v.screen === 'boxput') t.innerHTML = 'Ranger en scannant<small>' + (BP && BP.toZone ? 'vers ' + esc(BP.toZone) : esc(locName(v.loc))) + '</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
@@ -630,6 +631,7 @@ function render(){
   if(v.screen === 'bilan'){ m.innerHTML = banner() + bilanHTML(); bindBilan(); return; }
   if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
   if(v.screen === 'boxput'){ m.innerHTML = banner() + boxPutHTML(); bindBoxPut(); return; }
+  if(v.screen === 'sorties'){ m.innerHTML = banner() + sortiesHTML(); bindSorties(); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
@@ -655,6 +657,7 @@ function homeHTML(){
   }).join('') + '</div>';
   const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
   h += `<button class="recvbtn" data-act="transit"><span class="ic">🚚</span><span><b>En route</b><small>${TR ? trN + ' envoi(s) sur la route' + (trLate ? ' · <span style="color:var(--bad)">en retard</span>' : '') + ' · ' + (TR.requested.length ? new Set(TR.requested.map(l => l.grp || l.id)).size + ' demande(s) à préparer' : 'aucune demande') : 'Transferts entre l’entrepôt et les magasins'}</small></span></button>`;
+  h += `<button class="recvbtn" data-act="sorties"><span class="ic">📤</span><span><b>Sorties</b><small>Ce qui est sorti aujourd’hui, par zone · à remonter de l’entrepôt</small></span></button>`;
   h += `<button class="recvbtn" data-act="ctl"><span class="ic">🔍</span><span><b>Contrôle du jour</b><small>4 étagères tirées au sort, comptées à l’aveugle</small></span></button>`;
   if(meIsAdmin()) h += `<button class="recvbtn" data-act="bilan"><span class="ic">📊</span><span><b>Bilan du jour</b><small>Ventes, caisse, contrôles, stock négatif, codes inconnus</small></span></button>`;
   h += `<button class="recvbtn" data-act="reorg"><span class="ic">🔄</span><span><b>Réorganisation</b><small>Repérer les étagères · valider ce que la caisse a scanné</small></span></button>`;
@@ -664,6 +667,7 @@ function homeHTML(){
 }
 function storeView(loc){ return MAPS[loc] ? (ls('s1981_view') || 'plan') : 'list'; }
 function storeHTML(loc){
+  if(loc !== 'Warehouse') loadSorties(loc);
   const rows = rowsAt(loc);
   const listed = zoneList(loc);
   const codes = new Set(listed.map(z => z.c));
@@ -682,8 +686,8 @@ function storeHTML(loc){
       const z = listed.find(q => q.c === c) || {};
       const t = totals(rowsAt(loc, c));
       const cls = 'mz' + (z.b ? ' boxz' : '') + (z.x ? ' sale' : t.units ? ' has' : '');
-      const small = w < 50 || ht < 34, lab = z.b ? '📦 ' + (z.k || c) : c;
-      return `<g class="${cls}" data-zone="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}, ${t.units} articles"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>`
+      const small = w < 50 || ht < 34, lab = z.b ? '📦 ' + (z.k || c) : c, nb = sorZoneBadge(loc, c);
+      return `<g class="${cls}" data-zone="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}, ${t.units} articles${nb ? ', ' + nb + ' sortis' : ''}"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>` + (nb ? `<circle cx="${x + w - 2}" cy="${y + 2}" r="9" fill="#dc2626"/><text x="${x + w - 2}" y="${y + 2}" style="fill:#fff;font-size:10px;font-weight:800">${nb}</text>` : '')
         + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(lab)}</text>`
                  : `<text x="${x + w / 2}" y="${y + ht / 2 - 7}">${esc(lab)}</text><text class="n" x="${x + w / 2}" y="${y + ht / 2 + 8}">${t.units ? fmt(t.units) : '—'}</text>`) + '</g>';
     }).join('') + `</svg></div><div class="legend"><span>Glissez le plan pour voir toute la boutique.</span><span><i></i>Vide / pas compté</span><span><i class="has"></i>En stock</span><span><i class="sale"></i>Solde</span></div>`;
@@ -694,7 +698,8 @@ function storeHTML(loc){
     groups.forEach(g => {
       h += `<div class="sect">${esc(g.name)}</div><div class="list">` + g.zones.map(z => {
         const t = totals(rowsAt(loc, z.c));
-        return `<button class="zrow" data-zone="${esc(z.c)}"><span class="code">${esc(z.c)}</span><span class="nm">${esc(z.k || '')}${z.x ? ' · solde' : ''}</span><span class="u">${t.units ? fmt(t.units) : '—'}</span></button>`;
+        const nb = sorZoneBadge(loc, z.c);
+        return `<button class="zrow" data-zone="${esc(z.c)}"><span class="code">${esc(z.c)}</span><span class="nm">${esc(z.k || '')}${z.x ? ' · solde' : ''}${nb ? ` <b style="color:var(--bad);white-space:nowrap">🛒 ${nb} sorti${nb > 1 ? 's' : ''}</b>` : ''}</span><span class="u">${t.units ? fmt(t.units) : '—'}</span></button>`;
       }).join('') + '</div>';
     });
   }
@@ -711,8 +716,9 @@ function zoneHTML(loc, zone, tab){
     ${meIsAdmin() && zone !== UNPLACED && !z.b ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
-  h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button></div>`;
-  if(tab === 'shelves'){
+  h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves' && tab !== 'out'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button>${zone !== UNPLACED ? (() => { const nb = sorZoneBadge(loc, zone); return `<button role="tab" data-tab="out" aria-selected="${tab === 'out'}">Sorties${nb ? ' 🛒' + nb : ''}</button>`; })() : ''}</div>`;
+  if(tab === 'out'){ h += zoneSortiesHTML(loc, zone); }
+  else if(tab === 'shelves'){
     const counted = spotsAt(loc, zone);
     const known = new Set(spots.map(s => s.code));
     const extraSpots = [...new Set(counted.map(r => r[2]))].filter(c => !known.has(c)).map(c => ({ code:c, label:c }));
@@ -751,6 +757,8 @@ function bindMain(){
   const me = document.querySelector('[data-act="medit"]'); if(me) me.onclick = () => openMapEditor(VIEW.loc, VIEW.screen === 'zone' ? VIEW.zone : '');
   const mb = document.querySelector('[data-act="mboxes"]'); if(mb) mb.onclick = () => { openViewer(VIEW.loc, VIEW.zone); if(PV){ PV.edit = true; PV.sel = null; drawViewer(); } };
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
+  const so = document.querySelector('[data-act="sorties"]'); if(so) so.onclick = () => { go({ screen:'sorties' }); loadSorties(SOV.loc, true); try { loadData(); } catch(e){} };
+  document.querySelectorAll('[data-zper]').forEach(b => b.onclick = () => { VIEW.zper = b.dataset.zper; history.replaceState(VIEW, ''); render(); });
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const ct = document.querySelector('[data-act="ctl"]'); if(ct) ct.onclick = () => { go({ screen:'ctl' }); loadCtl(); };
   const bl = document.querySelector('[data-act="bilan"]'); if(bl) bl.onclick = () => { go({ screen:'bilan' }); loadBilan(ctlToday()); };
@@ -2491,6 +2499,183 @@ function closeSheet(){ $('#sheet').hidden = true; $('#scrim').hidden = true; S =
 $('#scrim').onclick = closeSheet;
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
+
+// ══════════════════════════════════════════════════════════════════
+//  📤 SORTIES (3 Nov 2026) — what left a store: sales (getSorties, read from
+//  the sales Sheet) + transfers out (getMovements). Shown three ways:
+//   • a 🛒 badge on each zone of the store (since that zone's last count),
+//   • a « Sorties » tab in the zone, sorted by number of units,
+//   • the « 📤 Sorties » screen: one day / 7 days, grouped by zone, with the
+//     « À remonter de l'entrepôt » list — proposed, then confirmed by 1981,
+//     which becomes a transfer request (🚚 En route), dated that day.
+//  A sale has no shelf: it is shown on every zone that holds the product
+//  (« aussi en … »).
+// ══════════════════════════════════════════════════════════════════
+let SOR = lsj('s1981_sorties', {});   // loc -> { sales:[[bk,bc,qty,t,name,emp]], noCode:[[name,qty,t,emp]], moves:[...], at }
+let SOR_BUSY = {}, SOR_ERR = '';
+let SOV = { loc: 'Store 1', per: 'today', pick: {}, qty: {} };
+async function loadSorties(loc, force){
+  if(!URL_ || !KEY || SOR_BUSY[loc]) return;
+  const c = SOR[loc];
+  if(!force && c && Date.now() - c.at < 5 * 60 * 1000) return;
+  SOR_BUSY[loc] = true; SOR_ERR = '';
+  try {
+    const [d, m] = await Promise.all([api({ action:'getSorties', location: loc, days: 14 }), api({ action:'getMovements', days: 14 }).catch(() => null)]);
+    if(!d || !d.success || !Array.isArray(d.sales)) throw new Error(d && d.error ? d.error : 'old');
+    SOR[loc] = { sales: d.sales, noCode: d.noCode || [], moves: (m && m.moves) || [], at: Date.now() };
+    ls('s1981_sorties', JSON.stringify(SOR));
+  } catch(e){ SOR_ERR = e.message === 'old' ? 'Collez « LATEST - Code GS » et redéployez pour voir les sorties.' : (/fetch/i.test(e.message) ? 'Pas de connexion : dernières sorties enregistrées sur ce téléphone.' : e.message); }
+  SOR_BUSY[loc] = false;
+  if(['store', 'zone', 'sorties'].includes(VIEW.screen)) render();
+}
+function sorDayStart(off){ const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() - (off || 0) * 864e5; }
+function sorPeriod(per){
+  if(per === 'yesterday') return [sorDayStart(1), sorDayStart(0)];
+  if(per === 'week') return [sorDayStart(6), Infinity];
+  return [sorDayStart(0), Infinity];
+}
+// zones of `loc` holding the product (stock now, else last counts)
+function sorZonesOf(loc, bk){
+  let z = [...new Set(rowsAt(loc).filter(r => bkey(r[2]) === bk && r[4] > 0 && r[1] !== UNPLACED).map(r => r[1]))];
+  if(!z.length) z = [...new Set((DATA ? DATA.spots : []).filter(r => r[0] === loc && bkey(r[3]) === bk).map(r => r[1]))];
+  if(!z.length) z = [...new Set(rowsAt(loc).filter(r => bkey(r[2]) === bk && r[1] !== UNPLACED).map(r => r[1]))];
+  return z;
+}
+function sorWarehouse(bk){ return rowsAt('Warehouse').filter(r => bkey(r[2]) === bk && r[4] > 0).reduce((a, r) => a + r[4], 0); }
+function sorZoneCountAt(loc, zone){
+  const ds = spotsAt(loc, zone).map(r => r[6]).filter(Boolean).sort();
+  if(!ds.length) return null;
+  const t = new Date(ds[ds.length - 1]).getTime();
+  if(isNaN(t)) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(ds[ds.length - 1])) ? new Date(ds[ds.length - 1] + 'T00:00:00').getTime() : t;
+}
+function sorMoveT(m){ const t = new Date(m.at).getTime(); return isNaN(t) ? 0 : t; }
+// Per product of one zone, between from and to: { bk, bc, name, sold, moved, others }
+function sorZoneOut(loc, zone, from, to){
+  const c = SOR[loc]; if(!c) return [];
+  const out = {};
+  const get = (bk, bc, name) => out[bk] || (out[bk] = { bk, bc, name: name || productName(bc) || bc, sold: 0, moved: 0, others: [] });
+  c.sales.forEach(([bk, bc, q, t, nm]) => {
+    if(t < from || t >= to) return;
+    const zs = sorZonesOf(loc, bk);
+    if(!zs.includes(zone)) return;
+    const o = get(bk, bc, nm); o.sold += q; o.others = zs.filter(x => x !== zone);
+  });
+  (c.moves || []).forEach(m => {
+    const t = sorMoveT(m);
+    if(m.fromLoc !== loc || m.fromZone !== zone || t < from || t >= to) return;
+    if(m.toLoc === loc && m.toZone === zone) return;
+    get(bkey(m.bc), m.bc, m.name).moved += m.qty;
+  });
+  return Object.values(out).filter(o => o.sold || o.moved).sort((a, b) => (b.sold + b.moved) - (a.sold + a.moved));
+}
+// 🛒 badge of a zone: units out since its last count (7 days if never counted)
+function sorZoneBadge(loc, zone){
+  if(!SOR[loc]) return 0;
+  const from = sorZoneCountAt(loc, zone) || sorDayStart(6);
+  return sorZoneOut(loc, zone, from, Infinity).reduce((a, o) => a + o.sold + o.moved, 0);
+}
+function sorItemHTML(loc, o, here){
+  const w = sorWarehouse(o.bk), left = rowsAt(loc, here).filter(r => bkey(r[2]) === o.bk).reduce((a, r) => a + r[4], 0);
+  return `<button class="row" data-bc="${esc(o.bc)}">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name || 'Sans nom')}</strong>
+    <small>${o.sold ? '🛒 ' + fmt(o.sold) + ' vendu' + (o.sold > 1 ? 's' : '') : ''}${o.sold && o.moved ? ' · ' : ''}${o.moved ? '🔄 ' + fmt(o.moved) + ' transféré' + (o.moved > 1 ? 's' : '') : ''}${o.others && o.others.length ? ' · aussi en ' + esc(o.others.join(', ')) : ''}</small>
+    <small style="font-weight:700;color:${w ? 'var(--ok)' : 'var(--warn)'}">${w ? '📦 ' + fmt(w) + ' à l’entrepôt → à remonter' : '⚠ rien à l’entrepôt'}${here ? ' · reste ici ' + fmt(left) : ''}</small></div>
+    <div class="qty num" style="color:var(--bad)">−${fmt(o.sold + o.moved)}</div></button>`;
+}
+function zoneSortiesHTML(loc, zone){
+  if(!SOR[loc]){ loadSorties(loc); return `<p class="empty">${SOR_ERR ? esc(SOR_ERR) : 'Chargement des sorties…'}</p>`; }
+  const per = VIEW.zper || 'count', cAt = sorZoneCountAt(loc, zone);
+  const from = per === 'today' ? sorDayStart(0) : per === 'week' ? sorDayStart(6) : (cAt || sorDayStart(6));
+  const list = sorZoneOut(loc, zone, from, Infinity);
+  const n = list.reduce((a, o) => a + o.sold + o.moved, 0);
+  let h = `<div class="chips" style="margin-bottom:10px">${[['count', cAt ? 'Depuis le comptage' : '7 derniers jours'], ['today', 'Aujourd’hui'], ['week', '7 jours']].map(([k, l]) => `<button data-zper="${k}" aria-pressed="${per === k}">${l}</button>`).join('')}</div>`;
+  h += `<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">${per === 'count' && cAt ? 'Depuis le comptage du ' + esc(new Date(cAt).toLocaleDateString('fr-FR', { day:'numeric', month:'short' })) + ' · ' : ''}${fmt(n)} article(s) sorti(s), ${list.length} produit(s), du plus vendu au moins vendu.</p>`;
+  h += list.length ? '<div class="list">' + list.map(o => sorItemHTML(loc, o, zone)).join('') + '</div>' : '<p class="empty">Rien n’est sorti de cette zone sur cette période.</p>';
+  return h;
+}
+function sortiesHTML(){
+  const loc = SOV.loc, c = SOR[loc];
+  let h = `<div class="chips" style="margin-bottom:8px">${LOCS.filter(L => L.id !== 'Warehouse').map(L => `<button data-sorloc="${esc(L.id)}" aria-pressed="${L.id === loc}">${esc(L.name)}</button>`).join('')}</div>`;
+  h += `<div class="chips" style="margin-bottom:12px">${[['today', 'Aujourd’hui'], ['yesterday', 'Hier'], ['week', '7 jours']].map(([k, l]) => `<button data-sorper="${k}" aria-pressed="${SOV.per === k}">${l}</button>`).join('')}<button data-act="sorreload">↻</button></div>`;
+  if(SOR_ERR) h += `<div class="notice">${esc(SOR_ERR)}</div>`;
+  if(!c){ loadSorties(loc); return h + '<p class="empty">Chargement des sorties…</p>'; }
+  const [from, to] = sorPeriod(SOV.per);
+  // all products out of the store in the period
+  const byP = {};
+  const P = (bk, bc, nm) => byP[bk] || (byP[bk] = { bk, bc, name: nm || productName(bc) || bc, sold: 0, moved: 0 });
+  c.sales.forEach(([bk, bc, q, t, nm]) => { if(t >= from && t < to) P(bk, bc, nm).sold += q; });
+  (c.moves || []).forEach(m => { const t = sorMoveT(m); if(m.fromLoc === loc && m.toLoc !== loc && t >= from && t < to) P(bkey(m.bc), m.bc, m.name).moved += m.qty; });
+  const all = Object.values(byP).filter(o => o.sold + o.moved > 0);
+  const nc = c.noCode.filter(r => r[2] >= from && r[2] < to);
+  const units = all.reduce((a, o) => a + o.sold + o.moved, 0) + nc.reduce((a, r) => a + r[1], 0);
+  const val = all.reduce((a, o) => a + (priceOf(o.bc) || 0) * o.sold, 0);
+  h += `<div class="stats"><div class="stat"><b class="num">${fmt(units)}</b><span>articles sortis</span></div><div class="stat"><b class="num">${fmt(all.length)}</b><span>produits</span></div>${val ? `<div class="stat"><b class="num">${fmt(val)} F</b><span>ventes (prix fiche)</span></div>` : ''}</div>`;
+  // « À remonter de l'entrepôt »
+  const refill = all.filter(o => o.sold > 0 && sorWarehouse(o.bk) > 0).sort((a, b) => b.sold - a.sold);
+  if(loc !== 'Warehouse'){
+    h += `<div class="sect">📦 À remonter de l’entrepôt (${refill.length})</div>`;
+    if(refill.length){
+      h += '<div class="list">' + refill.map(o => {
+        const w = sorWarehouse(o.bk), on = SOV.pick[o.bk] !== false, q = Math.min(w, SOV.qty[o.bk] != null ? SOV.qty[o.bk] : o.sold);
+        return `<div class="citem"><input type="checkbox" data-sorpick="${esc(o.bk)}" ${on ? 'checked' : ''} style="width:22px;height:22px">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong><small>🛒 ${fmt(o.sold)} vendu(s) · 📦 ${fmt(w)} à l’entrepôt</small></div>
+          <button data-sorq="${esc(o.bk)}" data-d="-1" aria-label="Moins">−</button><span class="c num">${q}</span><button data-sorq="${esc(o.bk)}" data-d="1" aria-label="Plus">+</button></div>`;
+      }).join('') + '</div>';
+      const sel = refill.filter(o => SOV.pick[o.bk] !== false);
+      h += `<button class="go" data-act="sorpropose" style="margin:10px 0 4px" ${sel.length ? '' : 'disabled'}>Proposer la demande : ${sel.length} produit(s), ${fmt(sel.reduce((a, o) => a + Math.min(sorWarehouse(o.bk), SOV.qty[o.bk] != null ? SOV.qty[o.bk] : o.sold), 0))} article(s)</button>`;
+    } else h += '<p class="empty" style="padding:10px">Rien à remonter : les produits vendus n’ont pas de stock compté à l’entrepôt.</p>';
+  }
+  // grouped by zone
+  const zones = {};
+  all.forEach(o => {
+    const zs = sorZonesOf(loc, o.bk);
+    const z = zs[0] || 'Sans zone';
+    (zones[z] = zones[z] || []).push(Object.assign({}, o, { others: zs.slice(1) }));
+  });
+  const zk = Object.keys(zones).sort((a, b) => zones[b].reduce((s, o) => s + o.sold + o.moved, 0) - zones[a].reduce((s, o) => s + o.sold + o.moved, 0));
+  h += '<div class="sect">Par zone, du plus vendu au moins vendu</div>';
+  h += zk.length ? zk.map(z => {
+    const l = zones[z].sort((a, b) => (b.sold + b.moved) - (a.sold + a.moved));
+    return `<div class="sect" style="margin-top:14px">${esc(z)} · ${fmt(l.reduce((s, o) => s + o.sold + o.moved, 0))} article(s)</div><div class="list">` + l.map(o => sorItemHTML(loc, o, z === 'Sans zone' ? '' : z)).join('') + '</div>';
+  }).join('') : '<p class="empty">Aucune sortie sur cette période.</p>';
+  if(nc.length) h += `<div class="sect" style="margin-top:14px">Sans code (tapé à la main) · ${fmt(nc.reduce((a, r) => a + r[1], 0))} article(s)</div><div class="list">` + nc.map(r => `<div class="citem"><div class="nm"><strong>${esc(r[0] || 'Sans nom')}</strong><small>${new Date(r[2]).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${r[3] ? ' · ' + esc(r[3]) : ''} — impossible de savoir de quelle zone</small></div><span class="c num">${fmt(r[1])}</span></div>`).join('') + '</div>';
+  return h;
+}
+function bindSorties(){
+  document.querySelectorAll('[data-sorloc]').forEach(b => b.onclick = () => { SOV.loc = b.dataset.sorloc; SOV.pick = {}; SOV.qty = {}; render(); loadSorties(SOV.loc); });
+  document.querySelectorAll('[data-sorper]').forEach(b => b.onclick = () => { SOV.per = b.dataset.sorper; SOV.pick = {}; SOV.qty = {}; render(); });
+  const rl = document.querySelector('[data-act="sorreload"]'); if(rl) rl.onclick = () => loadSorties(SOV.loc, true);
+  document.querySelectorAll('[data-sorpick]').forEach(x => x.onchange = () => { SOV.pick[x.dataset.sorpick] = x.checked; render(); });
+  document.querySelectorAll('[data-sorq]').forEach(b => b.onclick = () => {
+    const bk = b.dataset.sorq, w = sorWarehouse(bk);
+    const c = SOR[SOV.loc], [from, to] = sorPeriod(SOV.per);
+    const sold = c.sales.filter(r => r[0] === bk && r[3] >= from && r[3] < to).reduce((a, r) => a + r[2], 0);
+    const cur = SOV.qty[bk] != null ? SOV.qty[bk] : sold;
+    SOV.qty[bk] = Math.max(1, Math.min(w, cur + Number(b.dataset.d))); render();
+  });
+  document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(SOV.loc, sorZonesOf(SOV.loc, bkey(b.dataset.bc))[0] || UNPLACED, b.dataset.bc));
+  const pr = document.querySelector('[data-act="sorpropose"]'); if(pr) pr.onclick = sorPropose;
+}
+function sorPropose(){
+  const loc = SOV.loc, c = SOR[loc], [from, to] = sorPeriod(SOV.per);
+  const sold = {}; c.sales.forEach(([bk, bc, q, t, nm]) => { if(t >= from && t < to){ (sold[bk] = sold[bk] || { bk, bc, name: nm, q: 0 }).q += q; } });
+  const lines = Object.values(sold).filter(o => o.q > 0 && sorWarehouse(o.bk) > 0 && SOV.pick[o.bk] !== false)
+    .map(o => ({ barcode: o.bc, name: productName(o.bc) || o.name, qty: Math.min(sorWarehouse(o.bk), SOV.qty[o.bk] != null ? SOV.qty[o.bk] : o.q) })).filter(l => l.qty > 0);
+  if(!lines.length) return;
+  const today = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+  openSheet(`<h3>Demande de transfert</h3><div class="sub">Entrepôt → ${esc(locName(loc))} · datée d’aujourd’hui (${esc(today)})</div>
+    <div class="list" style="max-height:46vh;overflow:auto">${lines.map(l => `<div class="citem">${thumb(l.barcode, l.name)}<div class="nm"><strong>${esc(l.name)}</strong><small class="num">${esc(l.barcode)}</small></div><span class="c num">${fmt(l.qty)}</span></div>`).join('')}</div>
+    <button class="go" id="sorok">Confirmer : ${fmt(lines.reduce((a, l) => a + l.qty, 0))} article(s)</button><button class="ghost" id="sorno">Annuler</button>`);
+  $('#sorno').onclick = closeSheet;
+  $('#sorok').onclick = async () => {
+    const b = $('#sorok'); b.disabled = true; b.textContent = 'Envoi…';
+    try {
+      const d = await post({ action:'stock1981RequestTransfer', by: user.name, userHash: user.hash, from: 'Warehouse', to: loc, lines });
+      if(!d || !d.success) throw new Error(d && d.error ? d.error : 'Collez « LATEST - Code GS » et redéployez.');
+      closeSheet(); toast('📨 Demande ' + d.id + ' envoyée à l’entrepôt (' + d.lines + ' produit(s))');
+      SOV.pick = {}; SOV.qty = {}; render(); try { loadTransit(); } catch(e){}
+    } catch(e){ b.disabled = false; b.textContent = 'Réessayer'; toast(/fetch/i.test(e.message) ? 'Pas de connexion : réessayez.' : e.message); }
+  };
+}
 function openProduct(loc, zone, bc){
   const here = rowsAt(loc, zone).find(r => bkey(r[2]) === bkey(bc));
   S = { loc, zone, bc, name: (here && here[3]) || productName(bc), cur: here ? here[4] : 0, mode:'out', qty:1, reason:null, note:'' };
