@@ -189,6 +189,12 @@ select.t{appearance:auto}
 @media (min-width:860px){.mapwrap svg{min-width:0}}
 .mz rect{fill:var(--sunk);stroke:var(--line);stroke-width:1.5;rx:5}
 .mz.has rect{fill:var(--brand-soft);stroke:var(--brand)}
+.mz.hl rect{fill:#ffe14d;stroke:#d40000;stroke-width:4;animation:hlp 1.2s ease-in-out infinite}
+@keyframes hlp{50%{stroke-width:1.5}}
+.pbox.hl{outline:4px solid #ffd400!important;background:rgba(255,212,0,.35)!important}
+.hlbar{display:flex;gap:8px;align-items:center;background:#fff7cc;border:1.5px solid #e6b800;border-radius:12px;padding:8px 10px;margin:0 0 10px;font-size:13px}
+.hlbar b{flex:1}
+.pin{border:1.5px solid var(--brand);background:#fff;border-radius:99px;padding:4px 9px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .mz.sale rect{fill:var(--warn-soft);stroke:var(--warn)}
 .mz{cursor:pointer}
 .mz:hover rect,.mz:focus rect{stroke-width:3}
@@ -665,6 +671,7 @@ function render(){
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'sorties') t.innerHTML = 'Sorties<small>' + esc(locName(SOV.loc)) + '</small>';
+  else if(v.screen === 'restock') t.innerHTML = 'À réassortir<small>Presque vides depuis le comptage</small>';
   else if(v.screen === 'boxput') t.innerHTML = 'Ranger en scannant<small>' + (BP && BP.toZone ? 'vers ' + esc(BP.toZone) : esc(locName(v.loc))) + '</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
   else if(v.screen === 'unit') t.innerHTML = (R ? esc(R.kind) + ' ' + esc(R.unit) : 'Réception') + '<small>' + (R ? esc(R.aname) : '') + '</small>';
@@ -678,6 +685,7 @@ function render(){
   if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
   if(v.screen === 'boxput'){ m.innerHTML = banner() + boxPutHTML(); bindBoxPut(); return; }
   if(v.screen === 'sorties'){ m.innerHTML = banner() + sortiesHTML(); bindSorties(); return; }
+  if(v.screen === 'restock'){ m.innerHTML = banner() + restockHTML(); document.querySelectorAll('[data-rsloc]').forEach(b => b.onclick = () => { VIEW.rsloc = b.dataset.rsloc; history.replaceState(VIEW, ''); render(); }); document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc)); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
   m.innerHTML = banner() + (v.screen === 'home' ? homeHTML() : v.screen === 'store' ? storeHTML(v.loc) : zoneHTML(v.loc, v.zone, v.tab));
@@ -697,14 +705,18 @@ function homeHTML(){
   h += '<div class="tiles">' + LOCS.map(L => {
     const t = totals(rowsAt(L.id));
     const un = rowsAt(L.id, UNPLACED).filter(r => r[4] > 0).length;
-    return `<button class="tile" data-loc="${esc(L.id)}">${L.photo ? `<img src="${L.photo}" alt="" loading="lazy" onerror="this.remove()">` : '<div class="pat"></div>'}
+    const tp = tilePhoto(L);
+    return `<button class="tile" data-loc="${esc(L.id)}">${tp ? `<img src="${esc(tp)}" alt="" loading="lazy" onerror="this.remove()">` : '<div class="pat"></div>'}
       ${un ? `<span class="badge">${un} à ranger</span>` : ''}
       <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} art. · ${fmt(t.products)} prod.</p></div></button>`;
   }).join('') + '</div>';
   const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
   const trReq = TR ? new Set(TR.requested.map(l => l.grp || l.id)).size : 0;
   const tool = (act, ic, b, sm, dot) => `<button class="tool" data-act="${act}"><span class="ic">${ic}</span><b>${b}</b>${sm ? '<small>' + sm + '</small>' : ''}${dot ? '<span class="dot">' + dot + '</span>' : ''}</button>`;
+  const rsN = ['Store 1', 'Store 2'].reduce((a, l) => { const r = restockList(l); return a + (r ? r.length : 0); }, 0);
   h += '<div class="tools">'
+    + tool('pscan', '📷', 'Scanner', 'où est ce produit ?')
+    + tool('restock', '🧺', 'Réassort', rsN ? rsN + ' produit(s)' : 'presque vides', rsN || '')
     + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
@@ -723,10 +735,11 @@ function storeHTML(loc){
   const listed = zoneList(loc);
   const codes = new Set(listed.map(z => z.c));
   const extra = [...new Set(rows.map(r => r[1]))].filter(z => !codes.has(z) && z !== UNPLACED);
-  const view = storeView(loc);
+  const view = VIEW.hl && MAPS[loc] ? 'plan' : storeView(loc);
   let h = '';
   if(MAPS[loc]) h += `<div class="viewsw" role="group" aria-label="Affichage"><button data-view="plan" aria-pressed="${view === 'plan'}">Plan</button><button data-view="list" aria-pressed="${view === 'list'}">Liste</button></div>`;
-  if(meIsAdmin()) h += `<button class="cbtn alt" data-act="medit" style="margin:0 0 12px">✏ ${MAPS[loc] ? 'Modifier le plan' : 'Créer le plan'}</button>`;
+  if(meIsAdmin()) h += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px"><button class="cbtn alt" data-act="medit">✏ ${MAPS[loc] ? 'Modifier le plan' : 'Créer le plan'}</button><button class="cbtn alt" data-act="sphoto">📷 Photo du magasin</button></div>`;
+  if(VIEW.hl) h += hlBar(loc, VIEW.hl);
   const un = totals(rows.filter(r => r[1] === UNPLACED));
   if(un.units) h += `<button class="zrow unplaced" data-zone="${esc(UNPLACED)}" style="margin-bottom:12px"><span class="code">À ranger</span><span class="nm">${fmt(un.products)} produits sans rayon</span><span class="u">${fmt(un.units)}</span></button>`;
   h += loc === 'Warehouse' ? boxesAllHTML() : boxesHintHTML(loc);
@@ -736,7 +749,8 @@ function storeHTML(loc){
     h += `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan de ${esc(locName(loc))}">${M.deco}` + M.z.filter(([c]) => !isBox(loc, c)).map(([c, x, y, w, ht]) => {
       const z = listed.find(q => q.c === c) || {};
       const t = totals(rowsAt(loc, c));
-      const cls = 'mz' + (z.b ? ' boxz' : '') + (z.x ? ' sale' : t.units ? ' has' : '');
+      const hq = VIEW.hl ? rowsAt(loc, c).filter(r => bkey(r[2]) === VIEW.hl).reduce((a, r) => a + r[4], 0) : 0;
+      const cls = 'mz' + (z.b ? ' boxz' : '') + (z.x ? ' sale' : t.units ? ' has' : '') + (hq > 0 ? ' hl' : '');
       const small = w < 50 || ht < 34, lab = z.b ? '📦 ' + (z.k || c) : c, nb = sorZoneBadge(loc, c);
       return `<g class="${cls}" data-zone="${esc(c)}" tabindex="0" role="button" aria-label="Zone ${esc(c)}, ${t.units} articles${nb ? ', ' + nb + ' sortis' : ''}"><rect x="${x}" y="${y}" width="${w}" height="${ht}"/>` + (nb ? `<circle cx="${x + w - 2}" cy="${y + 2}" r="9" fill="#dc2626"/><text x="${x + w - 2}" y="${y + 2}" style="fill:#fff;font-size:10px;font-weight:800">${nb}</text>` : '')
         + (small ? `<text x="${x + w / 2}" y="${y + ht / 2}">${esc(lab)}</text>`
@@ -767,6 +781,7 @@ function zoneHTML(loc, zone, tab){
     ${meIsAdmin() && zone !== UNPLACED && !z.b ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button><button class="cbtn alt" data-act="zphoto">📷 Nouvelle photo</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
+  if(VIEW.hl) h = hlBar(loc, VIEW.hl, zone) + h;
   if(zone === UNPLACED && rows.some(r => r[4] > 0)) h += `<button class="go" data-act="boxout" style="margin:0 0 12px">📤 Ranger les arrivages (étagère proposée)</button>`;
   h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves' && tab !== 'out'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button>${zone !== UNPLACED ? (() => { const nb = sorZoneBadge(loc, zone); return `<button role="tab" data-tab="out" aria-selected="${tab === 'out'}">Sorties${nb ? ' 🛒' + nb : ''}</button>`; })() : ''}</div>`;
   if(tab === 'out'){ h += zoneSortiesHTML(loc, zone); }
@@ -792,7 +807,7 @@ function zoneHTML(loc, zone, tab){
 }
 function bindMain(){
   document.querySelectorAll('[data-loc]').forEach(b => b.onclick = () => go({ screen:'store', loc: b.dataset.loc }));
-  document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => go({ screen:'zone', loc: b.dataset.zloc || VIEW.loc, zone: b.dataset.zone }); b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); b.onclick(); } }; });
+  document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => go(Object.assign({ screen:'zone', loc: b.dataset.zloc || VIEW.loc, zone: b.dataset.zone }, VIEW.hl ? { hl: VIEW.hl } : {})); b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); b.onclick(); } }; });
   document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { ls('s1981_view', b.dataset.view); render(); });
   document.querySelectorAll('[data-count]').forEach(b => b.onclick = () => startCount(VIEW.loc, VIEW.zone, b.dataset.count));
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { VIEW.tab = b.dataset.tab; history.replaceState(VIEW, ''); render(); });
@@ -825,7 +840,12 @@ function bindMain(){
   const ro = document.querySelector('[data-act="reorg"]'); if(ro) ro.onclick = () => { go({ screen:'reorg' }); loadReorg(); };
   bindPhoto();
   const q = $('#q');
-  if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; renderResults(); }
+  if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; q.onkeydown = e => { if(e.key === 'Enter'){ const sh = parseShelf(q.value); if(sh){ e.preventDefault(); q.value = ''; VIEW.q = ''; shelfScanned(sh); } else if(/^\d{6,}$/.test(q.value.trim())){ e.preventDefault(); productWhere(q.value.trim()); } } }; renderResults(); }
+  const ps = document.querySelector('[data-act="pscan"]'); if(ps) ps.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh) shelfScanned(sh); else productWhere(code); });
+  const rs = document.querySelector('[data-act="restock"]'); if(rs) rs.onclick = () => { go({ screen:'restock' }); ['Store 1', 'Store 2'].forEach(l => loadSorties(l)); };
+  const sp = document.querySelector('[data-act="sphoto"]'); if(sp) sp.onclick = () => zonePhotoTake(VIEW.loc, '__store');
+  const hx = document.querySelector('[data-act="hlclear"]'); if(hx) hx.onclick = () => { delete VIEW.hl; history.replaceState(VIEW, ''); render(); };
+  if(VIEW.hl){ setTimeout(() => { const f = document.querySelector('.mz.hl, .pbox.hl'); if(f && f.scrollIntoView) f.scrollIntoView({ block:'center', inline:'center', behavior:'smooth' }); }, 120); }
 }
 function renderResults(){
   const box = $('#results'); if(!box) return;
@@ -834,7 +854,11 @@ function renderResults(){
   if(/^\d{6,}$/.test(q)) q = aliasOf(q);
   const hits = (DATA ? DATA.zones : []).filter(r => r[4] !== 0 && (String(r[3]).toLowerCase().includes(q) || String(r[2]).includes(q))).slice(0, 40);
   box.innerHTML = hits.length ? hits.map(r => `<button class="row" data-bc="${esc(r[2])}" data-loc2="${esc(r[0])}" data-zone2="${esc(r[1])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || r[2])}</strong><small>${esc(locName(r[0]))} · ${isBox(r[0], r[1]) ? '📦 boîte ' + esc(boxName(r[0], r[1])) : 'zone ' + esc(r[1])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('') : '<p class="empty" style="padding:10px">Introuvable en rayon.</p>';
-  box.querySelectorAll('.row').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc));
+  box.querySelectorAll('.row').forEach(b => {
+    if(!b.querySelector('[data-pin]') && b.dataset.loc2 && MAPS[b.dataset.loc2]){ const pn = document.createElement('span'); pn.className = 'pin'; pn.dataset.pin = bkey(b.dataset.bc); pn.dataset.pinloc = b.dataset.loc2; pn.textContent = '📍 Plan'; b.appendChild(pn); }
+    b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc);
+  });
+  box.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); go({ screen:'store', loc: p.dataset.pinloc, hl: p.dataset.pin }); });
 }
 
 // ── shelf count ─────────────────────────────────────────
@@ -871,7 +895,7 @@ function bindCount(){
   C.flash = false;
   const focus = () => { if(!document.querySelector('[data-name]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
   inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addScan(inp.value); inp.value = ''; } };
-  $('#camb').onclick = openCamera;
+  $('#camb').onclick = () => openCamera();
   document.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { C.items[+b.dataset.inc].count++; saveDraft(); render(); });
   document.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { const it = C.items[+b.dataset.dec]; it.count--; if(it.count <= 0) C.items.splice(+b.dataset.dec, 1); saveDraft(); render(); });
   document.querySelectorAll('[data-name]').forEach(x => { x.oninput = () => { C.items[+x.dataset.name].pendingName = x.value; saveDraft(); }; x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); nameItem(+x.dataset.name, x.value); } }; x.onblur = () => { if(x.value.trim()) nameItem(+x.dataset.name, x.value); }; });
@@ -900,6 +924,7 @@ function beep(ok){
 }
 function aliasOf(raw){ const s = String(raw || '').trim(); const a = DATA && DATA.aliases ? DATA.aliases[bkey(s)] : null; return a || s; }
 function addScan(raw){
+  { const sh = parseShelf(raw); if(sh){ shelfScanned(sh); return; } }
   if(VIEW.screen === 'unit') return recvScan(raw);
   if(VIEW.screen === 'boxput') return bpScan(raw);
   if(VIEW.screen === 'reorgmark') return rePrint(raw);
@@ -965,7 +990,7 @@ function finishCount(){
     <div class="where"><div class="here"><span>${C.items.length} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div></div>
     <div class="sub">${C.items.length ? 'Ce comptage remplace ce qui était enregistré pour cette étagère.' : 'Tout ce qui était enregistré sur cette étagère sera retiré.'}</div>
     <button class="go" id="cok">Envoyer</button><button class="ghost" id="cno">Revenir au comptage</button>`);
-  $('#cno').onclick = closeSheet;
+  $('#cno').onclick = () => { if(C) delete C.next; closeSheet(); };
   $('#cok').onclick = () => {
     if(!user){ closeSheet(); lock(); return; }
     const body = { opId: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), location: C.loc, zone: C.zone, spot: C.spot,
@@ -973,8 +998,10 @@ function finishCount(){
     applyCountLocal(Object.assign({ by: user.name }, body));
     QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
     ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+    const nx = C.next;
     C = null; saveDraft(); closeSheet();
     VIEW = { screen:'zone', loc: body.location, zone: body.zone, tab:'shelves' }; history.replaceState(VIEW, ''); render();
+    if(nx) setTimeout(() => startCount(nx.loc, nx.zone, nx.spot), 200);
     toast(online ? 'Comptage enregistré' : 'Comptage gardé sur le téléphone, envoi au retour de la connexion');
     flushQueue();
   };
@@ -982,7 +1009,7 @@ function finishCount(){
 
 // ── camera scanning (BarcodeDetector, else ZXing) ───────
 let camStream = null, camTimer = null, zxReader = null;
-async function openCamera(){
+async function openCamera(onCode){
   const box = document.createElement('div');
   box.className = 'cam'; box.id = 'cam';
   box.innerHTML = '<video playsinline muted></video><div class="frame"></div><div class="camui"><span id="camtxt">Visez le code-barres</span><button class="cbtn" id="camx">Fermer</button></div>';
@@ -990,7 +1017,9 @@ async function openCamera(){
   $('#camx').onclick = closeCamera;
   const video = box.querySelector('video');
   let last = '', lastAt = 0;
-  const hit = code => { const now = Date.now(); if(code === last && now - lastAt < 1800) return; last = code; lastAt = now; addScan(code); $('#camtxt').textContent = 'Ajouté : ' + (productName(code) || code); };
+  const hit = code => { const now = Date.now(); if(code === last && now - lastAt < 1800) return; last = code; lastAt = now;
+    if(typeof onCode === 'function'){ beep(true); closeCamera(); onCode(code); return; }
+    addScan(code); const t = $('#camtxt'); if(t) t.textContent = 'Ajouté : ' + (productName(code) || code); };
   try {
     if('BarcodeDetector' in window){
       camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -1747,7 +1776,8 @@ function boxesHTML(loc, zone, t, spots){
   return spots.filter(s => t.spots[s.code]).map(s => {
     const [x, y, w, h] = t.spots[s.code];
     const st = spotState(loc, zone, s.code);
-    return `<button class="pbox ${st.counted ? 'ok' : emptyAt(loc, s.code) ? 'empty' : 'todo'}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
+    const hl = VIEW.hl && st.items.some(r => bkey(r[3]) === VIEW.hl);
+    return `<button class="pbox ${st.counted ? 'ok' : emptyAt(loc, s.code) ? 'empty' : 'todo'}${hl ? ' hl' : ''}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
   }).join('');
 }
 function photoHTML(loc, zone, z){
@@ -2239,7 +2269,8 @@ function zonePhotoTake(loc, zone){
       const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
       const dataUrl = cv.toDataURL('image/jpeg', 0.82);
-      openSheet(`<h3>📷 Nouvelle photo · ${esc(zone)}</h3><div class="sub">Elle remplace l’ancienne pour tout le monde. Les cases d’étagère seront à redessiner (✏️ Ajuster les cases).</div>
+      const isStore = zone === '__store';
+      openSheet(`<h3>📷 ${isStore ? 'Photo du magasin · ' + esc(locName(loc)) : 'Nouvelle photo · ' + esc(zone)}</h3><div class="sub">Elle remplace l’ancienne pour tout le monde.${isStore ? ' Elle s’affiche sur l’accueil.' : ' Les cases d’étagère seront à redessiner (✏️ Ajuster les cases).'}</div>
         <div class="psheet-img"><img src="${dataUrl}" alt=""></div>
         <button class="go" id="zpgo">Utiliser cette photo</button><button class="ghost" id="zpx">Annuler</button>`);
       $('#zpx').onclick = closeSheet;
@@ -2252,7 +2283,7 @@ function zonePhotoTake(loc, zone){
           ZIMG[loc] = ZIMG[loc] || {}; ZIMG[loc][zone] = d.image; ls('s1981_zimg', JSON.stringify(ZIMG));
           if(SHEET_TRACES[loc]) delete SHEET_TRACES[loc][zone]; ls('s1981_traces', JSON.stringify(SHEET_TRACES));
           offlineCache([driveImg(d.image.id)]);
-          closeSheet(); render(); toast('📷 Photo de ' + zone + ' remplacée. Redessinez les cases : ✏️ Ajuster les cases.');
+          closeSheet(); render(); toast(isStore ? '📷 Photo de ' + locName(loc) + ' remplacée.' : '📷 Photo de ' + zone + ' remplacée. Redessinez les cases : ✏️ Ajuster les cases.');
         } catch(e){ b.disabled = false; b.textContent = 'Réessayer'; toast(/fetch/i.test(e.message) ? 'Pas de connexion : réessayez.' : e.message); }
       };
     } catch(e){ toast('Photo illisible : réessayez.'); }
@@ -2293,7 +2324,7 @@ function offlineLabel(){ return OFF.busy ? OFF.n + '/' + OFF.total : OFF.at ? 'p
 function offlineUrls(){
   const u = new Set();
   LOCS.forEach(L => zoneList(L.id).forEach(z => { const p = photoFor(L.id, z.c); if(p) u.add(new URL(p, location.href).href); }));
-  LOCS.forEach(L => { if(L.photo) u.add(new URL(L.photo, location.href).href); });
+  LOCS.forEach(L => { const tp = tilePhoto(L); if(tp) u.add(new URL(tp, location.href).href); });
   Object.values(DATA && DATA.images || {}).forEach(v => { if(v) u.add(new URL(v, location.href).href); });
   return [...u];
 }
@@ -2329,6 +2360,103 @@ async function offlinePrep(manual){
 }
 // automatic: once a day, when the app opens with a connection
 setTimeout(() => { if(navigator.onLine && DATA && (!OFF.at || Date.now() - new Date(OFF.at) > 20 * 3600e3)) offlinePrep(false); }, 8000);
+// ══════════════════════════════════════════════════════════════════
+//  4 NOV 2026 (nuit) — shelf labels, search on the map, product scan,
+//  « à réassortir », store photo.
+// ══════════════════════════════════════════════════════════════════
+// ── 🏷 shelf labels: Code128 « S1-1B-3-2 » / « S2-B7-3 » (whole zone: « S2-Rice ») ──
+// A US scanner on a French (AZERTY) keyboard types other characters: translated back.
+const AZ_MAP = { '&':'1', 'é':'2', '"':'3', "'":'4', '(':'5', '§':'6', 'è':'7', '!':'8', 'ç':'9', 'à':'0', ')':'-', 'q':'a', 'a':'q', 'w':'z', 'z':'w', 'Q':'A', 'A':'Q', 'W':'Z', 'Z':'W' };
+function parseShelf(raw){
+  const tries = [String(raw || '').trim()];
+  tries.push(tries[0].split('').map(ch => AZ_MAP[ch] || ch).join(''));
+  for(const t of tries){
+    const m = /^S([12])-(.+)$/i.exec(t); if(!m) continue;
+    const loc = 'Store ' + m[1], rest = m[2].toLowerCase();
+    const zs = zoneList(loc).filter(z => !z.b);
+    for(const z of zs){ const sp = zoneSpots(z).find(x => x.code.toLowerCase() === rest); if(sp) return { loc, zone: z.c, spot: sp.code }; }
+    let z = zs.find(q => q.c.toLowerCase() === rest);
+    if(!z){ const pre = zs.filter(q => q.c.toLowerCase().startsWith(rest)); if(pre.length === 1) z = pre[0]; }
+    if(z){ const sps = zoneSpots(z); return { loc, zone: z.c, spot: sps.length === 1 ? sps[0].code : '' }; }
+  }
+  return null;
+}
+function shelfScanned(sh){
+  beep(true);
+  if(VIEW.screen === 'count' && C){
+    if(C.loc === sh.loc && C.spot === sh.spot){ toast('Vous êtes déjà sur ' + sh.spot); return; }
+    if(!sh.spot){ toast(sh.zone + ' : choisissez l’étagère après ce comptage.'); return; }
+    if(!C.items.length){ C = null; saveDraft(); VIEW = { screen:'zone', loc: sh.loc, zone: sh.zone, tab:'shelves' }; history.replaceState(VIEW, ''); startCount(sh.loc, sh.zone, sh.spot); return; }
+    C.next = sh; saveDraft(); finishCount();
+    toast('Étagère suivante : ' + sh.spot + ' — envoyez d’abord celle-ci.');
+    return;
+  }
+  go({ screen:'zone', loc: sh.loc, zone: sh.zone, tab:'shelves' });
+  if(sh.spot) setTimeout(() => openSpot(sh.loc, sh.zone, sh.spot), 120);
+}
+// ── 📍 product on the map ──
+function hlBar(loc, k, zone){
+  const rows = (DATA ? DATA.zones : []).filter(r => bkey(r[2]) === k && r[4] > 0);
+  const nm = (rows[0] && rows[0][3]) || productName(k) || k;
+  const here = rows.filter(r => r[0] === loc);
+  const shelves = zone ? [...new Set((DATA ? DATA.spots : []).filter(r => r[0] === loc && r[1] === zone && bkey(r[3]) === k && r[5] > 0).map(r => r[2]))] : [];
+  const others = rows.filter(r => r[0] !== loc);
+  return `<div class="hlbar">📍<b>${esc(nm)} : ${here.length ? here.map(r => esc(isBox(loc, r[1]) ? boxName(loc, r[1]) : r[1]) + ' (' + fmt(r[4]) + ')').join(', ') : 'pas ici'}${shelves.length ? ' · étagère ' + shelves.map(esc).join(', ') : ''}${others.length ? '<br><small style="font-weight:500">Aussi : ' + others.map(r => esc(locName(r[0])) + ' ' + esc(r[1]) + ' (' + fmt(r[4]) + ')').join(', ') + '</small>' : ''}</b><button class="pin" data-act="hlclear">✕</button></div>`;
+}
+// ── 📷 « où est ce produit ? » ──
+function productWhere(raw){
+  const code = aliasOf(raw), k = bkey(code);
+  const rows = (DATA ? DATA.zones : []).filter(r => bkey(r[2]) === k && r[4] !== 0);
+  const nm = (rows[0] && rows[0][3]) || productName(code) || '';
+  const p = priceOf(code), u = imgOf(code);
+  const locs = [...new Set(rows.filter(r => r[4] > 0).map(r => r[0]))];
+  openSheet(`${u ? `<div class="psheet-img"><img src="${esc(u)}" alt="" onerror="this.parentNode.remove()"></div>` : ''}<h3>${esc(nm || 'Produit inconnu')}</h3><div class="sub num">${esc(code)}${p ? ' · ' + fmt(p) + ' F' : ''}</div>
+    <div class="where">${rows.length ? rows.map(r => { const sp = shelfOf(r[0], code, r[1]); return `<div><span>${esc(locName(r[0]))} · ${esc(isBox(r[0], r[1]) ? '📦 ' + boxName(r[0], r[1]) : r[1])}${sp ? ' · étagère ' + esc(sp) : ''}</span><b class="num">${fmt(r[4])}</b></div>`; }).join('') : '<div><span>Pas encore compté dans un rayon</span></div>'}</div>
+    ${locs.filter(l => MAPS[l]).map(l => `<button class="go" data-wpin="${esc(l)}">📍 Voir sur le plan de ${esc(locName(l))}</button>`).join('')}
+    ${rows.length ? `<button class="ghost" id="wopen">Ouvrir la fiche (ajouter, retirer, déplacer)</button>` : ''}
+    <button class="ghost" id="wagain">📷 Scanner un autre produit</button><button class="ghost" id="wx">Fermer</button>`);
+  $('#sheet').querySelectorAll('[data-wpin]').forEach(b => b.onclick = () => { closeSheet(); go({ screen:'store', loc: b.dataset.wpin, hl: k }); });
+  const o = $('#wopen'); if(o) o.onclick = () => { closeSheet(); const r = rows.find(x => x[4] > 0) || rows[0]; openProduct(r[0], r[1], code); };
+  $('#wagain').onclick = () => { closeSheet(); openCamera(c2 => { const sh = parseShelf(c2); if(sh) shelfScanned(sh); else productWhere(c2); }); };
+  $('#wx').onclick = closeSheet;
+}
+// ── 🧺 à réassortir: last count minus what went out since (sales + transfers) ──
+function restockList(loc){
+  if(!SOR[loc] || !DATA) return null;
+  const c = SOR[loc], byP = {};
+  rowsAt(loc).forEach(r => {
+    if(r[4] <= 0 || r[1] === UNPLACED || isBox(loc, r[1])) return;
+    const k = bkey(r[2]), p = byP[k] || (byP[k] = { bk: k, bc: r[2], name: r[3] || productName(r[2]) || r[2], counted: 0, zones: [], from: Infinity });
+    p.counted += r[4]; p.zones.push([r[1], r[4]]);
+    p.from = Math.min(p.from, sorZoneCountAt(loc, r[1]) || sorDayStart(6));
+  });
+  const out = [];
+  Object.values(byP).forEach(p => {
+    const sold = c.sales.filter(x => x[0] === p.bk && x[3] >= p.from).reduce((a, x) => a + x[2], 0);
+    const moved = (c.moves || []).filter(m => m.fromLoc === loc && m.toLoc !== loc && bkey(m.bc) === p.bk && sorMoveT(m) >= p.from).reduce((a, m) => a + m.qty, 0);
+    if(!sold && !moved) return;
+    const left = p.counted - sold - moved, lim = Math.max(1, Math.round(p.counted * 0.25));
+    if(left > lim) return;
+    const main = p.zones.sort((a, b) => b[1] - a[1])[0][0];
+    out.push({ zone: main, bk: p.bk, bc: p.bc, name: p.name, counted: p.counted, left: Math.max(0, left), w: sorWarehouse(p.bk), shelf: shelfOf(loc, p.bc, main), also: p.zones.slice(1).map(z => z[0]) });
+  });
+  return out.sort((a, b) => a.left - b.left || a.zone.localeCompare(b.zone));
+}
+function restockHTML(){
+  const loc = VIEW.rsloc || 'Store 1';
+  let h = `<div class="chips" style="margin-bottom:10px">${['Store 1', 'Store 2'].map(l => { const r = restockList(l); return `<button data-rsloc="${esc(l)}" aria-pressed="${l === loc}">${esc(locName(l))}${r ? ' (' + r.length + ')' : ''}</button>`; }).join('')}</div>`;
+  h += '<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">Produits dont il reste peu en rayon : dernier comptage moins les ventes et transferts depuis. À remonter de l’entrepôt ou à recompter.</p>';
+  const list = restockList(loc);
+  if(!list){ loadSorties(loc); return h + '<p class="empty">Chargement des sorties…</p>'; }
+  if(!list.length) return h + '<p class="empty">Rien de presque vide pour l’instant.</p>';
+  const by = {}; list.forEach(o => (by[o.zone] = by[o.zone] || []).push(o));
+  Object.keys(by).forEach(z => {
+    h += `<div class="sect" style="margin-top:12px">${esc(z)} · ${esc((zoneList(loc).find(q => q.c === z) || {}).k || '')}</div><div class="list">` + by[z].map(o => `<button class="row" data-bc="${esc(o.bc)}" data-loc2="${esc(loc)}" data-zone2="${esc(z)}">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong><small>reste ~${fmt(o.left)} sur ${fmt(o.counted)} comptés${o.shelf ? ' · étagère ' + esc(o.shelf) : ''}${o.also && o.also.length ? ' · aussi en ' + o.also.map(esc).join(', ') : ''}</small><small style="font-weight:700;color:${o.w ? 'var(--ok)' : 'var(--warn)'}">${o.w ? '📦 ' + fmt(o.w) + ' à l’entrepôt' : '⚠ rien à l’entrepôt'}</small></div><div class="qty num" style="color:var(--warn)">${fmt(o.left)}</div></button>`).join('') + '</div>';
+  });
+  return h;
+}
+// ── 📷 store photo (home tiles), saved like a zone photo under the zone « __store » ──
+function tilePhoto(L){ const im = zoneImg(L.id, '__store'); return im ? driveImg(im.id) : (L.photo || ''); }
 function boxesHTMLList(loc){
   const bx = boxesOf(loc);
   if(!bx.length && !meIsAdmin()) return '';
