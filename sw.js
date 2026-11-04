@@ -15,7 +15,7 @@
 //
 // Bump CACHE_NAME whenever the shell's own file list changes, so old
 // clients pick up the new set on next activate instead of being stuck.
-const CACHE_NAME = 'boutique1981-shell-v4';
+const CACHE_NAME = 'boutique1981-shell-v5';
 const PHOTO_CACHE = 'boutique1981-photos-v1';
 const SHELL_URLS = [
   './Boutique_Scanner.html',
@@ -71,6 +71,17 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.open(PHOTO_CACHE).then((cache) =>
       fetch(req).then((res) => { if (res.ok) cache.put(req, res.clone()); return res; })
         .catch(() => cache.match(req))));
+    return;
+  }
+  // Product photos and zone photos taken in the app (Drive), 4 Nov 2026:
+  // cache first (works with no power / no wifi), refreshed in the background.
+  // Stock1981's « 📥 Hors-ligne » fills this cache ahead of time.
+  if (req.destination === 'image' || req.url.indexOf('/images/products/') !== -1) {
+    event.respondWith(caches.open(PHOTO_CACHE).then((cache) => cache.match(req.url).then((hit) => {
+      const net = fetch(req).then((res) => { if (res && (res.ok || res.type === 'opaque')) cache.put(req.url, res.clone()); return res; })
+        .catch(() => hit || Response.error());
+      return hit || net;
+    })));
     return;
   }
   if (!isShellUrl(req.url)) return; // Apps Script reads, anything dynamic: pass through untouched

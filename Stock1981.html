@@ -57,16 +57,29 @@ main{max-width:880px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-rig
 .results{display:flex;flex-direction:column;gap:6px;margin:-6px 0 18px}
 
 /* Store tiles */
-.tiles{display:grid;gap:12px;grid-template-columns:1fr}
+.tiles{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
+.tools{display:grid;gap:8px;grid-template-columns:repeat(4,1fr);margin-top:10px}
+@media(max-width:360px){.tools{grid-template-columns:repeat(3,1fr)}}
+.tool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;aspect-ratio:1/1;border:1.5px solid var(--brand);background:var(--brand-soft);color:var(--ink);border-radius:14px;padding:6px 4px;cursor:pointer;text-align:center;font:inherit;position:relative}
+.tool .ic{font-size:24px;line-height:1}
+.tool b{font-size:12px;line-height:1.15}
+.tool small{font-size:10px;color:var(--muted);line-height:1.15;max-height:2.3em;overflow:hidden}
+.tool .dot{position:absolute;top:5px;right:5px;background:var(--bad);color:#fff;font-size:10px;font-weight:700;border-radius:99px;padding:1px 6px}
+.zact{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 12px}
+.zact button{display:flex;flex-direction:column;align-items:center;gap:2px;border:1.5px solid var(--brand);background:var(--brand-soft);border-radius:12px;padding:10px 4px;font:inherit;font-size:12px;font-weight:700;color:var(--ink);cursor:pointer}
+.zact button span{font-size:20px}
+.pbox.empty{background:repeating-linear-gradient(135deg,rgba(120,120,120,.35) 0 6px,rgba(120,120,120,.12) 6px 12px)!important;border-color:#777!important}
+.vide{display:inline-block;background:#eee;color:#555;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700}
+.spotpick{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px;margin-bottom:6px;width:100%;background:#fff;font:inherit;text-align:left;cursor:pointer}
 @media (min-width:640px){.tiles{grid-template-columns:repeat(3,1fr)}}
-.tile{position:relative;border:0;padding:0;border-radius:20px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:16/10;background:var(--plum);box-shadow:var(--shadow);max-width:100%}
+.tile{position:relative;border:0;padding:0;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:1/1;background:var(--plum);box-shadow:var(--shadow);max-width:100%}
 .tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .tile::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,6,15,0) 30%,rgba(20,6,15,.85))}
 .tile .pat{position:absolute;inset:0;background:repeating-linear-gradient(135deg,#3a1630 0 18px,#2a1022 18px 36px)}
-.tile .t{position:absolute;left:16px;right:16px;bottom:14px;z-index:1;color:#fff}
-.tile .t h2{margin:0;font:800 26px/1 var(--display);letter-spacing:-.01em}
-.tile .t p{margin:6px 0 0;font-size:13px;opacity:.9}
-.tile .badge{position:absolute;top:12px;right:12px;z-index:1;background:var(--brand);color:#fff;font-weight:700;font-size:12px;padding:4px 10px;border-radius:99px}
+.tile .t{position:absolute;left:8px;right:8px;bottom:8px;z-index:1;color:#fff}
+.tile .t h2{margin:0;font:800 15px/1.05 var(--display);letter-spacing:-.01em}
+.tile .t p{margin:3px 0 0;font-size:10px;opacity:.9}
+.tile .badge{position:absolute;top:6px;right:6px;z-index:1;background:var(--brand);color:#fff;font-weight:700;font-size:10px;padding:2px 7px;border-radius:99px}
 .sect{font:700 12px var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 10px}
 
 /* Zone grid */
@@ -472,7 +485,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt, empty: Array.isArray(d.empty) ? d.empty : ((DATA && DATA.empty) || []) };
     applyZoneResets(DATA);
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
@@ -614,7 +627,14 @@ function shapeSpots(zone, shape){
   if(!out.length) out.push({ code: zone, label: 'Toute la zone' });
   return out;
 }
-function photoFor(loc, zone){ const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1104` : ''; }
+function photoFor(loc, zone){
+  const im = zoneImg(loc, zone); if(im) return driveImg(im.id);
+  const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1104` : '';
+}
+// Zone photos taken in the app (4 Nov 2026): Drive file, shared « anyone with the link ».
+let ZIMG = lsj('s1981_zimg', {});
+function zoneImg(loc, zone){ return ZIMG[loc] && ZIMG[loc][zone] || null; }
+function driveImg(id){ return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w1400'; }
 function locName(id){ const L = LOCS.find(l => l.id === id); return L ? L.name : id; }
 function ago(iso){
   if(!iso) return '';
@@ -678,16 +698,21 @@ function homeHTML(){
     const t = totals(rowsAt(L.id));
     const un = rowsAt(L.id, UNPLACED).filter(r => r[4] > 0).length;
     return `<button class="tile" data-loc="${esc(L.id)}">${L.photo ? `<img src="${L.photo}" alt="" loading="lazy" onerror="this.remove()">` : '<div class="pat"></div>'}
-      ${un ? `<span class="badge">${un} non placé${un > 1 ? 's' : ''}</span>` : ''}
-      <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} articles · ${fmt(t.products)} produits${t.value ? ' · ' + fmt(t.value) + ' F' : ''}</p></div></button>`;
+      ${un ? `<span class="badge">${un} à ranger</span>` : ''}
+      <div class="t"><h2>${esc(L.name)}</h2><p class="num">${fmt(t.units)} art. · ${fmt(t.products)} prod.</p></div></button>`;
   }).join('') + '</div>';
   const trN = TR ? new Set(TR.transit.map(l => l.grp || l.id)).size : 0, trLate = TR ? TR.transit.filter(l => (trHours(l.sentTs) || 0) > 24).length : 0;
-  h += `<button class="recvbtn" data-act="transit"><span class="ic">🚚</span><span><b>En route</b><small>${TR ? trN + ' envoi(s) sur la route' + (trLate ? ' · <span style="color:var(--bad)">en retard</span>' : '') + ' · ' + (TR.requested.length ? new Set(TR.requested.map(l => l.grp || l.id)).size + ' demande(s) à préparer' : 'aucune demande') : 'Transferts entre l’entrepôt et les magasins'}</small></span></button>`;
-  h += `<button class="recvbtn" data-act="sorties"><span class="ic">📤</span><span><b>Sorties</b><small>Ce qui est sorti aujourd’hui, par zone · à remonter de l’entrepôt</small></span></button>`;
-  h += `<button class="recvbtn" data-act="ctl"><span class="ic">🔍</span><span><b>Contrôle du jour</b><small>4 étagères tirées au sort, comptées à l’aveugle</small></span></button>`;
-  if(meIsAdmin()) h += `<button class="recvbtn" data-act="bilan"><span class="ic">📊</span><span><b>Bilan du jour</b><small>Ventes, caisse, contrôles, stock négatif, codes inconnus</small></span></button>`;
-  h += `<button class="recvbtn" data-act="reorg"><span class="ic">🔄</span><span><b>Réorganisation</b><small>Repérer les étagères · valider ce que la caisse a scanné</small></span></button>`;
-  h += `<button class="recvbtn" data-act="recv"><span class="ic">📦</span><span><b>Réception d’arrivage</b><small>${R ? 'Glacière / carton ' + esc(R.unit) + ' en cours' : 'Vider les glacières et cartons d’un conteneur'}</small></span></button>`;
+  const trReq = TR ? new Set(TR.requested.map(l => l.grp || l.id)).size : 0;
+  const tool = (act, ic, b, sm, dot) => `<button class="tool" data-act="${act}"><span class="ic">${ic}</span><b>${b}</b>${sm ? '<small>' + sm + '</small>' : ''}${dot ? '<span class="dot">' + dot + '</span>' : ''}</button>`;
+  h += '<div class="tools">'
+    + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
+    + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
+    + tool('ctl', '🔍', 'Contrôle', '4 étagères')
+    + (meIsAdmin() ? tool('bilan', '📊', 'Bilan', 'du jour') : '')
+    + tool('reorg', '🔄', 'Réorg.', 'repérage')
+    + tool('recv', '📦', 'Réception', R ? 'carton ' + esc(R.unit) : 'arrivage')
+    + tool('offline', '📥', 'Hors-ligne', esc(offlineLabel()))
+    + '</div>';
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
   return h;
 }
@@ -704,11 +729,11 @@ function storeHTML(loc){
   if(meIsAdmin()) h += `<button class="cbtn alt" data-act="medit" style="margin:0 0 12px">✏ ${MAPS[loc] ? 'Modifier le plan' : 'Créer le plan'}</button>`;
   const un = totals(rows.filter(r => r[1] === UNPLACED));
   if(un.units) h += `<button class="zrow unplaced" data-zone="${esc(UNPLACED)}" style="margin-bottom:12px"><span class="code">À ranger</span><span class="nm">${fmt(un.products)} produits sans rayon</span><span class="u">${fmt(un.units)}</span></button>`;
-  h += boxesHTMLList(loc);
+  h += loc === 'Warehouse' ? boxesAllHTML() : boxesHintHTML(loc);
   if(view === 'plan'){
     const M = MAPS[loc];
     const [, , vw, vh] = M.vb.split(' ').map(Number);
-    h += `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan de ${esc(locName(loc))}">${M.deco}` + M.z.map(([c, x, y, w, ht]) => {
+    h += `<div class="mapwrap"><svg viewBox="${M.vb}" role="img" aria-label="Plan de ${esc(locName(loc))}">${M.deco}` + M.z.filter(([c]) => !isBox(loc, c)).map(([c, x, y, w, ht]) => {
       const z = listed.find(q => q.c === c) || {};
       const t = totals(rowsAt(loc, c));
       const cls = 'mz' + (z.b ? ' boxz' : '') + (z.x ? ' sale' : t.units ? ' has' : '');
@@ -719,7 +744,7 @@ function storeHTML(loc){
     }).join('') + `</svg></div><div class="legend"><span>Glissez le plan pour voir toute la boutique.</span><span><i></i>Vide / pas compté</span><span><i class="has"></i>En stock</span><span><i class="sale"></i>Solde</span></div>`;
   } else {
     const groups = [];
-    listed.forEach(z => { let g = groups.find(x => x.name === z.g); if(!g) groups.push(g = { name: z.g, zones: [] }); g.zones.push(z); });
+    listed.filter(z => !z.b).forEach(z => { let g = groups.find(x => x.name === z.g); if(!g) groups.push(g = { name: z.g, zones: [] }); g.zones.push(z); });
     if(extra.length) groups.push({ name: 'Autres zones (dans le Sheet)', zones: extra.map(c => ({ c, k:'' })) });
     groups.forEach(g => {
       h += `<div class="sect">${esc(g.name)}</div><div class="list">` + g.zones.map(z => {
@@ -736,12 +761,13 @@ function zoneHTML(loc, zone, tab){
   const rows = rowsAt(loc, zone).filter(r => r[4] !== 0).sort((a, b) => b[4] - a[4]);
   const t = totals(rows);
   const ph = zone === UNPLACED ? '' : photoFor(loc, zone);
-  let h = (zone === UNPLACED || z.b ? '' : photoHTML(loc, zone, z)) + `
+  let h = (zone !== UNPLACED && !z.b ? `<div class="zact"><button data-act="zadd"><span>➕</span>Ajouter</button><button data-act="zcount"><span>🔢</span>Compter</button><button data-act="zmove"><span>↔</span>Déplacer</button><button data-act="zempty"><span>∅</span>Vide</button></div>` : '') + (zone === UNPLACED || z.b ? '' : photoHTML(loc, zone, z)) + `
     <div class="zhead"><h2>${z.b ? '📦 ' + esc(z.k || zone) : esc(zone)}</h2><p>${z.b ? 'Boîte' + (z.g && z.g !== 'Boîtes' ? ' · ' + esc(z.g.replace(/^Boîtes · /, '')) : '') : esc(z.k || z.g || '')}</p></div>
     ${z.b ? boxZoneActions(loc, zone) : ''}
-    ${meIsAdmin() && zone !== UNPLACED && !z.b ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
+    ${meIsAdmin() && zone !== UNPLACED && !z.b ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><button class="cbtn alt" data-act="medit">✏ Modifier la zone</button><button class="cbtn alt" data-act="zphoto">📷 Nouvelle photo</button>${ph && traceFor(loc, zone) ? '<button class="cbtn alt" data-act="mboxes">✏ Ajuster les cases</button>' : ''}</div>` : ''}
     <div class="stats"><div class="stat"><b class="num">${fmt(t.units)}</b><span>articles</span></div><div class="stat"><b class="num">${fmt(t.products)}</b><span>produits</span></div>${t.value ? `<div class="stat"><b class="num">${fmt(t.value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
   const spots = zoneSpots(z);
+  if(zone === UNPLACED && rows.some(r => r[4] > 0)) h += `<button class="go" data-act="boxout" style="margin:0 0 12px">📤 Ranger les arrivages (étagère proposée)</button>`;
   h += `<div class="tabs" role="tablist"><button role="tab" data-tab="products" aria-selected="${tab !== 'shelves' && tab !== 'out'}">Produits</button><button role="tab" data-tab="shelves" aria-selected="${tab === 'shelves'}">Étagères${spots.length ? ' (' + spots.length + ')' : ''}</button>${zone !== UNPLACED ? (() => { const nb = sorZoneBadge(loc, zone); return `<button role="tab" data-tab="out" aria-selected="${tab === 'out'}">Sorties${nb ? ' 🛒' + nb : ''}</button>`; })() : ''}</div>`;
   if(tab === 'out'){ h += zoneSortiesHTML(loc, zone); }
   else if(tab === 'shelves'){
@@ -753,7 +779,7 @@ function zoneHTML(loc, zone, tab){
       const items = counted.filter(r => r[2] === s.code);
       const last = items.reduce((a, r) => r[6] > a ? r[6] : a, '');
       const by = items.find(r => r[6] === last);
-      return `<div class="shelf"><div class="shelfhead"><h4>${esc(s.label)}<span style="display:block;color:var(--muted);font-weight:500;font-size:12px">${items.length ? esc(ago(last)) + (by && by[7] ? ' · ' + esc(by[7]) : '') : 'jamais compté'}</span></h4><button class="cbtn ${items.length ? 'alt' : ''}" data-count="${esc(s.code)}">${items.length ? 'Recompter' : 'Compter'}</button></div>${items.length ? '<ul style="margin-top:6px">' + items.map(r => `<li><span>${esc(r[4] || r[3])}</span><b>${fmt(r[5])}</b></li>`).join('') + '</ul>' : ''}</div>`;
+      return `<div class="shelf"><div class="shelfhead"><h4>${esc(s.label)}<span style="display:block;color:var(--muted);font-weight:500;font-size:12px">${!items.length && emptyAt(loc, s.code) ? '<span class="vide">∅ vide</span> depuis ' + esc(ago(emptyAt(loc, s.code))) : items.length ? esc(ago(last)) + (by && by[7] ? ' · ' + esc(by[7]) : '') : 'jamais compté'}</span></h4><button class="cbtn ${items.length ? 'alt' : ''}" data-count="${esc(s.code)}">${items.length ? 'Recompter' : 'Compter'}</button></div>${items.length ? '<ul style="margin-top:6px">' + items.map(r => `<li><span>${esc(r[4] || r[3])}</span><b>${fmt(r[5])}</b></li>`).join('') + '</ul>' : ''}</div>`;
     }).join('') + '</div>' : '<p class="empty">Cette zone n\'a pas d\'étagères définies.</p>';
   } else {
     h += rows.length ? '<div class="list">' + rows.map(r => {
@@ -766,7 +792,7 @@ function zoneHTML(loc, zone, tab){
 }
 function bindMain(){
   document.querySelectorAll('[data-loc]').forEach(b => b.onclick = () => go({ screen:'store', loc: b.dataset.loc }));
-  document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => go({ screen:'zone', loc: VIEW.loc, zone: b.dataset.zone }); b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); b.onclick(); } }; });
+  document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => go({ screen:'zone', loc: b.dataset.zloc || VIEW.loc, zone: b.dataset.zone }); b.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); b.onclick(); } }; });
   document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { ls('s1981_view', b.dataset.view); render(); });
   document.querySelectorAll('[data-count]').forEach(b => b.onclick = () => startCount(VIEW.loc, VIEW.zone, b.dataset.count));
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { VIEW.tab = b.dataset.tab; history.replaceState(VIEW, ''); render(); });
@@ -774,6 +800,13 @@ function bindMain(){
   const f = document.querySelector('[data-act="flush"]'); if(f) f.onclick = flushQueue;
   const rl = document.querySelector('[data-act="reload"]'); if(rl) rl.onclick = loadData;
   const ad = document.querySelector('[data-act="add"]'); if(ad) ad.onclick = () => openAdd(VIEW.loc, VIEW.zone);
+  const za = document.querySelector('[data-act="zadd"]'); if(za) za.onclick = () => zonePickSpot('add');
+  const zc = document.querySelector('[data-act="zcount"]'); if(zc) zc.onclick = () => zonePickSpot('count');
+  const zm = document.querySelector('[data-act="zmove"]'); if(zm) zm.onclick = () => zoneMovePick(VIEW.loc, VIEW.zone);
+  const ze = document.querySelector('[data-act="zempty"]'); if(ze) ze.onclick = () => zoneEmptyPick(VIEW.loc, VIEW.zone);
+  const zp = document.querySelector('[data-act="zphoto"]'); if(zp) zp.onclick = () => zonePhotoTake(VIEW.loc, VIEW.zone);
+  const off = document.querySelector('[data-act="offline"]'); if(off) off.onclick = () => offlinePrep(true);
+  document.querySelectorAll('[data-boxmark]').forEach(b => b.onclick = () => boxMark(b.dataset.bloc || VIEW.loc, VIEW.zone, b.dataset.boxmark));
   const bxn = document.querySelector('[data-act="boxnew"]'); if(bxn) bxn.onclick = () => boxCreate(VIEW.loc);
   const bxc = document.querySelector('[data-act="boxcount"]'); if(bxc) bxc.onclick = () => startCount(VIEW.loc, VIEW.zone, VIEW.zone + '-W');
   const bxa = document.querySelector('[data-act="boxadd"]'); if(bxa) bxa.onclick = () => boxAdd(VIEW.loc, VIEW.zone);
@@ -785,6 +818,7 @@ function bindMain(){
   const tv = document.querySelector('[data-act="transit"]'); if(tv) tv.onclick = () => { go({ screen:'transit' }); loadTransit(); };
   const so = document.querySelector('[data-act="sorties"]'); if(so) so.onclick = () => { go({ screen:'sorties' }); loadSorties(SOV.loc, true); try { loadData(); } catch(e){} };
   document.querySelectorAll('[data-zper]').forEach(b => b.onclick = () => { VIEW.zper = b.dataset.zper; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-zkind]').forEach(b => b.onclick = () => { VIEW.zkind = b.dataset.zkind; history.replaceState(VIEW, ''); render(); });
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const ct = document.querySelector('[data-act="ctl"]'); if(ct) ct.onclick = () => { go({ screen:'ctl' }); loadCtl(); };
   const bl = document.querySelector('[data-act="bilan"]'); if(bl) bl.onclick = () => { go({ screen:'bilan' }); loadBilan(ctlToday()); };
@@ -1685,7 +1719,7 @@ const TRACE_NEW_ZONES = ["1A", "1B", "1C", "1D", "1E", "1F", "1G", "1H", "1O", "
 let SHEET_TRACES = lsj('s1981_traces', {});
 async function loadTraces(){
   if(!URL_ || !KEY) return;
-  try { const d = await api({ action:'getZonePhotos' }); if(d && d.success && d.traces){ SHEET_TRACES = d.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); if(VIEW.screen === 'zone') render(); } } catch(e){}
+  try { const d = await api({ action:'getZonePhotos' }); if(d && d.success && d.traces){ SHEET_TRACES = d.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); if(d.images){ ZIMG = d.images; ls('s1981_zimg', JSON.stringify(ZIMG)); } if(VIEW.screen === 'zone') render(); } } catch(e){}
 }
 // Ouaga 2000 (4 Nov 2026): store split in two (cosmetics / food), new photo for each zone below —
 // boxes saved on the old photos are ignored, the new first-draft boxes are in TRACES_BUILTIN.
@@ -1694,6 +1728,8 @@ const TRACE_NEWPHOTO_S2 = {"A1":1,"A2":1,"A3":1,"A4":1,"A5":1,"A6":1,"A7":1,"A8"
 const TRACE_STRAIGHT_AT = {"1D": "2026-10-31T23:45:00Z", "1F": "2026-10-31T23:45:00Z", "1S": "2026-10-31T23:45:00Z", "2C": "2026-10-31T23:45:00Z", "2D": "2026-10-31T23:45:00Z", "3A": "2026-10-31T23:45:00Z", "3O": "2026-10-31T23:45:00Z", "3S": "2026-10-31T23:45:00Z", "4O": "2026-10-31T23:45:00Z", "F3b": "2026-10-31T23:45:00Z", "M1": "2026-10-31T23:45:00Z"};
 function traceFor(loc, zone){
   const s = SHEET_TRACES[loc] && SHEET_TRACES[loc][zone];
+  const im = zoneImg(loc, zone);
+  if(im){ return s && s.spots && Object.keys(s.spots).length && String(s.at || '') >= String(im.at || '') ? Object.assign({ src:'sheet' }, s) : null; }
   const isNew = loc === 'Store 1' && TRACE_NEW_ZONES.includes(zone);
   // zones whose photo was replaced by a straightened one (31 Oct 2026): boxes drawn on the old photo are ignored
   const straightAt = loc === 'Store 1' ? TRACE_STRAIGHT_AT[zone] : (loc === 'Store 2' && TRACE_NEWPHOTO_S2[zone]) ? TRACE_NEWPHOTO_S2_AT : '';
@@ -1711,7 +1747,7 @@ function boxesHTML(loc, zone, t, spots){
   return spots.filter(s => t.spots[s.code]).map(s => {
     const [x, y, w, h] = t.spots[s.code];
     const st = spotState(loc, zone, s.code);
-    return `<button class="pbox ${st.counted ? 'ok' : 'todo'}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
+    return `<button class="pbox ${st.counted ? 'ok' : emptyAt(loc, s.code) ? 'empty' : 'todo'}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
   }).join('');
 }
 function photoHTML(loc, zone, z){
@@ -1738,9 +1774,15 @@ function openSpot(loc, zone, code){
   openSheet(`<h3>${esc(zone)} · ${esc(s.label)}</h3><div class="sub">${st.counted ? 'Comptée ' + esc(ago(st.last)) + (st.by ? ' par ' + esc(st.by) : '') + ' · ' + fmt(st.units) + ' article(s)' : 'Jamais comptée'}</div>
     ${st.counted ? '<div class="where">' + st.items.sort((a, b) => b[5] - a[5]).map(r => `<div><span>${esc(r[4] || r[3])}</span><b class="num">${fmt(r[5])}</b></div>`).join('') + '</div>' : ''}
     <p class="sub" style="margin-top:8px">Les quantités sont celles du dernier comptage (les ventes depuis ne sont pas déduites ici).</p>
-    <button class="go" id="spc">${st.counted ? 'Recompter cette étagère' : 'Compter cette étagère'}</button><button class="ghost" id="spx">Fermer</button>`);
+    ${!st.counted && emptyAt(loc, code) ? '<p class="sub"><span class="vide">∅ vide</span> marquée ' + esc(ago(emptyAt(loc, code))) + '</p>' : ''}
+    <button class="go" id="spadd">➕ Ajouter des articles ici</button>
+    <button class="go" id="spc" style="background:var(--ink)">${st.counted ? '🔢 Recompter cette étagère' : '🔢 Compter cette étagère'}</button>
+    <button class="ghost" id="spe">${emptyAt(loc, code) && !st.counted ? 'Ce n’est plus vide' : '∅ Marquer vide'}</button>
+    <button class="ghost" id="spx">Fermer</button>`);
   $('#spx').onclick = closeSheet;
   $('#spc').onclick = () => { closeSheet(); closeViewer(); startCount(loc, zone, code); };
+  $('#spadd').onclick = () => { closeSheet(); closeViewer(); spotAdd(loc, zone, code); };
+  $('#spe').onclick = () => { closeSheet(); setEmpty(loc, zone, [code], !(emptyAt(loc, code) && !st.counted)); };
 }
 function bindPhoto(){
   document.querySelectorAll('.pzone [data-spot]').forEach(b => b.onclick = e => { e.stopPropagation(); openSpot(VIEW.loc, VIEW.zone, b.dataset.spot); });
@@ -2103,6 +2145,190 @@ async function checkImport(){
     } catch(e){ toast('Boîte non créée : ' + (e.message || 'pas de connexion')); b.disabled = false; b.textContent = 'Ouvrir le comptage'; }
   };
 }
+// ══════════════════════════════════════════════════════════════════
+//  4 NOV 2026 (soir) — zone actions, empty shelves, photo from the app,
+//  boxes listed under Entrepôt, offline photos, shelf hints.
+// ══════════════════════════════════════════════════════════════════
+// ── where a product sits: the shelf (spot) holding most of it ──
+function shelfOf(loc, bc, zone){
+  const k = bkey(aliasOf(bc));
+  const r = (DATA ? DATA.spots : []).filter(x => x[0] === loc && bkey(x[3]) === k && (Number(x[5]) || 0) > 0 && x[1] !== UNPLACED && !isBox(loc, x[1]) && (!zone || x[1] === zone))
+    .sort((a, b) => (Number(b[5]) || 0) - (Number(a[5]) || 0))[0];
+  return r ? r[2] : '';
+}
+// ── ∅ empty shelves ──
+function emptyAt(loc, spot){ const r = (DATA && DATA.empty || []).find(x => x[0] === loc && x[2] === spot); return r ? (r[3] || 'x') : ''; }
+async function setEmpty(loc, zone, spots, on){
+  if(!meIsAdmin()){ toast('Réservé aux administrateurs.'); return; }
+  if(!spots.length) return;
+  DATA = DATA || { zones:[], spots:[], prices:{} };
+  const before = (DATA.empty || []).slice();
+  DATA.empty = (DATA.empty || []).filter(x => !(x[0] === loc && spots.includes(x[2])));
+  if(on) spots.forEach(sp => DATA.empty.push([loc, zone, sp, new Date().toISOString(), user ? user.name : '']));
+  ls('s1981_cache', JSON.stringify(DATA)); render();
+  try {
+    const d = await post({ action:'setSpotEmpty', location: loc, zone, spots, empty: !!on, adminName: user.name, adminHash: user.hash });
+    if(!d || !d.success) throw new Error(d && d.error ? d.error : 'Collez « LATEST - Code GS » et redéployez.');
+    DATA.empty = d.empty || DATA.empty; ls('s1981_cache', JSON.stringify(DATA)); render();
+    toast(on ? '∅ ' + spots.length + ' étagère(s) marquée(s) vide(s)' : 'Marque « vide » retirée');
+  } catch(e){ DATA.empty = before; ls('s1981_cache', JSON.stringify(DATA)); render(); toast('Non enregistré : ' + (/fetch/i.test(e.message) ? 'pas de connexion' : e.message)); }
+}
+function zoneEmptyPick(loc, zone){
+  const z = zoneList(loc).find(x => x.c === zone) || { c: zone, s:'' };
+  const spots = zoneSpots(z), pick = {};
+  spots.forEach(sp => { pick[sp.code] = !!emptyAt(loc, sp.code); });
+  const draw = () => {
+    openSheet(`<h3>∅ Étagères vides · ${esc(zone)}</h3><div class="sub">Cochez les étagères vides. La marque disparaît toute seule dès qu’on y compte des articles.</div>
+      <div style="max-height:50vh;overflow:auto">${spots.map(sp => { const st = spotState(loc, zone, sp.code); return `<label class="spotpick"><input type="checkbox" data-ep="${esc(sp.code)}" ${pick[sp.code] ? 'checked' : ''} style="width:22px;height:22px"><span><b>${esc(sp.label)}</b><br><small style="color:var(--muted)">${st.counted ? fmt(st.units) + ' article(s) au dernier comptage' : emptyAt(loc, sp.code) ? 'marquée vide ' + esc(ago(emptyAt(loc, sp.code))) : 'jamais comptée'}</small></span></label>`; }).join('')}</div>
+      <button class="ghost" id="epall">Toute la zone est vide</button>
+      <button class="go" id="epgo">Enregistrer</button><button class="ghost" id="epx">Annuler</button>`);
+    $('#sheet').querySelectorAll('[data-ep]').forEach(x => x.onchange = () => { pick[x.dataset.ep] = x.checked; });
+    $('#epall').onclick = () => { spots.forEach(sp => pick[sp.code] = true); draw(); };
+    $('#epx').onclick = closeSheet;
+    $('#epgo').onclick = async () => {
+      closeSheet();
+      const on = spots.filter(sp => pick[sp.code] && !emptyAt(loc, sp.code)).map(sp => sp.code);
+      const off = spots.filter(sp => !pick[sp.code] && emptyAt(loc, sp.code)).map(sp => sp.code);
+      if(on.length) await setEmpty(loc, zone, on, true);
+      if(off.length) await setEmpty(loc, zone, off, false);
+      if(!on.length && !off.length) toast('Rien n’a changé.');
+    };
+  };
+  draw();
+}
+// ── ➕ / 🔢 : pick the shelf first ──
+function zonePickSpot(mode){
+  const loc = VIEW.loc, zone = VIEW.zone, z = zoneList(loc).find(x => x.c === zone) || { c: zone, s:'' };
+  const spots = zoneSpots(z);
+  if(spots.length === 1){ return mode === 'add' ? spotAdd(loc, zone, spots[0].code) : startCount(loc, zone, spots[0].code); }
+  openSheet(`<h3>${mode === 'add' ? '➕ Ajouter dans ' : '🔢 Compter '}${esc(zone)}</h3><div class="sub">Sur quelle étagère ?${mode === 'add' ? ' Vous scannez seulement les articles que vous ajoutez.' : ''}</div>
+    <div style="max-height:56vh;overflow:auto">${spots.map(sp => { const st = spotState(loc, zone, sp.code); return `<button class="spotpick" data-pk="${esc(sp.code)}"><span style="font-size:20px">${mode === 'add' ? '➕' : '🔢'}</span><span><b>${esc(sp.label)}</b><br><small style="color:var(--muted)">${st.counted ? fmt(st.units) + ' article(s) · compté ' + esc(ago(st.last)) : emptyAt(loc, sp.code) ? '∅ vide' : 'jamais comptée'}</small></span></button>`; }).join('')}</div>
+    ${mode === 'add' ? '<button class="ghost" id="pknos">Sans étagère précise</button>' : ''}<button class="ghost" id="pkx">Annuler</button>`);
+  $('#sheet').querySelectorAll('[data-pk]').forEach(b => b.onclick = () => { closeSheet(); mode === 'add' ? spotAdd(loc, zone, b.dataset.pk) : startCount(loc, zone, b.dataset.pk); });
+  const nos = $('#pknos'); if(nos) nos.onclick = () => { closeSheet(); openAdd(loc, zone); };
+  $('#pkx').onclick = closeSheet;
+}
+// ➕ Ajouter sur une étagère : a count that starts from what the shelf already holds
+function spotAdd(loc, zone, spot){
+  const cur = spotsAt(loc, zone).filter(r => r[2] === spot);
+  C = { loc, zone, spot, items: cur.map(r => ({ barcode: r[3], name: r[4] || productName(r[3]), count: Number(r[5]) || 0 })).filter(i => i.count > 0), startedAt: new Date().toISOString(), adding: true };
+  saveDraft(); go({ screen:'count', loc, zone, spot });
+  toast(cur.length ? 'Ce qui est déjà sur l’étagère est compté : scannez seulement les articles ajoutés.' : 'Scannez les articles que vous posez sur l’étagère.');
+}
+// ↔ Déplacer : pick the product of the zone, then the move sheet
+function zoneMovePick(loc, zone){
+  const rows = rowsAt(loc, zone).filter(r => r[4] > 0).sort((a, b) => b[4] - a[4]);
+  if(!rows.length){ toast('Rien à déplacer : aucun produit compté dans cette zone.'); return; }
+  openSheet(`<h3>↔ Déplacer depuis ${esc(zone)}</h3><div class="sub">Quel produit ?</div>
+    <div class="list" style="max-height:60vh;overflow:auto">${rows.map(r => `<button class="row" data-mv="${esc(r[2])}">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])}</small></div><div class="qty num">${fmt(r[4])}</div></button>`).join('')}</div>
+    <button class="ghost" id="mvx">Annuler</button>`);
+  $('#sheet').querySelectorAll('[data-mv]').forEach(b => b.onclick = () => { closeSheet(); openProduct(loc, zone, b.dataset.mv); if(S){ S.mode = 'move'; drawProduct(); } });
+  $('#mvx').onclick = closeSheet;
+}
+// ── 📷 new zone photo from the app (Admin) ──
+function zonePhotoTake(loc, zone){
+  if(!meIsAdmin()){ toast('Réservé aux administrateurs.'); return; }
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if(!f) return;
+    try {
+      const url = URL.createObjectURL(f);
+      const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+      const sc = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const dataUrl = cv.toDataURL('image/jpeg', 0.82);
+      openSheet(`<h3>📷 Nouvelle photo · ${esc(zone)}</h3><div class="sub">Elle remplace l’ancienne pour tout le monde. Les cases d’étagère seront à redessiner (✏️ Ajuster les cases).</div>
+        <div class="psheet-img"><img src="${dataUrl}" alt=""></div>
+        <button class="go" id="zpgo">Utiliser cette photo</button><button class="ghost" id="zpx">Annuler</button>`);
+      $('#zpx').onclick = closeSheet;
+      $('#zpgo').onclick = async () => {
+        if(!online){ toast('Il faut une connexion pour envoyer la photo.'); return; }
+        const b = $('#zpgo'); b.disabled = true; b.textContent = 'Envoi de la photo…';
+        try {
+          const d = await post({ action:'setZoneImage', location: loc, zone, dataUrl, width: w, height: h, adminName: user.name, adminHash: user.hash });
+          if(!d || !d.success) throw new Error(d && d.error ? d.error : 'Collez « LATEST - Code GS » et redéployez.');
+          ZIMG[loc] = ZIMG[loc] || {}; ZIMG[loc][zone] = d.image; ls('s1981_zimg', JSON.stringify(ZIMG));
+          if(SHEET_TRACES[loc]) delete SHEET_TRACES[loc][zone]; ls('s1981_traces', JSON.stringify(SHEET_TRACES));
+          offlineCache([driveImg(d.image.id)]);
+          closeSheet(); render(); toast('📷 Photo de ' + zone + ' remplacée. Redessinez les cases : ✏️ Ajuster les cases.');
+        } catch(e){ b.disabled = false; b.textContent = 'Réessayer'; toast(/fetch/i.test(e.message) ? 'Pas de connexion : réessayez.' : e.message); }
+      };
+    } catch(e){ toast('Photo illisible : réessayez.'); }
+  };
+  inp.click();
+}
+// ── 📦 boxes: listed under Entrepôt, with a quick « where » mark ──
+const BOX_MARKS = [['bureau', '🔒 Bureau'], ['entrepot', '🏬 Entrepôt'], ['magasin', '🏪 Magasin']];
+function boxWhere(z){ const g = String(z && z.g || ''); return /bureau/i.test(g) ? 'bureau' : /magasin/i.test(g) ? 'magasin' : 'entrepot'; }
+function boxesEverywhere(){ const out = []; LOCS.forEach(L => boxesOf(L.id).forEach(z => out.push({ loc: L.id, z }))); return out; }
+function boxesHintHTML(loc){
+  const n = boxesOf(loc).length;
+  return n ? `<button class="zrow boxrow" data-loc="Warehouse" style="margin-bottom:12px"><span class="code">📦</span><span class="nm">${n} boîte(s) de ${esc(locName(loc))} · rangées sous Entrepôt</span><span class="u">→</span></button>` : '';
+}
+function boxesAllHTML(){
+  const bx = boxesEverywhere();
+  let h = `<div class="sect">📦 Boîtes (${bx.length})</div>`;
+  h += bx.length ? '<div class="list">' + bx.map(({ loc, z }) => { const t = totals(rowsAt(loc, z.c)), w = BOX_MARKS.find(m => m[0] === boxWhere(z));
+    return `<button class="zrow boxrow" data-zone="${esc(z.c)}" data-zloc="${esc(loc)}"><span class="code">📦</span><span class="nm"><b>${esc(z.k || z.c)}</b> · ${w ? w[1] : ''}<small style="display:block;color:var(--muted)">compté dans ${esc(locName(loc))}</small></span><span class="u">${fmt(t.units)}</span></button>`; }).join('') + '</div>' : '<p class="empty">Aucune boîte.</p>';
+  if(meIsAdmin()) h += `<div style="display:flex;gap:8px;margin:8px 0 14px;flex-wrap:wrap">${LOCS.filter(L => L.id !== 'Warehouse').map(L => `<button class="cbtn alt" data-act="boxnew2" data-bl="${esc(L.id)}">＋ Nouvelle boîte (${esc(L.name)})</button>`).join('')}</div>`;
+  setTimeout(() => document.querySelectorAll('[data-act="boxnew2"]').forEach(b => b.onclick = () => boxCreate(b.dataset.bl)), 0);
+  return h;
+}
+async function boxMark(loc, zone, mark){
+  if(!meIsAdmin()) return;
+  const src = meItemsFromMap(loc), it = src.items.find(i => i.t === 'zone' && i.code === zone);
+  if(!it){ toast('Boîte introuvable sur le plan.'); return; }
+  const lab = { bureau: 'Bureau (fermé à clé)', entrepot: 'Entrepôt', magasin: 'Magasin' }[mark] || '';
+  it.g = 'Boîtes · ' + lab;
+  try { await meSaveLayout(loc, src.items, src.vw, src.vh); toast('📦 ' + (it.k || zone) + ' : ' + lab); render(); }
+  catch(e){ toast('Non enregistré : ' + (e.message || 'pas de connexion')); }
+}
+// ── 📥 offline photos: zone photos + product photos kept on the device ──
+const OFF_CACHE = 'boutique1981-photos-v1';
+let OFF = lsj('s1981_offline', { at: '', n: 0, total: 0, busy: false });
+OFF.busy = false;
+function offlineLabel(){ return OFF.busy ? OFF.n + '/' + OFF.total : OFF.at ? 'prêt · ' + ago(OFF.at) : 'à préparer'; }
+function offlineUrls(){
+  const u = new Set();
+  LOCS.forEach(L => zoneList(L.id).forEach(z => { const p = photoFor(L.id, z.c); if(p) u.add(new URL(p, location.href).href); }));
+  LOCS.forEach(L => { if(L.photo) u.add(new URL(L.photo, location.href).href); });
+  Object.values(DATA && DATA.images || {}).forEach(v => { if(v) u.add(new URL(v, location.href).href); });
+  return [...u];
+}
+async function offlineCache(urls, onStep){
+  if(!('caches' in window)) return 0;
+  const cache = await caches.open(OFF_CACHE);
+  let done = 0, i = 0;
+  const one = async url => {
+    try {
+      if(!(await cache.match(url))){
+        const same = url.startsWith(location.origin);
+        const res = await fetch(url, same ? { cache: 'no-store' } : { mode: 'no-cors' });
+        if(res && (res.ok || res.type === 'opaque')) await cache.put(url, res);
+      }
+    } catch(e){}
+    done++; if(onStep) onStep(done);
+  };
+  const workers = Array.from({ length: 4 }, async () => { while(i < urls.length){ const url = urls[i++]; await one(url); } });
+  await Promise.all(workers);
+  return done;
+}
+async function offlinePrep(manual){
+  if(OFF.busy) return;
+  if(!navigator.onLine){ if(manual) toast('Pas de connexion : les photos déjà enregistrées restent disponibles.'); return; }
+  const urls = offlineUrls();
+  OFF.busy = true; OFF.n = 0; OFF.total = urls.length; if(VIEW.screen === 'home') render();
+  if(manual) toast('📥 Enregistrement de ' + urls.length + ' photos sur cet appareil…');
+  let last = 0;
+  await offlineCache(urls, n => { OFF.n = n; if(VIEW.screen === 'home' && Date.now() - last > 800){ last = Date.now(); const t = document.querySelector('[data-act="offline"] small'); if(t) t.textContent = n + '/' + urls.length; } });
+  OFF.busy = false; OFF.at = new Date().toISOString(); ls('s1981_offline', JSON.stringify(OFF));
+  if(VIEW.screen === 'home') render();
+  if(manual) toast('✅ Photos prêtes hors-ligne (' + urls.length + ')');
+}
+// automatic: once a day, when the app opens with a connection
+setTimeout(() => { if(navigator.onLine && DATA && (!OFF.at || Date.now() - new Date(OFF.at) > 20 * 3600e3)) offlinePrep(false); }, 8000);
 function boxesHTMLList(loc){
   const bx = boxesOf(loc);
   if(!bx.length && !meIsAdmin()) return '';
@@ -2114,6 +2340,11 @@ function boxesHTMLList(loc){
 }
 function boxZoneActions(loc, zone){
   const t = totals(rowsAt(loc, zone));
+  const z = zoneList(loc).find(q => q.c === zone) || {}, w = boxWhere(z);
+  const marks = meIsAdmin() ? `<div class="chips" style="margin:0 0 10px">${BOX_MARKS.map(([k, l]) => `<button data-boxmark="${k}" data-bloc="${esc(loc)}" aria-pressed="${w === k}">${l}</button>`).join('')}</div>` : '';
+  return marks + boxZoneActionsBase(loc, zone, t);
+}
+function boxZoneActionsBase(loc, zone, t){
   return `<div class="boxbar"><button class="cbtn" data-act="boxcount">${t.units ? 'Recompter la boîte' : 'Compter la boîte'}</button>${t.units ? '<button class="cbtn" data-act="boxadd">＋ Ajouter des articles</button><button class="cbtn" data-act="boxput">📲 Ranger en scannant</button><button class="cbtn" data-act="boxout">📤 Ranger (liste)</button>' : ''}${meIsAdmin() && !t.units ? '<button class="cbtn alt" data-act="boxclose">Fermer la boîte</button>' : ''}</div>`;
 }
 // ＋ Ajouter: a count that starts from what the box already holds
@@ -2148,12 +2379,14 @@ function bxSend(loc, box, moves, msg){
   const ops = [];
   moves.forEach(m => {
     const base = { barcode: m.barcode, name: m.name, mode:'delta', reason:'Transfert' };
-    ops.push(Object.assign({}, base, { location: loc, zone: box, qty: -m.qty, note: 'boîte ' + boxName(loc, box) + ' → ' + locName(m.to) + ' · ' + m.toZone }));
-    ops.push(Object.assign({}, base, { location: m.to, zone: m.toZone, qty: m.qty, note: 'depuis la boîte ' + boxName(loc, box) }));
+    const from = box === UNPLACED ? 'arrivage' : 'boîte ' + boxName(loc, box), sh = m.shelf ? ' · étagère ' + m.shelf : '';
+    ops.push(Object.assign({}, base, { location: loc, zone: box, qty: -m.qty, note: from + ' → ' + locName(m.to) + ' · ' + m.toZone + sh }));
+    ops.push(Object.assign({}, base, { location: m.to, zone: m.toZone, qty: m.qty, note: 'depuis ' + (box === UNPLACED ? 'les arrivages' : 'la boîte ' + boxName(loc, box)) + sh }));
   });
   const out = {}; moves.forEach(m => { const k = bkey(m.barcode); out[k] = (out[k] || 0) + m.qty; });
   const left = rowsAt(loc, box).filter(r => r[4] > 0).map(r => ({ barcode: r[2], name: r[3], count: r[4] - (out[bkey(r[2])] || 0) })).filter(i => i.count > 0);
   queueWork(ops, [], msg || fmt(moves.reduce((a, m) => a + m.qty, 0)) + ' article(s) rangé(s)');
+  if(box === UNPLACED){ render(); return true; }   // « À ranger » has no shelf of its own
   // the box's content (its single « -W » spot) = what is left in it
   const body = { opId: 'bx' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: loc, zone: box, spot: box + '-W', at: new Date().toISOString(), items: left };
   applyCountLocal(Object.assign({ by: user.name }, body));
@@ -2172,13 +2405,14 @@ function boxOut(loc, zone){
 function drawBoxOut(){
   const o = BXO, rows = rowsAt(o.loc, o.zone).filter(r => r[4] > 0).sort((a, b) => b[4] - a[4]);
   const dests = bxDests(o.loc);
-  const opts = cur => '<option value="">— reste dans la boîte —</option>' + dests.map(d => `<option value="${esc(d.v)}"${d.v === cur ? ' selected' : ''}>${esc(d.t)}</option>`).join('');
+  const opts = cur => '<option value="">— ' + (o.zone === UNPLACED ? 'reste à ranger' : 'reste dans la boîte') + ' —</option>' + dests.map(d => `<option value="${esc(d.v)}"${d.v === cur ? ' selected' : ''}>${esc(d.t)}</option>`).join('');
   const going = rows.filter(r => o.dest[bkey(r[2])]), n = going.reduce((a, r) => a + Math.min(r[4], o.qty[bkey(r[2])] || 0), 0);
-  openSheet(`<h3>📤 Ranger « ${esc(boxName(o.loc, o.zone))} »</h3>
-    <div class="sub">Une zone par produit. La zone proposée est celle où le produit est déjà rangé : vérifiez-la. Sans zone, le produit reste dans la boîte.</div>
+  const isUn = o.zone === UNPLACED;
+  openSheet(`<h3>📤 ${isUn ? 'Ranger les arrivages' : 'Ranger « ' + esc(boxName(o.loc, o.zone)) + ' »'}</h3>
+    <div class="sub">Une zone par produit. La zone proposée est celle où le produit est déjà rangé, avec son étagère : vérifiez-la. Sans zone, le produit reste ${isUn ? 'dans « À ranger »' : 'dans la boîte'}.</div>
     <div style="display:flex;gap:6px;align-items:center;margin:8px 0"><select class="t" id="bxall" style="flex:1;margin:0"><option value="">Mettre les produits sans zone vers…</option>${dests.map(d => `<option value="${esc(d.v)}">${esc(d.t)}</option>`).join('')}</select></div>
     <div class="list" style="max-height:46vh;overflow:auto">${rows.map(r => { const k = bkey(r[2]), q = Math.min(r[4], o.qty[k] || 0), sg = bxSuggest(o.loc, r[2], o.zone);
-      return `<div class="citem" style="flex-wrap:wrap;gap:6px">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])} · ${fmt(r[4])} dans la boîte${sg ? ' · déjà en ' + esc(sg) : ''}</small></div>
+      return `<div class="citem" style="flex-wrap:wrap;gap:6px">${thumb(r[2], r[3])}<div class="nm"><strong>${esc(r[3] || productName(r[2]) || 'Sans nom')}</strong><small class="num">${esc(r[2])} · ${fmt(r[4])} ${isUn ? 'à ranger' : 'dans la boîte'}${sg ? ' · déjà en ' + esc(sg) : ''}</small>${(() => { const sp = shelfOf(o.loc, r[2], o.dest[k] ? o.dest[k].split('|')[1] : sg); return sp ? `<small style="font-weight:700;color:var(--ok)">→ étagère ${esc(sp)}</small>` : ''; })()}</div>
         <div style="display:flex;gap:6px;align-items:center;width:100%"><select class="t" data-bxd="${esc(k)}" style="flex:1;margin:0;${o.dest[k] ? '' : 'color:var(--muted)'}">${opts(o.dest[k])}</select>
         <button data-bxq="${esc(k)}" data-d="-1" aria-label="Moins">−</button><span class="c num" style="min-width:28px;text-align:center">${q}</span><button data-bxq="${esc(k)}" data-d="1" aria-label="Plus">+</button></div></div>`; }).join('')}</div>
     <button class="go" id="bxgo" ${n ? '' : 'disabled'}>Ranger ${fmt(n)} article(s)${going.length ? ' · ' + going.length + ' produit(s)' : ''}</button><button class="ghost" id="bxno">Annuler</button>`);
@@ -2188,7 +2422,7 @@ function drawBoxOut(){
   $('#bxall').onchange = e => { const v = e.target.value; if(!v) return; rows.forEach(r => { const k = bkey(r[2]); if(!o.dest[k]) o.dest[k] = v; }); drawBoxOut(); };
   $('#bxno').onclick = closeSheet;
   $('#bxgo').onclick = () => {
-    const moves = going.map(r => { const k = bkey(r[2]), d = o.dest[k].split('|'); return { barcode: r[2], name: r[3], qty: Math.min(r[4], o.qty[k] || 0), to: d[0], toZone: d[1] }; });
+    const moves = going.map(r => { const k = bkey(r[2]), d = o.dest[k].split('|'); return { barcode: r[2], name: r[3], qty: Math.min(r[4], o.qty[k] || 0), to: d[0], toZone: d[1], shelf: shelfOf(d[0], r[2], d[1]) }; });
     const zs = new Set(moves.filter(m => m.qty > 0).map(m => m.toZone));
     bxSend(o.loc, o.zone, moves, fmt(n) + ' article(s) rangé(s) dans ' + (zs.size === 1 ? [...zs][0] : zs.size + ' zones'));
   };
@@ -2609,18 +2843,21 @@ function sorItemHTML(loc, o, here){
   const w = sorWarehouse(o.bk), left = rowsAt(loc, here).filter(r => bkey(r[2]) === o.bk).reduce((a, r) => a + r[4], 0);
   return `<button class="row" data-bc="${esc(o.bc)}">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name || 'Sans nom')}</strong>
     <small>${o.sold ? '🛒 ' + fmt(o.sold) + ' vendu' + (o.sold > 1 ? 's' : '') : ''}${o.sold && o.moved ? ' · ' : ''}${o.moved ? '🔄 ' + fmt(o.moved) + ' transféré' + (o.moved > 1 ? 's' : '') : ''}${o.others && o.others.length ? ' · aussi en ' + esc(o.others.join(', ')) : ''}</small>
-    <small style="font-weight:700;color:${w ? 'var(--ok)' : 'var(--warn)'}">${w ? '📦 ' + fmt(w) + ' à l’entrepôt → à remonter' : '⚠ rien à l’entrepôt'}${here ? ' · reste ici ' + fmt(left) : ''}</small></div>
+    ${o.sold ? `<small style="font-weight:700;color:${w ? 'var(--ok)' : 'var(--warn)'}">${w ? '📦 ' + fmt(w) + ' à l’entrepôt → à remonter' : '⚠ rien à l’entrepôt'}${here ? ' · reste ici ' + fmt(left) : ''}</small>` : (here ? `<small>reste ici ${fmt(left)}</small>` : '')}</div>
     <div class="qty num" style="color:var(--bad)">−${fmt(o.sold + o.moved)}</div></button>`;
 }
 function zoneSortiesHTML(loc, zone){
   if(!SOR[loc]){ loadSorties(loc); return `<p class="empty">${SOR_ERR ? esc(SOR_ERR) : 'Chargement des sorties…'}</p>`; }
   const per = VIEW.zper || 'count', cAt = sorZoneCountAt(loc, zone);
   const from = per === 'today' ? sorDayStart(0) : per === 'week' ? sorDayStart(6) : (cAt || sorDayStart(6));
-  const list = sorZoneOut(loc, zone, from, Infinity);
+  const zk = VIEW.zkind || 'sold';
+  const both = sorZoneOut(loc, zone, from, Infinity);
+  const list = both.map(o => zk === 'sold' ? Object.assign({}, o, { moved: 0 }) : Object.assign({}, o, { sold: 0 })).filter(o => o.sold + o.moved > 0);
   const n = list.reduce((a, o) => a + o.sold + o.moved, 0);
   let h = `<div class="chips" style="margin-bottom:10px">${[['count', cAt ? 'Depuis le comptage' : '7 derniers jours'], ['today', 'Aujourd’hui'], ['week', '7 jours']].map(([k, l]) => `<button data-zper="${k}" aria-pressed="${per === k}">${l}</button>`).join('')}</div>`;
   h += `<p class="sub" style="color:var(--muted);margin:0 0 10px;font-size:13px">${per === 'count' && cAt ? 'Depuis le comptage du ' + esc(new Date(cAt).toLocaleDateString('fr-FR', { day:'numeric', month:'short' })) + ' · ' : ''}${fmt(n)} article(s) sorti(s), ${list.length} produit(s), du plus vendu au moins vendu.</p>`;
-  h += list.length ? '<div class="list">' + list.map(o => sorItemHTML(loc, o, zone)).join('') + '</div>' : '<p class="empty">Rien n’est sorti de cette zone sur cette période.</p>';
+  h = `<div class="seg" role="group" aria-label="Sorties" style="margin-bottom:10px"><button data-zkind="sold" aria-pressed="${zk === 'sold'}">🛒 Vendus (${fmt(both.reduce((a, o) => a + o.sold, 0))})</button><button data-zkind="moved" aria-pressed="${zk === 'moved'}">🔄 Transférés (${fmt(both.reduce((a, o) => a + o.moved, 0))})</button></div>` + h;
+  h += list.length ? '<div class="list">' + list.map(o => sorItemHTML(loc, o, zone)).join('') + '</div>' : '<p class="empty">' + (zk === 'sold' ? 'Rien de vendu' : 'Rien de transféré') + ' depuis cette zone sur cette période.</p>';
   return h;
 }
 function sortiesHTML(){
@@ -2635,19 +2872,24 @@ function sortiesHTML(){
   const P = (bk, bc, nm) => byP[bk] || (byP[bk] = { bk, bc, name: nm || productName(bc) || bc, sold: 0, moved: 0 });
   c.sales.forEach(([bk, bc, q, t, nm]) => { if(t >= from && t < to) P(bk, bc, nm).sold += q; });
   (c.moves || []).forEach(m => { const t = sorMoveT(m); if(m.fromLoc === loc && m.toLoc !== loc && t >= from && t < to) P(bkey(m.bc), m.bc, m.name).moved += m.qty; });
-  const all = Object.values(byP).filter(o => o.sold + o.moved > 0);
-  const nc = c.noCode.filter(r => r[2] >= from && r[2] < to);
+  const kind = SOV.kind || 'sold';
+  const both = Object.values(byP).filter(o => o.sold + o.moved > 0);
+  const nSold = both.reduce((a, o) => a + o.sold, 0), nMoved = both.reduce((a, o) => a + o.moved, 0);
+  h += `<div class="seg" role="group" aria-label="Sorties" style="margin-bottom:12px"><button data-sorkind="sold" aria-pressed="${kind === 'sold'}">🛒 Vendus (${fmt(nSold)})</button><button data-sorkind="moved" aria-pressed="${kind === 'moved'}">🔄 Transférés (${fmt(nMoved)})</button></div>`;
+  const all = both.map(o => kind === 'sold' ? Object.assign({}, o, { moved: 0 }) : Object.assign({}, o, { sold: 0 })).filter(o => o.sold + o.moved > 0);
+  const nc = kind === 'sold' ? c.noCode.filter(r => r[2] >= from && r[2] < to) : [];
   const units = all.reduce((a, o) => a + o.sold + o.moved, 0) + nc.reduce((a, r) => a + r[1], 0);
   const val = all.reduce((a, o) => a + (priceOf(o.bc) || 0) * o.sold, 0);
   h += `<div class="stats"><div class="stat"><b class="num">${fmt(units)}</b><span>articles sortis</span></div><div class="stat"><b class="num">${fmt(all.length)}</b><span>produits</span></div>${val ? `<div class="stat"><b class="num">${fmt(val)} F</b><span>ventes (prix fiche)</span></div>` : ''}</div>`;
   // « À remonter de l'entrepôt »
   const refill = all.filter(o => o.sold > 0 && sorWarehouse(o.bk) > 0).sort((a, b) => b.sold - a.sold);
-  if(loc !== 'Warehouse'){
+  if(loc !== 'Warehouse' && kind === 'sold'){
     h += `<div class="sect">📦 À remonter de l’entrepôt (${refill.length})</div>`;
     if(refill.length){
       h += '<div class="list">' + refill.map(o => {
         const w = sorWarehouse(o.bk), on = SOV.pick[o.bk] !== false, q = Math.min(w, SOV.qty[o.bk] != null ? SOV.qty[o.bk] : o.sold);
-        return `<div class="citem"><input type="checkbox" data-sorpick="${esc(o.bk)}" ${on ? 'checked' : ''} style="width:22px;height:22px">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong><small>🛒 ${fmt(o.sold)} vendu(s) · 📦 ${fmt(w)} à l’entrepôt</small></div>
+        const shf = shelfOf(loc, o.bc);
+        return `<div class="citem"><input type="checkbox" data-sorpick="${esc(o.bk)}" ${on ? 'checked' : ''} style="width:22px;height:22px">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong>${shf ? `<small style="font-weight:700;color:var(--ok)">→ ira en ${esc(shf)}</small>` : ''}<small>🛒 ${fmt(o.sold)} vendu(s) · 📦 ${fmt(w)} à l’entrepôt</small></div>
           <button data-sorq="${esc(o.bk)}" data-d="-1" aria-label="Moins">−</button><span class="c num">${q}</span><button data-sorq="${esc(o.bk)}" data-d="1" aria-label="Plus">+</button></div>`;
       }).join('') + '</div>';
       const sel = refill.filter(o => SOV.pick[o.bk] !== false);
@@ -2662,17 +2904,18 @@ function sortiesHTML(){
     (zones[z] = zones[z] || []).push(Object.assign({}, o, { others: zs.slice(1) }));
   });
   const zk = Object.keys(zones).sort((a, b) => zones[b].reduce((s, o) => s + o.sold + o.moved, 0) - zones[a].reduce((s, o) => s + o.sold + o.moved, 0));
-  h += '<div class="sect">Par zone, du plus vendu au moins vendu</div>';
+  h += `<div class="sect">${kind === 'sold' ? 'Vendus par zone, du plus vendu au moins vendu' : 'Transférés par zone (sortis vers un autre magasin ou l’entrepôt)'}</div>`;
   h += zk.length ? zk.map(z => {
     const l = zones[z].sort((a, b) => (b.sold + b.moved) - (a.sold + a.moved));
     return `<div class="sect" style="margin-top:14px">${esc(z)} · ${fmt(l.reduce((s, o) => s + o.sold + o.moved, 0))} article(s)</div><div class="list">` + l.map(o => sorItemHTML(loc, o, z === 'Sans zone' ? '' : z)).join('') + '</div>';
-  }).join('') : '<p class="empty">Aucune sortie sur cette période.</p>';
+  }).join('') : '<p class="empty">' + (kind === 'sold' ? 'Aucune vente' : 'Aucun transfert') + ' sur cette période.</p>';
   if(nc.length) h += `<div class="sect" style="margin-top:14px">Sans code (tapé à la main) · ${fmt(nc.reduce((a, r) => a + r[1], 0))} article(s)</div><div class="list">` + nc.map(r => `<div class="citem"><div class="nm"><strong>${esc(r[0] || 'Sans nom')}</strong><small>${new Date(r[2]).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${r[3] ? ' · ' + esc(r[3]) : ''} — impossible de savoir de quelle zone</small></div><span class="c num">${fmt(r[1])}</span></div>`).join('') + '</div>';
   return h;
 }
 function bindSorties(){
   document.querySelectorAll('[data-sorloc]').forEach(b => b.onclick = () => { SOV.loc = b.dataset.sorloc; SOV.pick = {}; SOV.qty = {}; render(); loadSorties(SOV.loc); });
   document.querySelectorAll('[data-sorper]').forEach(b => b.onclick = () => { SOV.per = b.dataset.sorper; SOV.pick = {}; SOV.qty = {}; render(); });
+  document.querySelectorAll('[data-sorkind]').forEach(b => b.onclick = () => { SOV.kind = b.dataset.sorkind; render(); });
   const rl = document.querySelector('[data-act="sorreload"]'); if(rl) rl.onclick = () => loadSorties(SOV.loc, true);
   document.querySelectorAll('[data-sorpick]').forEach(x => x.onchange = () => { SOV.pick[x.dataset.sorpick] = x.checked; render(); });
   document.querySelectorAll('[data-sorq]').forEach(b => b.onclick = () => {
