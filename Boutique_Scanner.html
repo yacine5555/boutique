@@ -1572,7 +1572,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v2-nov-e</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v4-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1944,6 +1944,32 @@ input,select{font-family:inherit}
           Réimprimer ou renvoyer un reçu à un client.
         </div>
         <div id="reprint-list" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+
+      <!-- v4-nov-a: create a barcode for a product that has none (Admin only) -->
+      <div class="admin-card" id="cc-card">
+        <div class="admin-card-title">🆕 Créer un code-barres</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">
+          Pour un produit sans code-barres : le Scanner prend le prochain code 0610000… libre (vérifié dans le Product Master),
+          ajoute le produit avec son prix et met ses étiquettes dans « Imprimer des étiquettes ».
+        </div>
+        <label style="font-size:12px;font-weight:600">Nom du produit</label>
+        <input id="cc-name" type="text" autocomplete="off" placeholder="ex. Miss Mari Savon Curcuma 100 g" oninput="ccCheckName()" style="width:100%;padding:9px;font-size:15px;border:1px solid var(--border2);border-radius:8px;margin:4px 0 2px">
+        <div id="cc-similar" style="font-size:12px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px"><label style="font-size:12px;font-weight:600">Prix (CFA)</label>
+            <input id="cc-price" type="number" inputmode="numeric" min="0" placeholder="5000" oninput="_ccAck=false" style="width:100%;padding:9px;font-size:15px;border:1px solid var(--border2);border-radius:8px;margin-top:4px"></div>
+          <div style="flex:1;min-width:120px"><label style="font-size:12px;font-weight:600">Stock de départ</label>
+            <input id="cc-qty" type="number" inputmode="numeric" min="0" value="0" oninput="ccQtyChanged()" style="width:100%;padding:9px;font-size:15px;border:1px solid var(--border2);border-radius:8px;margin-top:4px"></div>
+          <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600">Où</label>
+            <select id="cc-loc" style="width:100%;padding:9px;font-size:15px;border:1px solid var(--border2);border-radius:8px;margin-top:4px">
+              <option value="Store 1">Balkuy</option><option value="Store 2">Ouaga 2000</option><option value="Warehouse">Entrepôt</option></select></div>
+          <div style="flex:1;min-width:120px"><label style="font-size:12px;font-weight:600">Étiquettes</label>
+            <input id="cc-labels" type="number" inputmode="numeric" min="0" value="1" style="width:100%;padding:9px;font-size:15px;border:1px solid var(--border2);border-radius:8px;margin-top:4px"></div>
+        </div>
+        <div id="cc-warn" style="font-size:13px;color:var(--orange);margin:8px 0 0;min-height:4px"></div>
+        <button id="cc-go" class="btn-sm" onclick="ccCreate()" style="margin-top:8px;width:100%;padding:11px;font-size:15px;font-weight:700;background:var(--ink);color:#fff;border:0;border-radius:8px">Créer le code</button>
+        <div id="cc-done" style="margin-top:10px"></div>
       </div>
 
       <!-- Produits sans code-barres (sold under the shared 00000 placeholder) -->
@@ -5877,6 +5903,7 @@ function getNoBarcodeSummary(){
   return Object.values(map).sort((a,b) => (b.lastTs||'').localeCompare(a.lastTs||''));
 }
 function renderNoBarcodeList(){
+  { const cd = document.getElementById('cc-done'); if(cd && !cd.innerHTML) cd.innerHTML = ccRecentHtml(); }
   const el = document.getElementById('nobc-list');
   if(!el) return;
   const list = getNoBarcodeSummary();
@@ -5889,10 +5916,154 @@ function renderNoBarcodeList(){
   el.innerHTML = list.map(e => `
     <div style="border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:6px;
       display:flex;justify-content:space-between;gap:10px;font-size:13px">
-      <span style="font-weight:600">${e.name}</span>
+      <span style="font-weight:600">${e.name}<br/><button class="btn-sm btn-outline" style="margin-top:4px;font-size:12px" onclick="ccPrefill(${_ccAttr(e.name)}, ${Number(e.lastPrice) || 0})">🆕 Créer un code</button></span>
       <span style="color:var(--ink3);text-align:right">${e.qty} vendu(s) — dernier prix ${formatCFA(e.lastPrice)}<br/>
         <span style="font-size:11px;color:var(--ink4)">${e.lastDate}</span></span>
     </div>`).join('');
+}
+// ══════════════════════════════════════════════════════════════════
+//  🆕 CRÉER UN CODE-BARRES (v4-nov-a, 4 Nov 2026) — Admin only.
+//  Replaces the separate Barcode Generator for new products: the next
+//  free 0610000… code is taken from the FRESH Product Master list (plus
+//  this device's catalogue and its own recent creations), so two products
+//  never share a code. Saves through the existing script actions
+//  (addNewProductWithStock + updatePrice): no Apps Script change needed.
+// ══════════════════════════════════════════════════════════════════
+let _ccAck = false, _ccBusy = false;
+function _ccAttr(v){ return "'" + String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;') + "'"; }
+function _ccEsc(v){ return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _ccNorm(n){ return String(n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function _ccTokens(n){ return _ccNorm(n).split(' ').filter(t => t.length > 1); }
+function _ccCreated(){ try { return JSON.parse(localStorage.getItem('bc_created_codes') || '[]'); } catch(e){ return []; } }
+function _ccShow(c){ c = String(c || '').trim(); return (c.length === 12 && c.indexOf('610000') === 0) ? '0' + c : c; }
+function _ccAllProducts(){
+  const out = [], seen = new Set();
+  (_plAll || []).forEach(p => { const k = _bcKeyClient(p.barcode); if(k && !seen.has(k)){ seen.add(k); out.push({ code: _ccShow(p.barcode), name: p.name || '' }); } });
+  Object.keys(BARCODE_DB || {}).forEach(c => { const k = _bcKeyClient(c); if(k && !seen.has(k)){ seen.add(k); out.push({ code: _ccShow(c), name: (BARCODE_DB[c] || {}).name || '' }); } });
+  return out;
+}
+// Similar names already in the catalogue: exact match first, then by shared words.
+function _ccSimilar(name){
+  const n = _ccNorm(name), tk = _ccTokens(name);
+  if(n.length < 3) return [];
+  const res = [];
+  _ccAllProducts().forEach(p => {
+    const pn = _ccNorm(p.name); if(!pn) return;
+    if(pn === n){ res.push({ p, score: 2 }); return; }
+    const pt = new Set(_ccTokens(p.name)); if(!tk.length) return;
+    const common = tk.filter(t => pt.has(t)).length;
+    const score = common / Math.max(tk.length, 1);
+    if(score >= 0.6 && common >= 2) res.push({ p, score });
+  });
+  return res.sort((a, b) => b.score - a.score).slice(0, 4);
+}
+function ccCheckName(){
+  _ccAck = false;
+  const el = document.getElementById('cc-similar'); if(!el) return;
+  const name = document.getElementById('cc-name').value;
+  const sim = _ccSimilar(name);
+  el.innerHTML = sim.length ? '<div style="color:var(--orange);font-weight:600;margin-bottom:3px">' + (sim[0].score >= 2 ? '⚠ Ce produit existe déjà :' : '⚠ Produits qui ressemblent :') + '</div>' +
+    sim.map(x => '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--border2)"><span>' + _ccEsc(x.p.name) + ' <span style="color:var(--ink4);font-family:monospace">' + _ccEsc(x.p.code) + '</span></span>' +
+      '<button class="btn-sm btn-outline" style="font-size:11px;white-space:nowrap" onclick="ccUseExisting(' + _ccAttr(x.p.code) + ',' + _ccAttr(x.p.name) + ')">🏷 Étiquettes de celui-ci</button></div>').join('') : '';
+}
+function ccQtyChanged(){ const q = parseInt(document.getElementById('cc-qty').value, 10); const l = document.getElementById('cc-labels'); if(l && q > 0) l.value = q; }
+function ccUseExisting(code, name){
+  const price = psPriceFor(code);
+  const n = Math.max(1, parseInt(document.getElementById('cc-labels').value, 10) || 1);
+  labelQueueAdd(code, name, price != null ? price : null, n, true);
+  showToast('🏷 ' + n + ' étiquette(s) de « ' + name + ' » ajoutée(s) à « Imprimer des étiquettes ».', 5000);
+}
+function ccPrefill(name, price){
+  try { adminTab('prix'); } catch(e){}
+  const n = document.getElementById('cc-name'); if(!n) return;
+  n.value = name || ''; document.getElementById('cc-price').value = price > 0 ? price : '';
+  document.getElementById('cc-qty').value = 0; document.getElementById('cc-labels').value = 1;
+  document.getElementById('cc-warn').textContent = ''; document.getElementById('cc-done').innerHTML = '';
+  ccCheckName();
+  const card = document.getElementById('cc-card'); if(card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => n.focus(), 300);
+}
+// Next free internal code: 0610000 + 5-digit sequence + EAN-13 check digit.
+function _ccEan13(twelve){ let s = 0; for(let i = 0; i < 12; i++){ const d = +twelve[i]; s += (i % 2 === 0) ? d : d * 3; } return (10 - (s % 10)) % 10; }
+function _ccNextCode(){
+  const used = new Set();
+  _ccAllProducts().forEach(p => used.add(_bcKeyClient(p.code)));
+  Object.keys(MASTER_KEYS || {}).forEach(c => used.add(_bcKeyClient(c)));
+  _ccCreated().forEach(c => used.add(_bcKeyClient(c.code)));
+  let max = 0;
+  used.forEach(k => { if(k.length === 12 && k.indexOf('610000') === 0){ const q = parseInt(k.slice(6, 11), 10); if(!isNaN(q) && q > max) max = q; } });
+  for(let q = max + 1; q < 99999; q++){
+    const twelve = '0610000' + String(q).padStart(5, '0');
+    const code = twelve + _ccEan13(twelve);
+    if(!used.has(_bcKeyClient(code))) return code;
+  }
+  return '';
+}
+async function ccCreate(){
+  if(_ccBusy) return;
+  const warn = document.getElementById('cc-warn'), done = document.getElementById('cc-done'), btn = document.getElementById('cc-go');
+  const name = document.getElementById('cc-name').value.trim().replace(/\s+/g, ' ');
+  const price = parseInt(document.getElementById('cc-price').value, 10);
+  const qty = Math.max(0, parseInt(document.getElementById('cc-qty').value, 10) || 0);
+  const loc = document.getElementById('cc-loc').value || 'Store 1';
+  const labels = Math.max(0, parseInt(document.getElementById('cc-labels').value, 10) || 0);
+  warn.textContent = '';
+  if(!productSyncUrl || !writeKey){ warn.textContent = '❌ La synchro des produits n\'est pas configurée (Réglages → Product Sync).'; return; }
+  if(name.length < 3){ warn.textContent = 'Écrivez le nom du produit (au moins 3 lettres).'; return; }
+  if(!(price > 0)){ warn.textContent = 'Écrivez le prix de vente en CFA.'; return; }
+  const sim = _ccSimilar(name);
+  if(sim.length && sim[0].score >= 2){ warn.textContent = '❌ « ' + sim[0].p.name + ' » existe déjà avec le code ' + sim[0].p.code + ' : utilisez ce code (bouton 🏷 ci-dessus).'; return; }
+  if(!_ccAck && (sim.length || priceNeedsDigitWarning(price))){
+    _ccAck = true;
+    warn.textContent = (sim.length ? '⚠ Des produits ressemblent à ce nom (liste ci-dessus). ' : '') + (priceNeedsDigitWarning(price) ? '⚠ ' + formatCFA(price) + ' — plus de 6 chiffres. ' : '') + 'Vérifiez, puis appuyez encore sur « Créer le code » pour confirmer.';
+    return;
+  }
+  _ccBusy = true; btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = 'Vérification des codes…';
+  try {
+    // Always start from the Product Master as it is NOW: no stale list, no duplicate code.
+    const fresh = await loadPriceList(true);
+    if(!fresh) throw new Error('impossible de lire le Product Master (connexion ?) — rien n\'a été créé');
+    const again = _ccSimilar(name);
+    if(again.length && again[0].score >= 2) throw new Error('« ' + again[0].p.name + ' » existe déjà avec le code ' + again[0].p.code);
+    const code = _ccNextCode();
+    if(!code) throw new Error('plus de code libre');
+    btn.textContent = 'Enregistrement de ' + code + '…';
+    const a = await _postProductSync({ key: writeKey, action: 'addNewProductWithStock', name: name, barcode: code, category: '', location: loc, qty: qty });
+    if(!a || !a.success) throw new Error((a && a.error) || 'ajout du produit refusé');
+    if(a.masterResult && a.masterResult.success === false){
+      const ex = a.masterResult.existingBarcode;
+      throw new Error(ex ? '« ' + name + ' » existe déjà dans le Product Master avec le code ' + ex : describePriceSaveError(a.masterResult.error) || 'produit déjà présent');
+    }
+    const d = await _postProductSync({ key: writeKey, action: 'updatePrice', barcode: code, newPrice: price,
+      location: storeBranding.name || '', session: currentEmployee || '', app: 'Scanner (Créer un code)' });
+    const priceOk = !!(d && d.success);
+    // The Scanner knows the new product at once (till, labels, price list).
+    BARCODE_DB[code] = { name: name, category: '', brand: '', unit: '' };
+    if(priceOk){ PRODUCT_PRICES[code] = price; try { localStorage.setItem('bc_psync_prices', JSON.stringify(PRODUCT_PRICES)); } catch(e){} }
+    (_plAll = _plAll || []).push({ barcode: code, name: name, m: priceOk ? price : null, s1: null, s2: null }); _plIndex();
+    if(labels > 0) labelQueueAdd(code, name, priceOk ? price : null, labels, true);
+    const list = _ccCreated(); list.unshift({ code, name, price, qty, loc, at: new Date().toISOString(), by: currentEmployee || 'Admin' });
+    try { localStorage.setItem('bc_created_codes', JSON.stringify(list.slice(0, 50))); } catch(e){}
+    done.innerHTML = '<div style="border:2px solid #1f9d55;border-radius:10px;padding:10px 12px;background:#effaf3">' +
+      '<div style="font-weight:700;font-size:15px">✅ ' + _ccEsc(name) + '</div>' +
+      '<div style="font-family:monospace;font-size:20px;letter-spacing:1px;margin:4px 0">' + code + '</div>' +
+      '<div style="font-size:13px;color:var(--ink3)">' + (priceOk ? 'Prix ' + formatCFA(price) : '⚠ Produit créé, mais le prix n\'a pas été enregistré : mettez-le dans « Liste des prix ».') +
+      (qty ? ' · stock de départ ' + qty + ' (' + (loc === 'Store 1' ? 'Balkuy' : loc === 'Store 2' ? 'Ouaga 2000' : 'Entrepôt') + ')' : '') +
+      (labels ? ' · ' + labels + ' étiquette(s) dans « Imprimer des étiquettes »' : '') + '</div></div>' + ccRecentHtml();
+    showToast('✅ Code ' + code + ' créé pour « ' + name + ' »', 6000);
+    document.getElementById('cc-name').value = ''; document.getElementById('cc-price').value = '';
+    document.getElementById('cc-qty').value = 0; document.getElementById('cc-labels').value = 1;
+    document.getElementById('cc-similar').innerHTML = ''; _ccAck = false;
+  } catch(err){
+    warn.textContent = '❌ ' + String(err && err.message || err);
+  } finally {
+    _ccBusy = false; btn.disabled = false; btn.style.opacity = ''; btn.textContent = 'Créer le code';
+  }
+}
+function ccRecentHtml(){
+  const l = _ccCreated().slice(0, 8); if(!l.length) return '';
+  return '<div style="font-size:12px;font-weight:600;margin:10px 0 4px;color:var(--ink3)">Derniers codes créés sur cet appareil</div>' +
+    l.map(c => '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border2)"><span>' + _ccEsc(c.name) + '</span><span style="font-family:monospace;color:var(--ink3)">' + c.code + '</span></div>').join('');
 }
 function exportNoBarcode(){
   const list = getNoBarcodeSummary();
@@ -6595,7 +6766,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
