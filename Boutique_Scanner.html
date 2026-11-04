@@ -69,7 +69,15 @@ input,select{font-family:inherit}
 /* ══════════════════════════════════
    LOGIN SCREEN
 ══════════════════════════════════ */
-#screen-login{
+/* v4-nov-b */
+.adm-sq{position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:10px;border:1.5px solid rgba(255,255,255,.55);background:rgba(255,255,255,.14);color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5}
+.adm-sq:hover{background:rgba(255,255,255,.28)}
+.dlv-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.dlv-chips button{border:1.5px solid var(--border2);background:#fff;border-radius:99px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.dlv-chips button.on{background:#2563eb;border-color:#2563eb;color:#fff}
+.dlv-tag{display:inline-block;border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:700;margin-right:4px}
+.dlv-tag.paid{background:#dcfce7;color:#15803d}.dlv-tag.cod{background:#fef3c7;color:#b45309}.dlv-tag.who{background:#e0e7ff;color:#3730a3}
+#screen-login{position:relative;
   background:linear-gradient(135deg,#1e3a5f 0%,#2563EB 50%,#1D4ED8 100%);
   align-items:center;justify-content:center;padding:20px}
 .login-card{
@@ -1135,6 +1143,7 @@ input,select{font-family:inherit}
      LOGIN
 ══════════════════════════════════ -->
 <div id="screen-login" class="screen active">
+  <button class="adm-sq" onclick="openPinModal()" title="Admin" aria-label="Admin">🔒</button>
   <div class="login-card">
     <div class="login-brand">
       <div class="login-brand-icon">🏪</div>
@@ -1171,7 +1180,7 @@ input,select{font-family:inherit}
       📲 <span>Installer sur cet appareil</span>
     </button>
     <hr class="login-divider">
-    <button class="btn-admin-link" onclick="openPinModal()">🔒 <span id="lbl-admin">Admin Access</span></button>
+    <span id="lbl-admin" hidden>Admin Access</span>
   </div>
 </div>
 
@@ -1186,8 +1195,8 @@ input,select{font-family:inherit}
     </div>
     <div class="pos-topbar-right">
       <div class="emp-badge" id="topbar-emp">—</div>
+      <button class="btn-icon" onclick="doLogout()" title="Fin de service (caisse du soir)" id="btn-logout" style="width:auto;padding:0 10px;font-size:13px;font-weight:700">🌙 Fin de service</button>
       <button class="btn-icon" onclick="openPinModal()" title="Admin">🔒</button>
-      <button class="btn-icon" onclick="doLogout()" title="Sign out" id="btn-logout">↩</button>
     </div>
   </div>
 
@@ -1380,7 +1389,7 @@ input,select{font-family:inherit}
           </button>
           <button class="sale-act" id="btn-delivery" onclick="openDeliveryModal()"
             style="display:none;--c:#2563eb" title="Transformer en livraison">
-            <span class="i">🚚</span><span class="l">Livraison</span>
+            <span class="i">🚚</span><span class="l">Nouvelle livraison</span>
           </button>
           <button class="sale-act" id="btn-dlv-list" onclick="openDeliveryList()"
             style="--c:#475569" title="Liste des livraisons">
@@ -1572,7 +1581,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v4-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v4-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2652,7 +2661,7 @@ function doLogout() {
   // End-of-shift summary is part of signing out — an employee closing
   // their own shift shouldn't need the admin PIN to see today's totals.
   if(currentShift) {
-    openShiftSummary();
+    openEndShift();   // v4-nov-b: deliveries + caisse du soir, then the shift summary
     return; // finishLogout() runs after they confirm in the shift modal
   }
   finishLogout();
@@ -8005,7 +8014,8 @@ function _ccDateStr(){
 function _ccDayData(dateStr){
   const rows = []; let cashIn = 0, cashOut = 0;
   allTransactions.forEach(t => {
-    if(t.date !== dateStr) return;
+    const tDate = t.delivery && t.delivery.collectTs ? fmtDate(new Date(t.delivery.collectTs)) : t.date;
+    if(tDate !== dateStr) return;
     const parts = (t.payMethod === 'split' && Array.isArray(t.splitPayments))
       ? t.splitPayments.map(p => [p.method, p.amount || 0]) : [[t.payMethod, t.total || 0]];
     parts.forEach(([m, a]) => {
@@ -8080,6 +8090,10 @@ function updateCashCheck(){
 }
 function saveCashCheck(){
   const dateStr = _ccDateStr();
+  if(dateStr === fmtDate(new Date())){
+    const pend = dlvPendingForCheck(dateStr);
+    if(pend.length){ showToast('🚚 Confirmez d\'abord les ' + pend.length + ' livraison(s) en cours (✓ Livrée, 🌅 Demain ou ❌ Annulée).', 6000); try { if(!_endShift) openDeliveryList(); } catch(e){} return false; }
+  }
   const day = _ccDayData(dateStr);
   const cash = _ccReadCash();
   let ok = 0, missing = 0; const unconf = [];
@@ -8103,6 +8117,7 @@ function saveCashCheck(){
   }
   showToast('✅ Contrôle de caisse enregistré.');
   renderCashCheck(false);
+  return true;
 }
 function renderCashCheckHistory(){
   const el = document.getElementById('cc-history');
@@ -10864,6 +10879,9 @@ function openDeliveryModal(){
   document.getElementById('dlv-phone').value = '+226 ';
   document.getElementById('dlv-addr').value = '';
   document.getElementById('dlv-err').textContent = '';
+  _dlvNew = { paid: '', who: '' }; dlvPaintChips();
+  document.getElementById('dlv-new-morning').checked = false;
+  document.getElementById('dlv-who-ext').value = '';
   document.getElementById('dlv-other-wrap').style.display = 'none';
   document.getElementById('dlv-other-wrap').innerHTML = currentTxn.items.map((it, i) =>
     '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0"><input type="checkbox" class="dlv-pk" data-i="' + i + '"/> ' +
@@ -10884,6 +10902,10 @@ function submitDelivery(){
   const errEl = document.getElementById('dlv-err');
   if(normalizePhone(phone).length < 8){ errEl.textContent = 'Numéro de téléphone invalide.'; return; }
   if(!name){ errEl.textContent = 'Nom du client requis.'; return; }
+  if(!_dlvNew.paid){ errEl.textContent = 'Le client a-t-il payé ? Choisissez une réponse.'; return; }
+  if(!_dlvNew.who){ errEl.textContent = 'Qui livre ? Choisissez une réponse.'; return; }
+  const whoName = dlvWhoName();
+  if(_dlvNew.who !== 'none' && !whoName){ errEl.textContent = 'Choisissez ou écrivez le nom du livreur.'; return; }
   errEl.textContent = '';
   if(!currentTxn || !currentTxn.items.length){ closeDeliveryModal(); return; }
   const dlvId = nextDeliveryId();
@@ -10894,13 +10916,19 @@ function submitDelivery(){
     createdTs: new Date().toISOString(),
     txn: JSON.parse(JSON.stringify(currentTxn)),
     mixed: false, otherReady: false, otherPicked: false, stockFixed: false,
-    driver: '', morning: false, deliveredTs: '', payer: '', method: '', fee: 0,
-    settled: false, cancelled: false, sale: null
+    driver: _dlvNew.who === 'none' ? '' : whoName, who: _dlvNew.who,
+    morning: document.getElementById('dlv-new-morning').checked, deliveredTs: '', payer: '',
+    paid: _dlvNew.paid !== 'later', method: _dlvNew.paid !== 'later' ? _dlvNew.paid : '', fee: 0,
+    settled: false, cancelled: false, sale: null, v2: true
   };
   document.querySelectorAll('.dlv-pk:checked').forEach(c => {
     const it = d.txn.items[parseInt(c.getAttribute('data-i'), 10)];
     if(it){ it.pickup = 'other'; d.mixed = true; }
   });
+  // v4-nov-b: the sale is recorded NOW (counts on the day it was entered,
+  // even when delivered tomorrow). Unpaid → « À la livraison » until the
+  // payment is confirmed (Livraisons → ✓ Livrée, or the caisse du soir).
+  const closedTxn = dlvRecordSale(d);
   _dlvSave(d);
   closeDeliveryModal();
   // The order is set aside; the till is free for the next customer.
@@ -10908,12 +10936,249 @@ function submitDelivery(){
   updateSaleUI();
   startNewSale();
   saveState();
-  showToast('🚚 Livraison ' + dlvId + ' créée — à assigner.');
+  updateStats();
+  showToast('🚚 Livraison ' + dlvId + ' enregistrée' + (d.paid ? ' (payée)' : ' — à encaisser à la livraison') + (d.driver ? ' · ' + d.driver : ' · livreur à choisir'));
+  try { showReceipt(closedTxn, closedTxn.delivery); } catch(e){}
+  // 💬 outside driver chosen → his WhatsApp message opens right away
+  if(d.driver && d.who === 'ext') setTimeout(() => { try { whatsappDriver(d.uid); } catch(e){} }, 400);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  LIVRAISONS v4-nov-b (4 Nov 2026)
+//  - The form asks right away: paid? (cash / Orange / Wave / virement /
+//    « paiera à la livraison ») and who delivers (store staff / outside
+//    driver / not decided yet) + « livrer demain ».
+//  - The sale is recorded when the delivery is ENTERED (dashboard: that
+//    day, even when delivered tomorrow). Unpaid → payMethod « livraison »
+//    until confirmed; the real method then replaces it (editSalePayMethod)
+//    and the money counts in the caisse du soir of the day it came in.
+//  - Two stages only: À livrer → Terminées (✓ Livrée = delivered + paid +
+//    driver's share paid from the till, all at once).
+//  - Fin de service (cashier): every open delivery must be answered
+//    (✓ Livrée / 🌅 Demain / ❌ Annulée), then the caisse du soir.
+// ══════════════════════════════════════════════════════════════════
+let _dlvNew = { paid: '', who: '' };
+function dlvPaintChips(){
+  document.querySelectorAll('#dlv-paid-chips [data-paid]').forEach(b => b.classList.toggle('on', b.dataset.paid === _dlvNew.paid));
+  document.querySelectorAll('#dlv-who-chips [data-who]').forEach(b => b.classList.toggle('on', b.dataset.who === _dlvNew.who));
+  const sel = document.getElementById('dlv-who-name'), ext = document.getElementById('dlv-who-ext');
+  if(!sel || !ext) return;
+  if(_dlvNew.who === 'store'){
+    const emps = (Array.isArray(employees) ? employees : []).map(e => e && (e.name || e)).filter(Boolean);
+    sel.innerHTML = '<option value="">— Qui ? —</option>' + emps.map(n => '<option value="' + _dlvEsc(n) + '"' + (n === currentEmployee ? ' selected' : '') + '>' + _dlvEsc(n) + '</option>').join('');
+    sel.style.display = 'block'; ext.style.display = 'none';
+  } else if(_dlvNew.who === 'ext'){
+    sel.innerHTML = '<option value="">— Quel livreur ? —</option>' + dlvDrivers.map(x => '<option value="' + _dlvEsc(x.name) + '">' + _dlvEsc(x.name) + '</option>').join('') + '<option value="__ext">Autre (écrire le nom)</option>';
+    sel.style.display = 'block'; ext.style.display = dlvDrivers.length ? 'none' : 'block';
+    if(!dlvDrivers.length) sel.style.display = 'none';
+  } else { sel.style.display = 'none'; ext.style.display = 'none'; }
+}
+function dlvPickPaid(v){ _dlvNew.paid = v; dlvPaintChips(); }
+function dlvPickWho(v){ _dlvNew.who = v; dlvPaintChips(); }
+function dlvWhoNameChange(){
+  const sel = document.getElementById('dlv-who-name'), ext = document.getElementById('dlv-who-ext');
+  ext.style.display = sel.value === '__ext' ? 'block' : 'none';
+  if(sel.value === '__ext') ext.focus();
+}
+function dlvWhoName(){
+  if(_dlvNew.who === 'none') return '';
+  const sel = document.getElementById('dlv-who-name'), ext = document.getElementById('dlv-who-ext');
+  if(_dlvNew.who === 'ext' && (!dlvDrivers.length || sel.value === '__ext')) return ext.value.trim();
+  return sel.value || '';
+}
+// The sale of a delivery, recorded at the moment it is entered.
+function dlvRecordSale(d){
+  const txn = d.txn, now = new Date(d.createdTs || Date.now());
+  const method = d.paid ? d.method : 'livraison';
+  const dlvInfo = {
+    dlvId: d.dlvId, name: d.name, phone: d.phone, location: d.addr || '',
+    date: fmtDate(now), time: fmtTime(now), payType: d.paid ? 'paid' : 'delivery', deposit: 0,
+    payMethod: method, deliverer: d.driver || '', notes: d.morning ? 'Livraison demain' : '', fee: 0
+  };
+  const closedTxn = {
+    id: txn.id, startTs: txn.startTs, endTs: now.toISOString(),
+    date: fmtDate(now), time: fmtTime(now), employee: txn.employee || currentEmployee || '',
+    itemCount: txn.items.length, total: getSaleTotal(txn),
+    items: txn.items.map(i => i.name).join(' | '),
+    itemsList: txn.items.map(i => ({
+      name: i.name, category: i.category || '', barcode: i.barcode || '',
+      price: i.price || 0, qty: i.qty || 1, lineTotal: i.lineTotal || i.price || 0,
+      discount: i.discount || null, scanId: i.scanId || ''
+    })),
+    discount: _finalizeSaleDiscount(txn),
+    payMethod: method, payMethodLabel: PAY_LABELS[method] || method,
+    delivery: dlvInfo
+  };
+  allTransactions.push(closedTxn);
+  d.sale = { total: closedTxn.total, ts: now.toISOString() };
+  pushTxnToSheet(closedTxn);
+  try { pushCustomerToSheet(d.phone, d.name, closedTxn.itemsList.map(i => i.name).join(', ')); } catch(e){}
+  return closedTxn;
+}
+// ✓ Livrée (v2): how was it paid (if not yet), and the driver's share paid from the till.
+let _dlvConf = null;
+function dlvOpenConfirm(uid){
+  const d = _dlvFind(uid); if(!d) return;
+  if(d.mixed && !d.otherPicked){ showToast('Récupérez d\'abord les articles de l\'autre magasin (✓ Récupéré).'); return; }
+  _dlvConf = { uid, method: d.paid ? d.method : '' };
+  let m = document.getElementById('dlv-conf-modal');
+  if(!m){ m = document.createElement('div'); m.className = 'modal-bg'; m.id = 'dlv-conf-modal'; m.style.zIndex = 160; m.innerHTML = '<div class="modal dlv-modal" id="dlv-conf-box"></div>'; document.body.appendChild(m); }
+  const box = document.getElementById('dlv-conf-box');
+  box.innerHTML = '<div class="modal-title">✓ Livraison ' + _dlvEsc(d.dlvId) + ' livrée</div>' +
+    '<div class="modal-sub">' + _dlvEsc(d.name) + ' — ' + formatCFA(_dlvTotal(d)) + (d.driver ? ' — ' + (d.who === 'store' ? '🏪 ' : '🛵 ') + _dlvEsc(d.driver) : '') + '</div>' +
+    (d.paid ? '<div class="dlv-opt" style="margin:6px 0 10px">✅ Déjà payé — ' + _dlvEsc(PAY_LABELS[d.method] || d.method) + '</div>'
+      : '<div class="dlv-lbl">Comment le client a payé ? *</div><div class="dlv-chips" id="dlv-conf-chips">' +
+        ['cash', 'orange', 'wave', 'bank'].map(k => '<button type="button" data-cm="' + k + '" onclick="dlvConfPick(\'' + k + '\')">' + (k === 'cash' ? '💵 Cash remis à la caisse' : PAY_LABELS[k]) + '</button>').join('') + '</div>') +
+    '<div class="pin-err" id="dlv-conf-err" style="margin-top:8px"></div>' +
+    '<div class="modal-btns" style="margin-top:12px"><button class="btn-cancel" onclick="dlvCloseConfirm()">Annuler</button><button class="btn-primary" onclick="dlvConfirmV2()">Confirmer ✓</button></div>';
+  m.classList.add('open');
+}
+function dlvConfPick(k){ if(!_dlvConf) return; _dlvConf.method = k; document.querySelectorAll('#dlv-conf-chips [data-cm]').forEach(b => b.classList.toggle('on', b.dataset.cm === k)); }
+function dlvCloseConfirm(){ const m = document.getElementById('dlv-conf-modal'); if(m) m.classList.remove('open'); _dlvConf = null; }
+function dlvConfirmV2(){
+  if(!_dlvConf) return;
+  const d = _dlvFind(_dlvConf.uid); if(!d){ dlvCloseConfirm(); return; }
+  const err = document.getElementById('dlv-conf-err');
+  if(!d.paid && !_dlvConf.method){ err.textContent = 'Comment le client a payé ? Choisissez.'; return; }
+  const feeEl = document.getElementById('dlv-conf-fee');
+  const fee = feeEl ? Math.max(0, parseInt(feeEl.value, 10) || 0) : 0;
+  const now = new Date();
+  if(!d.paid){
+    const method = _dlvConf.method;
+    const t = allTransactions.find(x => x.id === (d.txn && d.txn.id));
+    if(t){ t.payMethod = method; t.payMethodLabel = PAY_LABELS[method] || method; if(t.delivery){ t.delivery.collectTs = now.toISOString(); t.delivery.payType = 'paid'; t.delivery.payMethod = method; } }
+    pushEditSalePayMethodToSheet(d.txn.id, method, PAY_LABELS[method] || method);
+    d.paid = true; d.method = method; d.collectTs = now.toISOString();
+  }
+  d.deliveredTs = now.toISOString(); d.fee = fee; d.payer = 'us';
+  if(fee > 0){
+    const entry = { ts: now.toISOString(), employee: currentEmployee || '', store: storeBranding.name || '', amount: fee, note: 'Livreur ' + (d.driver || '?') + ' — ' + d.dlvId };
+    cashExpenses.push(entry); pushExpenseToSheet(entry);
+  }
+  d.settled = true; d.settledTs = now.toISOString();
+  _dlvSave(d); saveState();
+  dlvCloseConfirm();
+  try { updateStats(); } catch(e){}
+  renderDeliveryList(); try { renderDriverAdmin(); } catch(e){}
+  if(_endShift) renderEndShift();
+  showToast('✅ ' + d.dlvId + ' livrée');
+}
+// ❌ Annulée (v2): the sale was recorded → it is refunded (Retour), stock comes back.
+function dlvCancelV2(uid){
+  const d = _dlvFind(uid); if(!d) return;
+  if(!confirm('Annuler la livraison ' + d.dlvId + ' ? La vente est annulée (retour) et les articles reviennent en stock.' + (d.paid ? '\nLe client avait payé ' + (PAY_LABELS[d.method] || d.method) + ' : remboursez-le.' : ''))) return;
+  const t = allTransactions.find(x => x.id === (d.txn && d.txn.id));
+  const src = t && Array.isArray(t.itemsList) ? t.itemsList : (d.txn.items || []);
+  const items = src.map(it => {
+    const qty = Math.max(0, (it.qty || 1) - (it.returnedQty || 0)); if(!qty) return null;
+    const unitPrice = t ? _returnUnitPrice(it) : Math.round((it.lineTotal || it.price || 0) / (it.qty || 1));
+    it.returnedQty = (it.returnedQty || 0) + qty;
+    return { barcode: it.barcode || '', name: it.name, category: it.category || '', qty, unitPrice, lineTotal: qty * unitPrice };
+  }).filter(Boolean);
+  if(items.length){
+    const now = new Date();
+    returnCounter++;
+    const method = d.paid ? d.method : 'livraison';
+    const ret = { id: 'R-' + String(returnCounter).padStart(4, '0'), txnId: d.txn.id, ts: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
+      employee: currentEmployee || '', items, refundTotal: items.reduce((a, it) => a + it.lineTotal, 0),
+      refundMethod: method, refundMethodLabel: PAY_LABELS[method] || method, reason: 'Livraison ' + d.dlvId + ' annulée' };
+    allReturns.push(ret); pushReturnToSheet(ret);
+  }
+  d.cancelled = true; d.cancelledTs = new Date().toISOString();
+  _dlvSave(d); saveState();
+  try { updateStats(); } catch(e){}
+  renderDeliveryList();
+  if(_endShift) renderEndShift();
+  showToast('Livraison ' + d.dlvId + ' annulée — articles remis en stock.');
+}
+// Open deliveries of this store still to answer for the caisse du soir of dateStr.
+function dlvPendingForCheck(dateStr){
+  const store = storeBranding.name || '';
+  return allDeliveries.filter(d => _dlvTab2(d) === 'todo' && d.carryDate !== dateStr && (!store || !d.store || d.store === store));
+}
+function dlvCarry(uid){
+  const d = _dlvFind(uid); if(!d) return;
+  d.carryDate = fmtDate(new Date()); d.morning = true;
+  _dlvSave(d); renderDeliveryList();
+  if(_endShift) renderEndShift();
+}
+// ── 🌙 Fin de service: 1/2 deliveries, 2/2 caisse du soir, then the shift summary ──
+let _endShift = null;
+function openEndShift(){
+  _endShift = { step: 1, cardHome: null };
+  let m = document.getElementById('endshift-modal');
+  if(!m){ m = document.createElement('div'); m.className = 'modal-bg'; m.id = 'endshift-modal'; m.style.zIndex = 140;
+    m.innerHTML = '<div class="modal dlv-modal" id="endshift-box" style="max-width:820px;width:96vw;max-height:92vh;overflow:auto"></div>'; document.body.appendChild(m); }
+  m.classList.add('open');
+  try { refreshDeliveries().then(() => { if(_endShift && _endShift.step === 1) renderEndShift(); }); } catch(e){}
+  renderEndShift();
+}
+function renderEndShift(){
+  const box = document.getElementById('endshift-box'); if(!box || !_endShift) return;
+  const today = fmtDate(new Date());
+  if(_endShift.step === 1){
+    _esMoveCard(null);
+    const pend = dlvPendingForCheck(today);
+    let h = '<div class="modal-title">🌙 Fin de service — 1/2 · Livraisons</div><div class="modal-sub">' + _dlvEsc(currentEmployee || '') + ' — pour chaque livraison en cours : ✓ Livrée, 🌅 Demain ou ❌ Annulée.</div>';
+    h += pend.length ? pend.map(d => {
+      const u = _dlvEsc(d.uid);
+      return '<div class="dlv-card"><div class="dlv-card-top"><b>' + _dlvEsc(d.name) + '</b> <span class="dlv-id">' + _dlvEsc(d.dlvId) + '</span></div>' +
+        '<div class="dlv-meta"><b>' + formatCFA(_dlvTotal(d)) + '</b> ' + (d.v2 ? (d.paid ? '<span class="dlv-tag paid">✅ Payé</span>' : '<span class="dlv-tag cod">⏳ À encaisser</span>') : '') +
+        (d.driver ? '<span class="dlv-tag who">' + (d.who === 'store' ? '🏪 ' : '🛵 ') + _dlvEsc(d.driver) + '</span>' : '<span class="dlv-tag who">❓ Livreur à choisir</span>') + '</div>' +
+        '<div class="dlv-actions">' + (_dlvStage(d) === 'settle' ? '<button class="btn-sm btn-green" onclick="settleDelivery(\'' + u + '\');renderEndShift()">✔ Réglé avec le livreur</button>' : '<button class="btn-sm btn-green" onclick="openDeliverPay(\'' + u + '\')">✓ Livrée</button>') +
+        '<button class="btn-sm btn-outline" onclick="dlvCarry(\'' + u + '\')">🌅 Demain</button>' +
+        '<button class="btn-sm btn-outline" style="color:#b03a2e;border-color:#e8b4ac" onclick="cancelDelivery(\'' + u + '\')">❌ Annulée</button></div></div>';
+    }).join('') : '<div style="padding:16px;text-align:center;color:#15803d;font-weight:700">✅ Aucune livraison en attente</div>';
+    const carried = allDeliveries.filter(d => _dlvTab2(d) === 'todo' && d.carryDate === today).length;
+    if(carried) h += '<div class="dlv-dim" style="margin-top:6px">🌅 ' + carried + ' livraison(s) pour demain : elles restent comptées sur leur jour de saisie.</div>';
+    h += '<div class="modal-btns" style="margin-top:12px"><button class="btn-cancel" onclick="closeEndShift()">Retour à la caisse</button>' +
+      '<button class="btn-primary" ' + (pend.length ? 'disabled style="opacity:.5"' : '') + ' onclick="_endShift.step=2;renderEndShift()">Continuer → Caisse du soir</button></div>';
+    box.innerHTML = h;
+  } else {
+    box.innerHTML = '<div class="modal-title">🌙 Fin de service — 2/2 · Caisse du soir</div><div class="modal-sub">Comptez les billets, cochez chaque paiement Orange / Wave / virement reçu.</div>' +
+      '<div id="endshift-cc"></div>' +
+      '<div class="modal-btns" style="margin-top:12px;flex-wrap:wrap"><button class="btn-cancel" onclick="_endShift.step=1;renderEndShift()">← Livraisons</button>' +
+      '<button class="btn-primary" style="background:#15803d" onclick="endShiftSave()">💾 Enregistrer et terminer le service</button></div>' +
+      '<div style="text-align:center;margin-top:8px"><a href="#" onclick="endShiftSkip();return false" style="font-size:12.5px;color:var(--ink3)">Je passe la caisse à un collègue (pas de caisse du soir maintenant)</a></div>';
+    _esMoveCard(document.getElementById('endshift-cc'));
+  }
+}
+// The evening cash-check card (Admin → Caisse) is borrowed into this window, then put back.
+function _esMoveCard(into){
+  const b = document.getElementById('cc-bills'), card = b && b.closest('.admin-card');
+  if(!card || !_endShift) return;
+  const save = card.querySelector('button[onclick="saveCashCheck()"]');
+  if(into){
+    if(!_endShift.cardHome) _endShift.cardHome = { parent: card.parentNode, next: card.nextSibling };
+    into.appendChild(card); card.style.display = 'block';
+    if(save) save.style.display = 'none';
+    const dEl = document.getElementById('cc-date'); if(dEl) dEl.value = '';
+    renderCashCheck(false);
+  } else if(_endShift.cardHome){
+    const h = _endShift.cardHome; h.parent.insertBefore(card, h.next); _endShift.cardHome = null;
+    if(save) save.style.display = '';
+  }
+}
+function closeEndShift(){
+  _esMoveCard(null);
+  const m = document.getElementById('endshift-modal'); if(m) m.classList.remove('open');
+  _endShift = null;
+}
+function endShiftSave(){
+  if(!saveCashCheck()) return;
+  closeEndShift();
+  openShiftSummary();
+}
+function endShiftSkip(){
+  try { logActivity('Fin de service sans caisse du soir', currentEmployee || ''); } catch(e){}
+  closeEndShift();
+  openShiftSummary();
 }
 
 // ── 2. List ──
-let _dlvTab = 'new';
-const _DLV_TABS = [['new','À assigner'],['assigned','En cours'],['settle','À régler'],['done','Terminées']];
+let _dlvTab = 'todo';
+const _DLV_TABS = [['todo','À livrer'],['done','Terminées']];
+function _dlvTab2(d){ const s = _dlvStage(d); return (s === 'done' || s === 'cancelled') ? 'done' : 'todo'; }
 function openDeliveryList(){
   document.getElementById('dlv-list-modal').classList.add('open');
   renderDeliveryList();
@@ -10925,9 +11190,7 @@ function setDlvTab(t){ _dlvTab = t; renderDeliveryList(); }
 function updateDeliveryBadge(){
   const b = document.getElementById('btn-dlv-list');
   if(!b) return;
-  const active = allDeliveries.filter(d => ['new','assigned'].includes(_dlvStage(d))).length;
-  const settle = allDeliveries.filter(d => _dlvStage(d) === 'settle').length;
-  const n = active + settle;
+  const n = allDeliveries.filter(d => _dlvTab2(d) === 'todo').length;
   b.innerHTML = '<span class="i">📦</span><span class="l">Livraisons' + (n ? ' (' + n + ')' : '') + '</span>';
 }
 
@@ -10953,11 +11216,12 @@ function renderDeliveryList(){
   if(!el) return;
   const counts = {};
   _DLV_TABS.forEach(t => counts[t[0]] = 0);
-  allDeliveries.forEach(d => { const s = _dlvStage(d); if(counts[s] != null) counts[s]++; });
+  allDeliveries.forEach(d => { const s = _dlvTab2(d); if(counts[s] != null) counts[s]++; });
+  if(counts.done) counts.done = 0;
   document.getElementById('dlv-tabs').innerHTML = _DLV_TABS.map(t =>
     '<button class="dlv-tab' + (_dlvTab === t[0] ? ' on' : '') + '" onclick="setDlvTab(\'' + t[0] + '\')">' +
     t[1] + (counts[t[0]] ? ' <b>' + counts[t[0]] + '</b>' : '') + '</button>').join('');
-  let rows = allDeliveries.filter(d => _dlvStage(d) === _dlvTab || (_dlvTab === 'done' && d.cancelled));
+  let rows = allDeliveries.filter(d => _dlvTab2(d) === _dlvTab);
   rows.sort((a, b) => (b.morning ? 1 : 0) - (a.morning ? 1 : 0) || String(b.createdTs).localeCompare(String(a.createdTs)));
   if(_dlvTab === 'done') rows = rows.slice(0, 60);
   if(!rows.length){ el.innerHTML = '<div style="color:var(--ink4);padding:18px 4px;text-align:center">Aucune livraison ici.</div>'; return; }
@@ -10979,8 +11243,11 @@ function _dlvCard(d){
     h += '<div class="dlv-pickup"><b>🏬 À récupérer à l\'autre magasin :</b> ' + _dlvEsc(oi) + '<br/>' +
       (d.otherPicked ? '✅ Récupéré par le livreur' : (d.otherReady ? '🟢 Prêt chez l\'autre magasin' : '⏳ En attente de préparation')) + '</div>';
   }
-  h += '<div class="dlv-meta"><b>' + formatCFA(total) + '</b>';
-  if(d.driver) h += ' · 🚚 ' + _dlvEsc(d.driver);
+  h += '<div class="dlv-meta"><b>' + formatCFA(total) + '</b> ';
+  if(d.v2 && !d.cancelled) h += d.paid ? '<span class="dlv-tag paid">✅ Payé ' + _dlvEsc(PAY_LABELS[d.method] || d.method || '') + '</span>' : '<span class="dlv-tag cod">⏳ À encaisser</span>';
+  if(d.driver) h += '<span class="dlv-tag who">' + (d.who === 'store' ? '🏪 ' : '🛵 ') + _dlvEsc(d.driver) + '</span>';
+  else if(st !== 'done' && !d.cancelled) h += '<span class="dlv-tag who">❓ Livreur à choisir</span>';
+  if(d.createdTs) h += ' <span class="dlv-dim">· saisie ' + _dlvEsc(fmtDate(new Date(d.createdTs))) + '</span>';
   if(d.morning && st === 'assigned') h += ' · <span class="dlv-morning">🌅 Demain matin</span>';
   h += '</div>';
   if(st === 'settle'){
@@ -10991,15 +11258,13 @@ function _dlvCard(d){
   if(d.cancelled) h += '<div class="dlv-dim">❌ Annulée</div>';
   if(st === 'done' && !d.cancelled) h += '<div class="dlv-dim">✅ Terminée' + (d.sale ? ' · reçu ' + _dlvEsc(d.txn.id) : '') + '</div>';
   h += '<div class="dlv-actions">';
-  if(st === 'new') h += '<button class="btn-sm btn-blue" onclick="openAssignDelivery(\'' + u + '\')">🚚 Assigner un livreur</button>';
+  if(st === 'new' || st === 'assigned') h += '<button class="btn-sm btn-green" onclick="openDeliverPay(\'' + u + '\')">✓ Livrée</button>';
+  if(st === 'new' || st === 'assigned') h += '<button class="btn-sm btn-outline" onclick="openAssignDelivery(\'' + u + '\')">' + (d.driver ? '🛵 Changer de livreur' : '🛵 Choisir le livreur') + '</button>';
   if(d.mixed && !d.cancelled && !d.otherPicked && st !== 'done' && st !== 'settle'){
     if(!d.otherReady) h += '<button class="btn-sm btn-outline" onclick="markOtherReady(\'' + u + '\')">🟢 Prêt (autre magasin)</button>';
     h += '<button class="btn-sm btn-outline" onclick="markOtherPicked(\'' + u + '\')">✓ Récupéré</button>';
   }
-  if(st === 'assigned'){
-    h += '<button class="btn-sm btn-green" onclick="openDeliverPay(\'' + u + '\')">✓ Livrée</button>';
-    h += '<button class="btn-sm btn-outline" onclick="openAssignDelivery(\'' + u + '\')">Changer</button>';
-  }
+
   if(st === 'settle'){
     h += d.payer === 'us'
       ? '<button class="btn-sm btn-green" onclick="settleDelivery(\'' + u + '\')">✔ Payé au livreur</button>'
@@ -11033,6 +11298,7 @@ function whatsappDeliveryClient(uid){
 
 function cancelDelivery(uid){
   const d = _dlvFind(uid); if(!d) return;
+  if(d.v2 && d.sale) return dlvCancelV2(uid);
   if(!confirm('Annuler la livraison ' + d.dlvId + ' ? Les articles retournent en stock.')) return;
   (d.txn.items || []).forEach(item => { markScanLogVoided(item.scanId); pushVoidScanToSheet(item); });
   d.cancelled = true;
@@ -11045,8 +11311,12 @@ function cancelDelivery(uid){
 let _assignUid = null;
 function _driverOptionsHTML(sel){
   let h = '<option value="">— Choisir —</option>';
+  const emps = (Array.isArray(employees) ? employees : []).map(e => e && (e.name || e)).filter(Boolean);
+  if(emps.length) h += '<optgroup label="🏪 Le magasin">' + emps.map(n => '<option value="' + _dlvEsc(n) + '"' + (sel === n ? ' selected' : '') + '>' + _dlvEsc(n) + '</option>').join('') + '</optgroup>';
+  h += '<optgroup label="🛵 Livreurs">';
   dlvDrivers.forEach(x => { h += '<option value="' + _dlvEsc(x.name) + '"' + (sel === x.name ? ' selected' : '') + '>' + _dlvEsc(x.name) + '</option>'; });
-  h += '<option value="__ext"' + (sel && !dlvDrivers.some(x => x.name === sel) ? ' selected' : '') + '>Externe (autre)</option>';
+  const known = dlvDrivers.some(x => x.name === sel) || (Array.isArray(employees) ? employees : []).some(e => (e && (e.name || e)) === sel);
+  h += '<option value="__ext"' + (sel && !known ? ' selected' : '') + '>Externe (autre)</option></optgroup>';
   return h;
 }
 function openAssignDelivery(uid){
@@ -11077,11 +11347,12 @@ function confirmAssignDelivery(sendWa){
   const driver = _assignedDriver();
   if(!driver){ document.getElementById('dlv-assign-err').textContent = 'Choisissez un livreur.'; return; }
   d.driver = driver;
+  d.who = (Array.isArray(employees) ? employees : []).some(e => (e && (e.name || e)) === driver) ? 'store' : 'ext';
   d.morning = document.getElementById('dlv-morning').checked;
   _dlvSave(d);
   closeAssignDelivery();
   renderDeliveryList();
-  if(sendWa) whatsappDriver(d.uid);
+  if(sendWa || (d.v2 && d.who === 'ext')) whatsappDriver(d.uid);
 }
 function whatsappDriver(uid){
   const d = _dlvFind(uid); if(!d) return;
@@ -11093,7 +11364,8 @@ function whatsappDriver(uid){
     : all.map(fmt).join('\n');
   const msg = 'Livraison ' + d.dlvId + (d.morning ? ' (demain matin)' : '') + '\n' +
     'Client : ' + d.name + '\nTél : +' + d.phone + (d.addr ? '\nAdresse : ' + d.addr : '') +
-    '\n\n' + items + '\n\nTotal produits : ' + formatCFA(_dlvTotal(d));
+    '\n\n' + items + '\n\nTotal produits : ' + formatCFA(_dlvTotal(d)) +
+    (d.v2 ? (d.paid ? '\n✅ Déjà payé (' + (PAY_LABELS[d.method] || d.method) + ') : rien à encaisser' : '\n💰 À encaisser auprès du client : ' + formatCFA(_dlvTotal(d))) : '');
   const drv = dlvDrivers.find(x => x.name === d.driver);
   const to = drv && drv.phone ? normalizePhone(drv.phone) : '';
   openWhatsAppLink('https://wa.me/' + to + '?text=' + encodeURIComponent(msg));
@@ -11103,6 +11375,7 @@ function whatsappDriver(uid){
 let _payUid = null;
 function openDeliverPay(uid){
   const d = _dlvFind(uid); if(!d) return;
+  if(d.v2) return dlvOpenConfirm(uid);
   if(d.mixed && !d.otherPicked){ showToast('Récupérez d\'abord les articles de l\'autre magasin (✓ Récupéré).'); return; }
   _payUid = uid;
   document.getElementById('dlv-pay-sub').textContent = d.dlvId + ' — ' + d.name + ' — produits : ' + formatCFA(_dlvTotal(d));
@@ -11166,6 +11439,7 @@ function confirmDeliverPay(){
   renderDeliveryList();
   updateStats();
   showReceipt(closedTxn, dlvInfo);
+  if(_endShift) renderEndShift();
 }
 
 function reprintDeliveryReceipt(uid){
@@ -11479,7 +11753,7 @@ ${closing}${s.phone ? '\nTél : '+s.phone : ''}${receiptLinkLine(txn)}`;
 // ── Payment method helpers ──────────────────
 const PAY_LABELS = {
   cash:'💵 Cash', orange:'🟠 Orange Money', wave:'🌊 Wave',
-  bank:'🏦 Virement', monthly:'📅 Mensualité'
+  bank:'🏦 Virement', monthly:'📅 Mensualité', livraison:'🚚 À la livraison'
 };
 let _pendingPayClose = false;
 
@@ -13426,6 +13700,23 @@ closeSale = function(){
         <input class="dlv-field" id="dlv-name" placeholder="Prénom" type="text"/></div>
       <div class="dlv-full"><div class="dlv-lbl">Adresse / repère (facultatif)</div>
         <input class="dlv-field" id="dlv-addr" placeholder="Quartier, repère…" type="text"/></div>
+      <div class="dlv-full"><div class="dlv-lbl">Le client a-t-il payé ? *</div>
+        <div class="dlv-chips" id="dlv-paid-chips">
+          <button type="button" data-paid="cash" onclick="dlvPickPaid('cash')">💵 Payé cash</button>
+          <button type="button" data-paid="orange" onclick="dlvPickPaid('orange')">🟠 Orange</button>
+          <button type="button" data-paid="wave" onclick="dlvPickPaid('wave')">🌊 Wave</button>
+          <button type="button" data-paid="bank" onclick="dlvPickPaid('bank')">🏦 Virement</button>
+          <button type="button" data-paid="later" onclick="dlvPickPaid('later')">⏳ Paiera à la livraison</button>
+        </div></div>
+      <div class="dlv-full"><div class="dlv-lbl">Qui livre ? *</div>
+        <div class="dlv-chips" id="dlv-who-chips">
+          <button type="button" data-who="store" onclick="dlvPickWho('store')">🏪 Quelqu'un du magasin</button>
+          <button type="button" data-who="ext" onclick="dlvPickWho('ext')">🛵 Livreur externe</button>
+          <button type="button" data-who="none" onclick="dlvPickWho('none')">❓ Pas encore de livreur</button>
+        </div>
+        <select class="dlv-field" id="dlv-who-name" style="display:none;margin-top:6px" onchange="dlvWhoNameChange()"></select>
+        <input class="dlv-field" id="dlv-who-ext" placeholder="Nom du livreur" type="text" style="display:none;margin-top:6px"/></div>
+      <div class="dlv-full"><label class="dlv-opt" style="margin-top:2px"><input type="checkbox" id="dlv-new-morning"/> 🌅 Livrer demain (la vente compte quand même aujourd'hui)</label></div>
       <div class="dlv-full">
         <a href="#" id="dlv-other-link" onclick="toggleOtherPickup();return false" style="font-size:13px;color:#2563eb">🏬 Certains articles sont dans l'autre magasin ?</a>
         <div id="dlv-other-wrap" style="display:none;margin-top:6px"></div>
@@ -13450,7 +13741,7 @@ closeSale = function(){
   </div>
 </div>
 
-<div class="modal-bg" id="dlv-assign-modal">
+<div class="modal-bg" id="dlv-assign-modal" style="z-index:160">
   <div class="modal dlv-modal">
     <div class="modal-title">🚚 Livreur</div>
     <div class="modal-sub" id="dlv-assign-sub">—</div>
@@ -13467,7 +13758,7 @@ closeSale = function(){
   </div>
 </div>
 
-<div class="modal-bg" id="dlv-pay-modal">
+<div class="modal-bg" id="dlv-pay-modal" style="z-index:160">
   <div class="modal dlv-modal">
     <div class="modal-title">✓ Livraison effectuée</div>
     <div class="modal-sub" id="dlv-pay-sub">—</div>
