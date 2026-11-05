@@ -1581,7 +1581,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v4-nov-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v5-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1856,6 +1856,25 @@ input,select{font-family:inherit}
           <span class="dlv-dim" id="top25-status"></span>
         </div>
         <div id="top25-body"></div>
+      </div>
+
+      <!-- v5-nov-a: Caisse de secours (store phone during power cuts) -->
+      <div class="admin-card" id="sec-card">
+        <div class="admin-card-title">📱 Caisse de secours</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">
+          Téléphone du magasin pour vendre pendant les coupures : scan, prix automatique, heure gardée, envoi tout seul dès qu'il y a du réseau.
+          Pour l'installer : ouvrez l'appareil photo du téléphone et scannez ce code, puis « Ajouter à l'écran d'accueil ».
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+          <div id="sec-qr" style="background:#fff;padding:8px;border:1px solid var(--border2);border-radius:10px;min-width:180px;min-height:180px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink4)">Touchez « Afficher le QR »</div>
+          <div style="flex:1;min-width:220px">
+            <button class="btn-sm btn-blue" onclick="secShowQR()">📷 Afficher le QR</button>
+            <button class="btn-sm btn-outline" onclick="secCopyLink()">🔗 Copier le lien</button>
+            <div class="dlv-lbl" style="margin-top:12px">Ventes de secours aujourd'hui</div>
+            <div id="sec-list" style="font-size:12.5px;max-height:220px;overflow-y:auto"><span class="dlv-dim">—</span></div>
+            <button class="btn-sm btn-outline" style="margin-top:6px" onclick="secLoadList(true)">🔄 Actualiser</button>
+          </div>
+        </div>
       </div>
 
       <!-- Evening cash check -->
@@ -6774,7 +6793,7 @@ const ADMIN_CARD_TAB = [
   [/Historique des ventes/, 'ventes', 1], [/Ventes interrompues/, 'ventes', 2], [/Calendrier des ventes/, 'ventes', 3],
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
-  [/Contrôle de caisse du soir/, 'caisse', 1], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
+  [/Contrôle de caisse du soir/, 'caisse', 1], [/Caisse de secours/, 'caisse', 1.5], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
   [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
@@ -8035,16 +8054,72 @@ function _ccDayData(dateStr){
     else if(CC_DIGITAL.includes(r.refundMethod)) rows.push({ key: 'R' + r.id, label: 'Retour ' + r.id, method: r.refundMethod, amount: -a, time: r.time || '' });
   });
   cashExpenses.forEach(e => { if(fmtDate(new Date(e.ts)) === dateStr) cashOut += e.amount || 0; });
+  // v5-nov-a: sales rung on the Caisse de secours (store phone) during a power cut
+  ((_secSales[dateStr] || {}).sales || []).forEach(x => {
+    if(x.payMethod === 'cash') cashIn += x.total || 0;
+    else if(CC_DIGITAL.includes(x.payMethod)) rows.push({ key: 'X' + x.txnId, label: '🔦 Secours ' + x.txnId.slice(-8) + (x.employee ? ' ' + x.employee : ''), method: x.payMethod, amount: x.total || 0, time: x.time || '' });
+  });
   rows.sort((a, b) => String(a.time).localeCompare(String(b.time)));
   return { rows, cashIn, cashOut, expected: cashIn - cashOut };
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  📱 CAISSE DE SECOURS (v5-nov-a, 5 Nov 2026)
+//  The store phone (secours.html) sells during power cuts and sends each
+//  sale itself (POS RECEIVER logSecoursSale). Here: the QR code that sets
+//  the phone up for this store, the day's secours sales, and the caisse
+//  du soir adding them (cash in the expected amount, Orange/Wave to tick).
+// ══════════════════════════════════════════════════════════════════
+const SEC_URL = 'https://yacine5555.github.io/boutique/secours.html';
+let _secSales = {};   // dateStr -> { at, sales:[...] }
+function secLink(){
+  const cfg = { s: syncUrl, p: productSyncUrl, k: writeKey, st: storeBranding.name || '', loc: _defaultPriceLocation() };
+  return SEC_URL + '#cfg=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))));
+}
+async function secShowQR(){
+  const box = document.getElementById('sec-qr'); if(!box) return;
+  if(!syncUrl || !writeKey){ box.textContent = 'Configurez d\'abord la synchro des ventes (Réglages).'; return; }
+  box.textContent = 'Chargement…';
+  try {
+    if(!window.qrcode) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+    const q = qrcode(0, 'L'); q.addData(secLink()); q.make();
+    box.innerHTML = q.createSvgTag({ cellSize: 3, margin: 2 }) + '<div style="font-size:11px;text-align:center;margin-top:4px">' + _dlvEsc(storeBranding.name || '') + '</div>';
+  } catch(e){ box.textContent = 'QR indisponible sans internet : utilisez « Copier le lien » et envoyez-le au téléphone.'; }
+}
+async function secCopyLink(){
+  try { await navigator.clipboard.writeText(secLink()); showToast('🔗 Lien copié : envoyez-le au téléphone du magasin (WhatsApp) et ouvrez-le.'); }
+  catch(e){ prompt('Copiez ce lien :', secLink()); }
+}
+async function secFetch(dateStr, force){
+  if(!syncUrl || !writeKey) return false;
+  const c = _secSales[dateStr];
+  if(c && !force && Date.now() - c.at < 60000) return false;
+  try {
+    const r = await fetch(syncUrl + '?action=getSecoursSales&key=' + encodeURIComponent(writeKey) + '&date=' + encodeURIComponent(dateStr) + '&store=' + encodeURIComponent(storeBranding.name || ''), { cache: 'no-store' });
+    const d = await r.json();
+    if(!d || !d.ok) return false;
+    const before = JSON.stringify((c || {}).sales || []);
+    _secSales[dateStr] = { at: Date.now(), sales: d.sales || [] };
+    return JSON.stringify(d.sales || []) !== before;
+  } catch(e){ return false; }
+}
+async function secLoadList(force){
+  const el = document.getElementById('sec-list'); if(!el) return;
+  const day = fmtDate(new Date());
+  await secFetch(day, force);
+  const l = (_secSales[day] || {}).sales || [];
+  if(!l.length){ el.innerHTML = '<span class="dlv-dim">Aucune vente de secours aujourd\'hui (ou pas encore envoyée par le téléphone).</span>'; return; }
+  el.innerHTML = l.map(x => '<div style="border-bottom:1px solid var(--border2);padding:4px 0"><b>' + _dlvEsc(String(x.time).slice(0, 5)) + '</b> · ' + _dlvEsc(x.employee) + ' · <b>' + formatCFA(x.total) + '</b> ' + _dlvEsc(PAY_LABELS[x.payMethod] || x.payMethod) +
+    (/à vérifier/.test(x.note) ? ' <span style="color:#b45309;font-weight:700">⚠ prix tapé</span>' : '') + '<br><span class="dlv-dim">' + _dlvEsc(x.items) + '</span></div>').join('');
+}
 let _ccRows = [];
 function renderCashCheck(keepInputs){
+  try { secLoadList(false); } catch(e){}
   const dEl = document.getElementById('cc-date');
   if(!dEl) return;
   if(!dEl.value){ const n = new Date(); dEl.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
   const dateStr = _ccDateStr();
+  secFetch(dateStr, false).then(ch => { if(ch) renderCashCheck(true); });
   const day = _ccDayData(dateStr);
   const billsEl = document.getElementById('cc-bills');
   if(!keepInputs){
@@ -8060,7 +8135,8 @@ function renderCashCheck(keepInputs){
     '<span class="cc-t">' + _ccEsc(r.time) + '</span> <span style="flex:1">' + _ccEsc(r.label) + ' <span class="dlv-dim">' + _ccEsc(PAY_LABELS[r.method] || r.method) + '</span></span><b>' + (r.amount < 0 ? '−' : '') + formatCFA(Math.abs(r.amount)) + '</b></label>').join('')
     : '<div class="dlv-dim">Aucune transaction Orange / Wave / virement ce jour sur cet appareil.</div>';
   document.getElementById('cc-expected').textContent = formatCFA(day.expected);
-  document.getElementById('cc-expected-detail').textContent = 'Ventes cash ' + formatCFA(day.cashIn) + ' − sorties ' + formatCFA(day.cashOut);
+  const secN = ((_secSales[dateStr] || {}).sales || []).length;
+  document.getElementById('cc-expected-detail').textContent = 'Ventes cash ' + formatCFA(day.cashIn) + ' − sorties ' + formatCFA(day.cashOut) + (secN ? ' · dont ' + secN + ' vente(s) de secours' : '');
   updateCashCheck();
   renderCashCheckHistory();
 }

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#7c2d12">
+<link rel="manifest" href="secours.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Caisse de secours — Beauty Empire</title>
+<style>
+:root{--ink:#1c1917;--mut:#78716c;--line:#e7e5e4;--bg:#fafaf9;--brand:#c2410c;--ok:#15803d;--bad:#b91c1c;--warn:#b45309}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#7c2d12;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1;line-height:1.1}
+header h1 small{display:block;font-weight:500;font-size:12px;opacity:.85}
+.who{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700}
+.net{font-size:12.5px;padding:7px 14px;text-align:center;font-weight:700}
+.net.ok{background:#dcfce7;color:var(--ok)}.net.wait{background:#fef3c7;color:var(--warn)}.net.off{background:#e7e5e4;color:#44403c}
+main{padding:14px;max-width:560px;margin:0 auto}
+.big{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;border:0;border-radius:16px;padding:18px;font:inherit;font-size:20px;font-weight:800;cursor:pointer;margin:0 0 10px}
+.scanbtn{background:var(--brand);color:#fff}
+.done{background:var(--ok);color:#fff}
+.ghost{background:#fff;border:2px solid var(--line);color:var(--ink);font-size:16px;padding:13px}
+.row2{display:flex;gap:8px}
+.row2 input{flex:1;font:inherit;font-size:20px;padding:14px;border:2px solid var(--line);border-radius:14px;min-width:0}
+.row2 button{border:0;background:var(--ink);color:#fff;border-radius:14px;font:inherit;font-weight:800;padding:0 18px}
+.cart{margin:12px 0}
+.it{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.it .nm{flex:1;min-width:0}
+.it .nm b{display:block;font-size:15px;line-height:1.2;overflow-wrap:anywhere}
+.it .nm small{color:var(--mut);font-size:12.5px}
+.it .nm small.typed{color:var(--warn);font-weight:700}
+.q{display:flex;align-items:center;gap:6px}
+.q button{width:40px;height:40px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:22px;font-weight:800}
+.q span{min-width:26px;text-align:center;font-size:20px;font-weight:800}
+.total{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;color:var(--mut);margin:6px 2px 12px}
+.total b{font-size:30px;color:var(--ink)}
+.empty{color:var(--mut);text-align:center;padding:22px 8px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet>div{background:#fff;width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:18px 16px 22px;max-height:92vh;overflow:auto}
+.sheet h2{margin:0 0 4px;font-size:21px}
+.sheet p{margin:0 0 12px;color:var(--mut)}
+.sheet label{display:block;font-weight:700;font-size:14px;margin:10px 0 4px}
+.sheet input{width:100%;font:inherit;font-size:20px;padding:13px;border:2px solid var(--line);border-radius:14px}
+.pays{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 12px}
+.pays button{border:2px solid var(--line);background:#fff;border-radius:16px;padding:20px 8px;font:inherit;font-size:19px;font-weight:800}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.names button{border:2px solid var(--line);background:#fff;border-radius:16px;padding:20px 8px;font:inherit;font-size:18px;font-weight:800}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.pad button{border:2px solid var(--line);background:#fff;border-radius:16px;padding:16px;font:inherit;font-size:24px;font-weight:800}
+.dots{font-size:30px;letter-spacing:10px;text-align:center;min-height:42px}
+.err{color:var(--bad);font-weight:700;margin:8px 0}
+.ok-big{text-align:center;padding:20px 8px}
+.ok-big .c{font-size:60px}
+.ok-big b{font-size:28px;display:block}
+.day .s{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;margin-bottom:7px;font-size:14px}
+.day .s .top{display:flex;justify-content:space-between;font-weight:700}
+.day .sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.day .sum div{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.day .sum b{display:block;font-size:18px}
+.tabs{display:flex;gap:8px;margin:0 0 12px}
+.tabs button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:10px;font:inherit;font-weight:800}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.cam{position:fixed;inset:0;background:#000;z-index:30;display:flex;flex-direction:column}
+.cam video{flex:1;width:100%;object-fit:cover}
+.cam .frame{position:absolute;left:12%;right:12%;top:38%;height:22%;border:3px solid #fff;border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.cam .bar{display:flex;justify-content:space-between;align-items:center;padding:14px;color:#fff;background:#000}
+.cam .bar button{background:#fff;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:800}
+.hint{font-size:13px;color:var(--mut);text-align:center;margin-top:6px}
+</style>
+</head>
+<body>
+<header><h1>🔦 Caisse de secours<small id="hstore">—</small></h1><button class="who" id="who" hidden></button></header>
+<div class="net off" id="net">—</div>
+<main id="main"></main>
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CAISSE DE SECOURS — Beauty Empire (5 Nov 2026)
+//  Store phone, used during power cuts. Works with no wifi: the price list
+//  and the employees are kept on the phone. Each finished sale is saved on
+//  the phone with its time, and sent to the sales sheet (POS RECEIVER,
+//  action logSecoursSale) as soon as there is a signal — stock goes down
+//  like a till sale; the till's caisse du soir counts it.
+//  Set up once from the Scanner: Admin → 📱 Caisse de secours (QR code).
+// ══════════════════════════════════════════════════════════════════
+const $ = s => document.querySelector(s);
+const ls = (k, v) => { try { if(v === undefined) return localStorage.getItem(k); if(v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } };
+const lsj = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const fmt = n => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/ /g, ' ') + ' F';
+const bkey = b => { const s = String(b == null ? '' : b).trim(); return s.replace(/^0+/, '') || s; };
+const pad = n => String(n).padStart(2, '0');
+const frDate = d => pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+const frTime = d => pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+const PAY = { cash: '💵 Cash', orange: '🟠 Orange Money', wave: '🌊 Wave', bank: '🏦 Virement' };
+
+// ── setup from the QR code: #cfg=<base64 json {s, p, k, st, loc}> ──
+(function(){
+  const m = /#cfg=([^&]+)/.exec(location.hash || '');
+  if(!m) return;
+  try {
+    const c = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    if(c && c.s && c.k){ ls('sec_cfg', JSON.stringify(c)); ls('sec_user', null); }
+  } catch(e){ alert('QR code illisible : rescannez-le depuis le Scanner (Admin → 📱 Caisse de secours).'); }
+  history.replaceState(null, '', location.pathname);
+})();
+let CFG = lsj('sec_cfg', null);
+let EMPS = lsj('sec_emps', []);          // [{name, pin}]
+let PRICES = lsj('sec_prices', {});      // bkey -> [name, price]
+let PRICES_AT = ls('sec_prices_at') || '';
+let QUEUE = lsj('sec_queue', []);        // sales not sent yet
+let SENT = lsj('sec_sent', []);          // sales sent (last 300)
+let USER = ls('sec_user') || '';
+let CART = lsj('sec_cart', []);          // [{bc, name, price, qty, typed}]
+let sending = false;
+const saveCart = () => ls('sec_cart', JSON.stringify(CART));
+
+// ── data refresh (when there is a signal) ──
+async function refreshData(){
+  if(!CFG || !navigator.onLine) return;
+  try {
+    const r = await fetch(CFG.s + '?action=getEmployees&key=' + encodeURIComponent(CFG.k), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && Array.isArray(d.employees) && d.employees.length){ EMPS = d.employees.filter(e => e && e.name); ls('sec_emps', JSON.stringify(EMPS)); }
+  } catch(e){}
+  if(CFG.p){
+    try {
+      const r = await fetch(CFG.p + (CFG.p.includes('?') ? '&' : '?') + 'action=getPriceList&key=' + encodeURIComponent(CFG.k), { cache: 'no-store' });
+      const d = await r.json();
+      if(d && Array.isArray(d.products) && d.products.length){
+        const col = CFG.loc === 'Store 2' ? 's2' : CFG.loc === 'Store 1' ? 's1' : '';
+        const out = {};
+        d.products.forEach(p => { const k = bkey(p.barcode); if(!k) return; const price = (col && p[col] != null && p[col] !== '') ? p[col] : p.m; out[k] = [p.name || '', Number(price) || 0, String(p.barcode)]; });
+        PRICES = out; PRICES_AT = new Date().toISOString();
+        ls('sec_prices', JSON.stringify(PRICES)); ls('sec_prices_at', PRICES_AT);
+      }
+    } catch(e){}
+  }
+  render();
+}
+
+// ── sending the sales ──
+async function flush(){
+  if(sending || !CFG || !QUEUE.length || !navigator.onLine) { paintNet(); return; }
+  sending = true; paintNet();
+  while(QUEUE.length){
+    const sale = QUEUE[0];
+    try {
+      const r = await fetch(CFG.s, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: CFG.k, action: 'logSecoursSale' }, sale)) });
+      const d = await r.json();
+      if(!d || !d.ok){ sale.err = (d && d.error) || 'refusé'; ls('sec_queue', JSON.stringify(QUEUE)); break; }
+      QUEUE.shift(); delete sale.err; sale.sentAt = new Date().toISOString();
+      SENT.unshift(sale); SENT = SENT.slice(0, 300);
+      ls('sec_queue', JSON.stringify(QUEUE)); ls('sec_sent', JSON.stringify(SENT));
+    } catch(e){ break; }
+  }
+  sending = false; paintNet();
+  if(VIEW === 'day') render();
+}
+function paintNet(){
+  const n = $('#net');
+  if(!CFG){ n.className = 'net off'; n.textContent = 'Pas encore installée'; return; }
+  if(QUEUE.length){
+    n.className = 'net wait';
+    n.textContent = sending ? '⏫ Envoi de ' + QUEUE.length + ' vente(s)…' : (navigator.onLine ? '🟠 ' : '⚫ Pas de réseau · ') + QUEUE.length + ' vente(s) en attente d’envoi' + (QUEUE[0].err ? ' — ' + QUEUE[0].err : '');
+  } else { n.className = navigator.onLine ? 'net ok' : 'net off'; n.textContent = navigator.onLine ? '🟢 Tout est envoyé' : '⚫ Pas de réseau — les ventes restent sur le téléphone'; }
+}
+window.addEventListener('online', () => { flush(); refreshData(); });
+window.addEventListener('offline', paintNet);
+setInterval(flush, 20000);
+
+// ── screens ──
+let VIEW = 'sale', PIN = '', PICK = '';
+function render(){
+  $('#hstore').textContent = CFG ? (CFG.st || CFG.loc || '') : 'à installer';
+  const who = $('#who');
+  who.hidden = !USER; who.textContent = '👤 ' + USER;
+  paintNet();
+  const m = $('#main');
+  if(!CFG){
+    m.innerHTML = `<div class="empty"><p style="font-size:44px;margin:0">📱</p><p><b>Installation</b></p><p>Sur l’ordinateur de la caisse : <b>Admin → 📱 Caisse de secours</b>, puis scannez le QR code avec l’appareil photo de ce téléphone.</p></div>`;
+    return;
+  }
+  if(!USER){ m.innerHTML = loginHTML(); bindLogin(); return; }
+  if(VIEW === 'day'){ m.innerHTML = dayHTML(); bindDay(); return; }
+  m.innerHTML = saleHTML(); bindSale();
+}
+function loginHTML(){
+  if(!EMPS.length) return `<div class="empty">La liste des employés n’est pas encore sur ce téléphone.<br>Connectez-vous à internet une fois, puis rouvrez l’application.<br><br><button class="big ghost" onclick="refreshData()">🔄 Réessayer</button></div>`;
+  if(!PICK) return `<h2 style="margin:4px 0 12px">Qui êtes-vous ?</h2><div class="names">${EMPS.map(e => `<button data-name="${esc(e.name)}">${esc(e.name)}</button>`).join('')}</div>`;
+  return `<h2 style="margin:4px 0 4px">${esc(PICK)}</h2><p style="color:var(--mut);margin:0 0 6px">Votre code (le même qu’à la caisse)</p>
+    <div class="dots">${'●'.repeat(PIN.length) || '&nbsp;'}</div><div class="err" id="perr"></div>
+    <div class="pad">${[1,2,3,4,5,6,7,8,9,'←',0,'OK'].map(k => `<button data-k="${k}">${k}</button>`).join('')}</div>
+    <button class="big ghost" style="margin-top:12px" data-back="1">← Changer de nom</button>`;
+}
+function bindLogin(){
+  document.querySelectorAll('[data-name]').forEach(b => b.onclick = () => { PICK = b.dataset.name; PIN = ''; render(); });
+  const bk = document.querySelector('[data-back]'); if(bk) bk.onclick = () => { PICK = ''; PIN = ''; render(); };
+  document.querySelectorAll('[data-k]').forEach(b => b.onclick = () => {
+    const k = b.dataset.k;
+    if(k === '←'){ PIN = PIN.slice(0, -1); render(); return; }
+    if(k === 'OK'){
+      const e = EMPS.find(x => x.name === PICK);
+      if(e && String(e.pin) === PIN){ USER = PICK; ls('sec_user', USER); PICK = ''; PIN = ''; VIEW = 'sale'; render(); }
+      else { PIN = ''; render(); $('#perr').textContent = 'Code incorrect.'; }
+      return;
+    }
+    if(PIN.length < 10){ PIN += k; render(); }
+  });
+}
+function cartTotal(){ return CART.reduce((a, i) => a + i.price * i.qty, 0); }
+function saleHTML(){
+  const n = CART.reduce((a, i) => a + i.qty, 0);
+  let h = `<div class="tabs"><button class="on">🛒 Vente</button><button data-view="day">📋 Aujourd’hui</button></div>
+    <button class="big scanbtn" id="scan">📷 Scanner un article</button>
+    <div class="row2"><input id="code" inputmode="numeric" autocomplete="off" placeholder="ou tapez le code-barres"><button id="add">Ajouter</button></div>`;
+  h += '<div class="cart">' + (CART.length ? CART.map((it, i) => `<div class="it"><div class="nm"><b>${esc(it.name)}</b><small class="${it.typed ? 'typed' : ''}">${fmt(it.price)}${it.typed ? ' · prix tapé' : ''}</small></div>
+      <div class="q"><button data-dec="${i}">−</button><span>${it.qty}</span><button data-inc="${i}">+</button></div></div>`).join('') : '<div class="empty">Scannez le premier article du client.</div>') + '</div>';
+  if(CART.length){
+    h += `<div class="total"><span>${n} article(s)</span><b>${fmt(cartTotal())}</b></div>
+      <button class="big done" id="finish">✅ Vente terminée</button>
+      <button class="big ghost" id="clear">Annuler cette vente</button>`;
+  }
+  h += `<div class="hint">Prix ${PRICES_AT ? 'à jour du ' + esc(new Date(PRICES_AT).toLocaleString('fr-FR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })) : 'pas encore chargés'} · ${Object.keys(PRICES).length} produits</div>`;
+  return h;
+}
+function bindSale(){
+  $('#scan').onclick = openCam;
+  const code = $('#code');
+  const go = () => { const v = code.value.trim(); code.value = ''; if(v) addCode(v); };
+  $('#add').onclick = go; code.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); go(); } };
+  document.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { CART[+b.dataset.inc].qty++; saveCart(); render(); });
+  document.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { const i = +b.dataset.dec; CART[i].qty--; if(CART[i].qty <= 0) CART.splice(i, 1); saveCart(); render(); });
+  const f = $('#finish'); if(f) f.onclick = askPay;
+  const c = $('#clear'); if(c) c.onclick = () => { if(confirm('Annuler cette vente ? Les articles scannés sont effacés.')){ CART = []; saveCart(); render(); } };
+  document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { VIEW = b.dataset.view; render(); });
+}
+function beep(ok){ try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = ok ? 1200 : 240; o.connect(g); g.connect(a.destination); g.gain.value = .15; o.start(); o.stop(a.currentTime + (ok ? .08 : .25)); } catch(e){} if(navigator.vibrate) navigator.vibrate(ok ? 30 : [80, 60, 80]); }
+function addCode(raw){
+  const code = String(raw).trim();
+  if(!/^\d{4,20}$/.test(code)){ beep(false); alert('Code illisible : chiffres seulement.'); return; }
+  const k = bkey(code), ex = CART.findIndex(i => bkey(i.bc) === k);
+  if(ex >= 0){ const it = CART.splice(ex, 1)[0]; it.qty++; CART.unshift(it); saveCart(); beep(true); render(); return; }
+  const p = PRICES[k];
+  if(p && p[1] > 0){ CART.unshift({ bc: p[2] || code, name: p[0] || code, price: p[1], qty: 1, typed: false }); saveCart(); beep(true); render(); return; }
+  beep(false); askUnknown(code, p ? p[0] : '');
+}
+function sheet(html){ const s = document.createElement('div'); s.className = 'sheet'; s.innerHTML = '<div>' + html + '</div>'; document.body.appendChild(s); s.onclick = e => { if(e.target === s) s.remove(); }; return s; }
+function askUnknown(code, name){
+  const s = sheet(`<h2>Produit sans prix</h2><p>Code ${esc(code)} — ce téléphone ne connaît pas son prix. Écrivez-le (l’admin vérifiera).</p>
+    <label>Nom du produit</label><input id="un" value="${esc(name)}" placeholder="ex. Nivea crème 400 ml">
+    <label>Prix (F)</label><input id="up" inputmode="numeric" placeholder="ex. 5000">
+    <div class="err" id="uerr"></div><button class="big done" id="uok" style="margin-top:12px">Ajouter</button><button class="big ghost" id="ux">Annuler</button>`);
+  s.querySelector('#ux').onclick = () => s.remove();
+  s.querySelector('#uok').onclick = () => {
+    const nm = s.querySelector('#un').value.trim(), pr = parseInt(s.querySelector('#up').value, 10);
+    if(!nm){ s.querySelector('#uerr').textContent = 'Écrivez le nom.'; return; }
+    if(!(pr > 0)){ s.querySelector('#uerr').textContent = 'Écrivez le prix.'; return; }
+    CART.unshift({ bc: code, name: nm, price: pr, qty: 1, typed: true }); saveCart(); s.remove(); render();
+  };
+  setTimeout(() => { const i = s.querySelector(name ? '#up' : '#un'); if(i) i.focus(); }, 100);
+}
+function askPay(){
+  const s = sheet(`<h2>Comment le client paie ?</h2><p>Total : <b style="color:var(--ink);font-size:22px">${fmt(cartTotal())}</b></p>
+    <div class="pays">${Object.keys(PAY).map(k => `<button data-pay="${k}">${PAY[k]}</button>`).join('')}</div><button class="big ghost" id="px">Retour</button>`);
+  s.querySelector('#px').onclick = () => s.remove();
+  s.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => { s.remove(); finishSale(b.dataset.pay); });
+}
+function finishSale(method){
+  if(!CART.length) return;
+  const now = new Date();
+  const code = String(CFG.loc || 'S').replace(/\D/g, '') || 'X';
+  const id = 'SEC-' + code + '-' + String(now.getFullYear()).slice(2) + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + '-' + Math.random().toString(36).slice(2, 5).toUpperCase();
+  const sale = { txnId: id, date: frDate(now), time: frTime(now), employee: USER, store: CFG.st || '', payMethod: method,
+    items: CART.slice().reverse().map(i => ({ barcode: i.bc, name: i.name, qty: i.qty, unitPrice: i.price, typed: !!i.typed })), total: cartTotal(), ts: now.toISOString() };
+  QUEUE.push(sale); ls('sec_queue', JSON.stringify(QUEUE));
+  CART = []; saveCart();
+  const s = sheet(`<div class="ok-big"><div class="c">✅</div><b>${fmt(sale.total)}</b><p>${esc(PAY[method])} · ${esc(sale.time.slice(0, 5))}<br>Vente enregistrée sur le téléphone.</p></div><button class="big scanbtn" id="nx">🛒 Client suivant</button>`);
+  s.querySelector('#nx').onclick = () => { s.remove(); render(); };
+  render(); flush();
+}
+function dayHTML(){
+  const today = frDate(new Date());
+  const all = QUEUE.map(x => Object.assign({ wait: true }, x)).concat(SENT).filter(x => x.date === today && (!CFG.st || x.store === CFG.st));
+  const by = {}; all.forEach(x => by[x.payMethod] = (by[x.payMethod] || 0) + x.total);
+  let h = `<div class="tabs"><button data-view="sale">🛒 Vente</button><button class="on">📋 Aujourd’hui</button></div><div class="day">`;
+  h += `<div class="sum">${Object.keys(PAY).map(k => `<div><span>${PAY[k]}</span><b>${fmt(by[k] || 0)}</b></div>`).join('')}</div>`;
+  h += `<div class="total"><span>${all.length} vente(s) aujourd’hui</span><b>${fmt(all.reduce((a, x) => a + x.total, 0))}</b></div>`;
+  h += all.length ? all.sort((a, b) => String(b.time).localeCompare(String(a.time))).map(x => `<div class="s"><div class="top"><span>${esc(x.time.slice(0, 5))} · ${esc(x.employee)}</span><span>${fmt(x.total)}</span></div>
+    <div style="color:var(--mut)">${esc(PAY[x.payMethod] || x.payMethod)} · ${x.wait ? '<b style="color:var(--warn)">⏳ pas encore envoyée</b>' : '✔ envoyée'}</div>
+    <div style="font-size:13px">${x.items.map(i => esc(i.name) + (i.qty > 1 ? ' ×' + i.qty : '') + (i.typed ? ' <b style="color:var(--warn)">(prix tapé)</b>' : '')).join(', ')}</div></div>`).join('') : '<div class="empty">Aucune vente de secours aujourd’hui.</div>';
+  h += `</div><button class="big ghost" id="logout" style="margin-top:12px">👤 Changer d’employé</button>`;
+  return h;
+}
+function bindDay(){
+  document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { VIEW = b.dataset.view; render(); });
+  $('#logout').onclick = () => { USER = ''; ls('sec_user', null); VIEW = 'sale'; render(); };
+}
+$('#who').onclick = () => { VIEW = 'day'; render(); };
+
+// ── camera (BarcodeDetector, else ZXing) ──
+let camStream = null, camTimer = null, zx = null;
+async function openCam(){
+  const box = document.createElement('div'); box.className = 'cam'; box.id = 'cam';
+  box.innerHTML = '<video playsinline muted></video><div class="frame"></div><div class="bar"><span id="camtxt">Visez le code-barres</span><button id="camx">Fermer</button></div>';
+  document.body.appendChild(box);
+  $('#camx').onclick = closeCam;
+  const video = box.querySelector('video');
+  let done = false;
+  const hit = code => { if(done) return; done = true; closeCam(); addCode(code); };
+  try {
+    if('BarcodeDetector' in window){
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = camStream; await video.play();
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+      camTimer = setInterval(async () => { try { const r = await det.detect(video); if(r[0]) hit(r[0].rawValue); } catch(e){} }, 220);
+    } else {
+      if(!window.ZXing) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+      zx = new ZXing.BrowserMultiFormatReader();
+      await zx.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, r => { if(r) hit(r.getText()); });
+    }
+  } catch(e){ const t = $('#camtxt'); if(t) t.textContent = 'Caméra indisponible : tapez le code à la main.'; }
+}
+function closeCam(){
+  clearInterval(camTimer); camTimer = null;
+  try { if(zx) zx.reset(); } catch(e){} zx = null;
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const b = $('#cam'); if(b) b.remove();
+}
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+refreshData().then(flush);
+</script>
+</body>
+</html>
