@@ -1581,7 +1581,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v5-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v5-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1998,6 +1998,23 @@ input,select{font-family:inherit}
         <div id="cc-warn" style="font-size:13px;color:var(--orange);margin:8px 0 0;min-height:4px"></div>
         <button id="cc-go" class="btn-sm" onclick="ccCreate()" style="margin-top:8px;width:100%;padding:11px;font-size:15px;font-weight:700;background:var(--ink);color:#fff;border:0;border-radius:8px">Créer le code</button>
         <div id="cc-done" style="margin-top:10px"></div>
+      </div>
+
+      <!-- v5-nov-b: Prix par lot (3 Dole = 14 000 F) -->
+      <div class="admin-card" id="lot-card">
+        <div class="admin-card-title">🏷 Prix par lot</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">
+          Ex. 3 jus Dole = 14 000 F : à la caisse, la remise se fait toute seule dès que le 3e est dans le sac (6 = 2 lots, 4 = 1 lot + 1 au prix normal).
+          Aussi modifiable dans l'onglet « Prix par lot » du Sheet de l'inventaire.
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:2;min-width:150px"><div class="dlv-lbl">Code-barres</div><input class="dlv-field" id="lot-bc" inputmode="numeric" placeholder="Scannez le produit" oninput="lotFillName()"/></div>
+          <div style="flex:1;min-width:80px"><div class="dlv-lbl">Quantité</div><input class="dlv-field" id="lot-n" type="number" min="2" value="3"/></div>
+          <div style="flex:1;min-width:110px"><div class="dlv-lbl">Prix du lot (F)</div><input class="dlv-field" id="lot-price" type="number" min="1" placeholder="14000"/></div>
+          <button class="btn-sm btn-blue" onclick="lotSave()">＋ Enregistrer</button>
+        </div>
+        <div id="lot-name" class="dlv-dim" style="margin:4px 0 8px;min-height:15px"></div>
+        <div id="lot-list"></div>
       </div>
 
       <!-- Produits sans code-barres (sold under the shared 00000 placeholder) -->
@@ -2574,7 +2591,7 @@ function showScreen(s) {
     renderDriverAdmin();
     renderCashCheck(false);
     renderTop25();
-    renderExWatch('ex-admin-body'); renderLosses(); loadLosses(true); renderPriceAdmin(); renderPtAdmin(); _renderPricePinStatus(); loadPriceList(true); loadPriceTasks(true); loadActivityLog(true);
+    renderExWatch('ex-admin-body'); renderLosses(); loadLosses(true); renderPriceAdmin(); renderPtAdmin(); try { renderLotAdmin(); } catch(e){} _renderPricePinStatus(); loadPriceList(true); loadPriceTasks(true); loadActivityLog(true);
     renderTransferAdmin();
     refreshTransfers();
     renderCustomerRequests();
@@ -2918,7 +2935,7 @@ function renderCurrentCart() {
       : `<b class="bag-price">${formatCFA(it.lineTotal ?? base)}</b>`;
     return `<div class="bag-row${k === 0 ? ' newest' : ''}">
       <div class="bag-ph">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<i>${ini(it.name)}</i>'">` : `<i>${ini(it.name)}</i>`}</div>
-      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}
+      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}${it.discount && it.discount.type === 'lot' ? `<div class="bag-unit" style="color:#7e22ce;font-weight:700">🏷 ${it.discount.label || 'Prix par lot'}</div>` : ''}
         <span class="bag-qty">
           <button type="button" onclick="changeCartQty(${idx},-1);_bagFocus()" title="${fr ? 'Moins' : 'Less'}">−</button>
           <input type="number" min="1" max="999" inputmode="numeric" value="${q}" onfocus="this.select()" onchange="setCartQty(${idx},this.value)" onkeydown="if(event.key==='Enter'){this.blur();_bagFocus();}"/>
@@ -6794,7 +6811,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Caisse de secours/, 'caisse', 1.5], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Prix par lot/, 'prix', 1.13], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
@@ -8820,6 +8837,7 @@ setTimeout(() => {
 //    whenever the admin changes a price; staff tick them off.
 // ══════════════════════════════════════════
 let _plAll = null, _plMap = {}, _plTs = 0;
+let _lots = (function(){ try { return JSON.parse(localStorage.getItem('bc_lots') || '[]'); } catch(e){ return []; } })();   // Prix par lot (5 Nov 2026)
 const PL_STORES = [['Store 1', 's1', 'Balkuy'], ['Store 2', 's2', 'Ouaga 2000']];
 function _plCol(loc){ return loc === 'Store 1' ? 's1' : (loc === 'Store 2' ? 's2' : ''); }
 function _plIndex(){ _plMap = {}; (_plAll || []).forEach(p => { _plMap[_bcKeyClient(p.barcode)] = p; }); }
@@ -8828,6 +8846,7 @@ async function loadPriceList(silent){
   try {
     const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPriceList' + (writeKey ? '&key=' + encodeURIComponent(writeKey) : ''), { cache: 'no-store' });
     const d = await r.json();
+    if(d && Array.isArray(d.lots)){ _lots = d.lots; try { localStorage.setItem('bc_lots', JSON.stringify(_lots)); } catch(e){} try { renderLotAdmin(); } catch(e){} }
     if(d && Array.isArray(d.products)){ _plAll = d.products; _plTs = Date.now(); _plIndex(); renderPriceAdmin(); return true; }
     if(!silent) showToast('❌ Liste des prix : réponse inattendue (redéployez Code_updated.gs).', 5000);
   } catch(e){ if(!silent) showToast('❌ Liste des prix : connexion impossible.', 4000); }
@@ -11251,6 +11270,81 @@ function endShiftSkip(){
   openShiftSummary();
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  🏷 PRIX PAR LOT (v5-nov-b, 5 Nov 2026) — e.g. 3 Dole = 14 000 F.
+//  Rules come with the price list (Code GS getPriceList → lots, tab
+//  « Prix par lot »). Every time the bag changes, the difference is taken
+//  off by itself as a « lot » discount on that product's lines (6 = 2 lots,
+//  4 = 1 lot + 1 normal). A line with a manual Remise is left alone. The
+//  discount reaches the Sheet like any Remise (logSale discLines).
+// ══════════════════════════════════════════════════════════════════
+function _lotRule(bc){ const k = _bcKeyClient(bc); return k ? _lots.find(l => _bcKeyClient(l.barcode) === k) : null; }
+function applyLots(txn){
+  if(!txn || !Array.isArray(txn.items)) return;
+  txn.items.forEach(it => { if(it.discount && it.discount.type === 'lot') it.discount = null; if(!it.discount) it.lineTotal = (it.price || 0) * (it.qty || 1); });
+  if(!_lots.length) return;
+  const byK = {};
+  txn.items.forEach((it, i) => { if(it.discount) return; const k = _bcKeyClient(it.barcode); if(k && _lotRule(it.barcode)) (byK[k] = byK[k] || []).push(i); });
+  Object.keys(byK).forEach(k => {
+    const idxs = byK[k], rule = _lotRule(txn.items[idxs[0]].barcode);
+    const qty = idxs.reduce((a, i) => a + (txn.items[i].qty || 1), 0);
+    const sets = Math.floor(qty / rule.n); if(!sets) return;
+    const unit = txn.items[idxs[0]].price || 0;
+    let off = sets * (rule.n * unit - rule.price); if(!(off > 0)) return;
+    const label = 'Lot ' + rule.n + ' = ' + formatCFA(rule.price) + (sets > 1 ? ' (×' + sets + ')' : '');
+    for(let j = idxs.length - 1; j >= 0 && off > 0; j--){
+      const it = txn.items[idxs[j]], base = (it.price || 0) * (it.qty || 1), a = Math.min(base, off);
+      off -= a;
+      it.discount = { type: 'lot', value: a, amountOff: a, appliedBy: 'Prix par lot', label };
+      it.lineTotal = base - a;
+    }
+  });
+}
+const _baseSaleUILot = updateSaleUI;
+updateSaleUI = function(){ try { applyLots(currentTxn); } catch(e){} return _baseSaleUILot.apply(this, arguments); };
+setTimeout(() => { try { if(productSyncUrl) loadPriceList(true); } catch(e){} }, 5000);
+function lotFillName(){
+  const bc = document.getElementById('lot-bc').value.trim(), el = document.getElementById('lot-name');
+  if(!el) return;
+  const k = _bcKeyClient(bc), p = (_plAll || []).find(x => _bcKeyClient(x.barcode) === k);
+  const nm = p ? p.name : ((BARCODE_DB[bc] || {}).name || '');
+  const price = psPriceFor(bc);
+  el.textContent = bc ? (nm ? nm + (price ? ' · ' + formatCFA(price) + ' l\'unité' : '') : 'Produit inconnu de cette caisse') : '';
+}
+function renderLotAdmin(){
+  const el = document.getElementById('lot-list'); if(!el) return;
+  if(!_lots.length){ el.innerHTML = '<div class="dlv-dim">Aucun prix par lot.</div>'; return; }
+  el.innerHTML = _lots.map(l => {
+    const k = _bcKeyClient(l.barcode), p = (_plAll || []).find(x => _bcKeyClient(x.barcode) === k);
+    const unit = psPriceFor(l.barcode);
+    const save = unit ? l.n * unit - l.price : null;
+    return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--border2);padding:6px 0;font-size:13px"><span><b>' + _dlvEsc(l.name || (p && p.name) || l.barcode) + '</b><br><span class="dlv-dim">' + _dlvEsc(l.barcode) + ' · ' + l.n + ' pour ' + formatCFA(l.price) + (save > 0 ? ' (−' + formatCFA(save) + ')' : '') + '</span></span>' +
+      '<button class="btn-sm btn-outline" style="color:#b03a2e;border-color:#e8b4ac" onclick="lotRemove(\'' + _dlvEsc(l.barcode) + '\')">Retirer</button></div>';
+  }).join('');
+}
+async function lotSave(){
+  const bc = document.getElementById('lot-bc').value.trim(), n = parseInt(document.getElementById('lot-n').value, 10), price = parseInt(document.getElementById('lot-price').value, 10);
+  if(!bc){ showToast('Scannez le produit.'); return; }
+  if(!(n >= 2) || !(price > 0)){ showToast('Quantité (2 ou plus) et prix du lot requis.'); return; }
+  if(!productSyncUrl || !writeKey){ showToast('Synchro des produits non configurée.'); return; }
+  const k = _bcKeyClient(bc), p = (_plAll || []).find(x => _bcKeyClient(x.barcode) === k);
+  const name = p ? p.name : ((BARCODE_DB[bc] || {}).name || '');
+  try {
+    const d = await _postProductSync({ key: writeKey, action: 'setLotPrice', barcode: p ? String(p.barcode) : bc, name, n, price });
+    if(!d || !d.success) throw new Error((d && d.error) || 'Collez « LATEST - Code GS » et redéployez.');
+    _lots = d.lots || []; localStorage.setItem('bc_lots', JSON.stringify(_lots)); renderLotAdmin();
+    document.getElementById('lot-bc').value = ''; document.getElementById('lot-price').value = ''; lotFillName();
+    showToast('🏷 ' + (name || bc) + ' : ' + n + ' pour ' + formatCFA(price));
+  } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : e.message), 6000); }
+}
+async function lotRemove(bc){
+  if(!confirm('Retirer ce prix par lot ?')) return;
+  try {
+    const d = await _postProductSync({ key: writeKey, action: 'setLotPrice', barcode: bc, remove: true });
+    if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+    _lots = d.lots || []; localStorage.setItem('bc_lots', JSON.stringify(_lots)); renderLotAdmin();
+  } catch(e){ showToast('❌ ' + e.message); }
+}
 // ── 2. List ──
 let _dlvTab = 'todo';
 const _DLV_TABS = [['todo','À livrer'],['done','Terminées']];

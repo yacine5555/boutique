@@ -491,7 +491,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt, empty: Array.isArray(d.empty) ? d.empty : ((DATA && DATA.empty) || []) };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt, empty: Array.isArray(d.empty) ? d.empty : ((DATA && DATA.empty) || []), packs: (d.packs && typeof d.packs === 'object') ? d.packs : ((DATA && DATA.packs) || {}) };
     applyZoneResets(DATA);
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
@@ -723,6 +723,7 @@ function homeHTML(){
     + (meIsAdmin() ? tool('bilan', '📊', 'Bilan', 'du jour') : '')
     + tool('reorg', '🔄', 'Réorg.', 'repérage')
     + tool('recv', '📦', 'Réception', R ? 'carton ' + esc(R.unit) : 'arrivage')
+    + tool('pack', '🎁', 'Ouvrir un pack', 'vendre à l’unité')
     + tool('offline', '📥', 'Hors-ligne', esc(offlineLabel()))
     + '</div>';
   if(!DATA && !loading) h += `<p class="empty">Aucune donnée sur ce téléphone pour l'instant.</p>`;
@@ -834,6 +835,7 @@ function bindMain(){
   const so = document.querySelector('[data-act="sorties"]'); if(so) so.onclick = () => { go({ screen:'sorties' }); loadSorties(SOV.loc, true); try { loadData(); } catch(e){} };
   document.querySelectorAll('[data-zper]').forEach(b => b.onclick = () => { VIEW.zper = b.dataset.zper; history.replaceState(VIEW, ''); render(); });
   document.querySelectorAll('[data-zkind]').forEach(b => b.onclick = () => { VIEW.zkind = b.dataset.zkind; history.replaceState(VIEW, ''); render(); });
+  const pk = document.querySelector('[data-act="pack"]'); if(pk) pk.onclick = () => openCamera(code => packScanned(code));
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const ct = document.querySelector('[data-act="ctl"]'); if(ct) ct.onclick = () => { go({ screen:'ctl' }); loadCtl(); };
   const bl = document.querySelector('[data-act="bilan"]'); if(bl) bl.onclick = () => { go({ screen:'bilan' }); loadBilan(ctlToday()); };
@@ -3105,11 +3107,13 @@ function drawProduct(){
     <label class="f" for="snote">Note (facultatif)</label>
     <textarea id="snote" placeholder="Ex. : boîte écrasée, cliente fidèle…">${esc(S.note)}</textarea>
     <button class="go" id="sgo" ${S.reason && (S.mode === 'set' ? S.qty >= 0 : S.qty > 0) && !(S.mode === 'set' && S.qty === S.cur) ? '' : 'disabled'}>Enregistrer</button>
+    <button class="ghost" id="spack">📦 Ouvrir ce pack${packOf(S.bc) ? '' : ' (vendre à l’unité)'}</button>
     <button class="ghost" id="sbox">🏷 Étiquette de carton</button>
     <button class="ghost" id="sx">Annuler</button>`);
   const sh = $('#sheet');
   sh.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; S.qty = S.mode === 'set' ? Math.max(0, S.cur) : 1; drawProduct(); });
   $('#sbox').onclick = () => { S.box = { per: Math.max(1, S.cur || 1), n: 1 }; drawBox(); };
+  $('#spack').onclick = () => openPack(S.loc, S.zone, S.bc, S.name);
   sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.qty = Math.max(S.mode === 'set' ? 0 : 1, S.qty + Number(b.dataset.step)); drawProduct(); });
   sh.querySelectorAll('[data-reason]').forEach(b => b.onclick = () => { S.reason = b.dataset.reason; drawProduct(); });
   $('#sq').onchange = e => { const v = parseInt(e.target.value, 10); S.qty = isNaN(v) ? S.qty : Math.max(S.mode === 'set' ? 0 : 1, v); drawProduct(); };
@@ -3216,6 +3220,91 @@ function drawBox(){
     const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const labels = Array.from({ length: b.n }, (_, i) => ({ id: id + '-' + i, barcode: S.bc, name: S.name, qty: b.per, store: locName(S.loc), kind:'box' }));
     queueWork([], labels, b.n + ' étiquette' + (b.n > 1 ? 's' : '') + ' de carton envoyée' + (b.n > 1 ? 's' : '') + ' à l’imprimante');
+  };
+}
+// ══════════════════════════════════════════════════════════════════
+//  📦 OUVRIR UN PACK (5 Nov 2026). A pack (e.g. the Vaseline set of 3
+//  bottles) has its own barcode; when it is opened to sell the bottles one
+//  by one: pack −N and each bottle +qty×N in the chosen zone, reason
+//  « Pack ouvert » (not a loss, not a sale). What is inside a pack is set
+//  once by an admin (tab « Packs » of the inventory Sheet, setPack).
+// ══════════════════════════════════════════════════════════════════
+function packOf(bc){ const k = bkey(bc), P = (DATA && DATA.packs) || {}; return Object.values(P).find(p => bkey(p.barcode) === k) || null; }
+function packScanned(code){
+  const bc = aliasOf(code), rows = (DATA ? DATA.zones : []).filter(r => bkey(r[2]) === bkey(bc) && r[4] > 0).sort((a, b) => b[4] - a[4]);
+  const r = rows[0];
+  if(r) return openPack(r[0], r[1], bc, r[3]);
+  openPack(VIEW.loc && VIEW.loc !== 'home' ? VIEW.loc : 'Store 1', UNPLACED, bc, productName(bc));
+}
+function openPack(loc, zone, bc, name){
+  const here = rowsAt(loc, zone).find(r => bkey(r[2]) === bkey(bc));
+  const def = packOf(bc);
+  S = { pack: true, loc, zone, bc, name: name || (def && def.name) || productName(bc), cur: here ? here[4] : 0, n: 1, toZone: zone,
+        items: def ? def.items.map(i => ({ barcode: i.barcode, name: i.name || productName(i.barcode), qty: i.qty })) : [], edit: !def };
+  if(S.edit && !meIsAdmin()){ closeSheet(); return toast('Ce pack n’est pas encore décrit : demandez à un administrateur.'); }
+  S.edit ? drawPackDef() : drawPack();
+}
+function drawPack(err){
+  const zs = loc => (loc === 'Warehouse' ? ['Entrepôt'] : [UNPLACED].concat(zoneList(loc).map(z => z.c)));
+  const opts = [...new Set([S.zone].concat(zs(S.loc)))];
+  openSheet(`<h3>📦 Ouvrir · ${esc(S.name || 'Pack')}</h3>
+    <div class="sub num">${esc(S.bc)} · ${esc(locName(S.loc))} · ${esc(S.zone)} : ${fmt(S.cur)} pack${S.cur > 1 ? 's' : ''}</div>
+    <label class="f">Combien de packs ouverts ?</label>
+    <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="pn" class="num" inputmode="numeric" value="${S.n}" aria-label="Packs"><button data-step="1" aria-label="Plus">+</button></div>
+    ${S.n > S.cur ? `<div class="err">Seulement ${fmt(S.cur)} pack(s) enregistré(s) ici : le stock du pack passera en négatif.</div>` : ''}
+    <label class="f">Ce qui sort du pack</label>
+    <div class="where">${S.items.map(i => `<div><span>${esc(i.name || i.barcode)}</span><b class="num">+${fmt(i.qty * S.n)}</b></div>`).join('')}<div class="here"><span>${esc(S.name || 'Pack')}</span><b class="num">−${fmt(S.n)}</b></div></div>
+    <label class="f" for="pz">Où vont les articles ?</label>
+    <select class="t" id="pz">${opts.map(z => `<option value="${esc(z)}"${z === S.toZone ? ' selected' : ''}>${esc(z === UNPLACED ? 'Non placé (à ranger)' : z)}</option>`).join('')}</select>
+    ${err ? `<div class="err">${esc(err)}</div>` : ''}
+    <button class="go" id="pgo" ${S.n > 0 ? '' : 'disabled'}>Ouvrir ${fmt(S.n)} pack${S.n > 1 ? 's' : ''}</button>
+    ${meIsAdmin() ? '<button class="ghost" id="pdef">✏ Modifier le contenu du pack</button>' : ''}
+    <button class="ghost" id="px">Annuler</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { S.n = Math.max(1, S.n + Number(b.dataset.step)); drawPack(); });
+  $('#pn').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) S.n = v; drawPack(); };
+  $('#pz').onchange = e => { S.toZone = e.target.value; };
+  const pd = $('#pdef'); if(pd) pd.onclick = () => { S.edit = true; drawPackDef(); };
+  $('#px').onclick = closeSheet;
+  $('#pgo').onclick = () => {
+    const note = 'pack ' + S.bc + ' ×' + S.n;
+    const ops = [{ barcode: S.bc, name: S.name, mode:'delta', reason:'Pack ouvert', location: S.loc, zone: S.zone, qty: -S.n, note: S.n + ' pack(s) ouvert(s)' }]
+      .concat(S.items.map(i => ({ barcode: i.barcode, name: i.name, mode:'delta', reason:'Pack ouvert', location: S.loc, zone: S.toZone, qty: i.qty * S.n, note })));
+    queueWork(ops, [], S.n + ' pack' + (S.n > 1 ? 's' : '') + ' ouvert' + (S.n > 1 ? 's' : '') + ' · ' + S.items.reduce((a, i) => a + i.qty * S.n, 0) + ' article(s) ajouté(s)');
+  };
+}
+function drawPackDef(err){
+  openSheet(`<h3>✏ Contenu du pack</h3>
+    <div class="sub">${esc(S.name || 'Pack')} · <span class="num">${esc(S.bc)}</span></div>
+    <p class="sub" style="margin:8px 0">Scannez chaque article qui est dans <b>un</b> pack, avec sa quantité (ex. 2 Vaseline cocoa + 1 Vaseline aloe). À faire une seule fois.</p>
+    <div class="where">${S.items.length ? S.items.map((i, k) => `<div><span>${esc(i.name || i.barcode)}<br><small class="num">${esc(i.barcode)}</small></span><span style="display:flex;gap:6px;align-items:center"><button class="cbtn alt" data-iq="${k}" data-d="-1">−</button><b class="num">${fmt(i.qty)}</b><button class="cbtn alt" data-iq="${k}" data-d="1">+</button></span></div>`).join('') : '<div><span>Aucun article pour l’instant</span></div>'}</div>
+    <button class="cbtn" id="pscan" style="margin:8px 0">📷 Scanner un article du pack</button>
+    <div style="display:flex;gap:6px"><input class="t num" id="pbc" inputmode="numeric" placeholder="ou tapez le code-barres" autocomplete="off"><button class="cbtn alt" id="padd">Ajouter</button></div>
+    ${err ? `<div class="err">${esc(err)}</div>` : ''}
+    <button class="go" id="psave" ${S.items.length ? '' : 'disabled'}>Enregistrer le contenu</button>
+    <button class="ghost" id="pback">Annuler</button>`);
+  const add = code => {
+    const bc = aliasOf(code);
+    if(!/^\d{4,14}$/.test(bc)) return drawPackDef('Code-barres invalide.');
+    if(bkey(bc) === bkey(S.bc)) return drawPackDef('C’est le code du pack lui-même : scannez un article à l’intérieur.');
+    const ex = S.items.find(i => bkey(i.barcode) === bkey(bc));
+    if(ex) ex.qty++; else S.items.push({ barcode: bc, name: productName(bc), qty: 1 });
+    drawPackDef();
+  };
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-iq]').forEach(b => b.onclick = () => { const it = S.items[+b.dataset.iq]; it.qty += Number(b.dataset.d); if(it.qty <= 0) S.items.splice(+b.dataset.iq, 1); drawPackDef(); });
+  $('#pscan').onclick = () => openCamera(add);
+  $('#padd').onclick = () => add($('#pbc').value.trim());
+  $('#pbc').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); add(e.target.value.trim()); } };
+  $('#pback').onclick = () => { const d = packOf(S.bc); if(d){ S.items = d.items.map(i => ({ ...i })); S.edit = false; drawPack(); } else closeSheet(); };
+  $('#psave').onclick = async () => {
+    const b = $('#psave'); b.disabled = true; b.textContent = 'Enregistrement…';
+    try {
+      const d = await post({ action:'setPack', barcode: S.bc, name: S.name, items: S.items, adminName: user.name, adminHash: user.hash });
+      if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+      DATA.packs = d.packs || {}; ls('s1981_cache', JSON.stringify(DATA));
+      S.edit = false; toast('Contenu du pack enregistré'); drawPack();
+    } catch(e){ drawPackDef(/Unknown|action|JSON|Unexpected/i.test(e.message) ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas enregistré : ' + e.message + ' (connexion ?)'); }
   };
 }
 function queueWork(ops, labels, msg){

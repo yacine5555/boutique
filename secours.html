@@ -109,6 +109,7 @@ let CFG = lsj('sec_cfg', null);
 let EMPS = lsj('sec_emps', []);          // [{name, pin}]
 let PRICES = lsj('sec_prices', {});      // bkey -> [name, price]
 let PRICES_AT = ls('sec_prices_at') || '';
+let LOTS = lsj('sec_lots', []);           // [{barcode, n, price}] — prix par lot (3 Dole = 14 000)
 let QUEUE = lsj('sec_queue', []);        // sales not sent yet
 let SENT = lsj('sec_sent', []);          // sales sent (last 300)
 let USER = ls('sec_user') || '';
@@ -128,6 +129,7 @@ async function refreshData(){
     try {
       const r = await fetch(CFG.p + (CFG.p.includes('?') ? '&' : '?') + 'action=getPriceList&key=' + encodeURIComponent(CFG.k), { cache: 'no-store' });
       const d = await r.json();
+      if(d && Array.isArray(d.lots)){ LOTS = d.lots; ls('sec_lots', JSON.stringify(LOTS)); }
       if(d && Array.isArray(d.products) && d.products.length){
         const col = CFG.loc === 'Store 2' ? 's2' : CFG.loc === 'Store 1' ? 's1' : '';
         const out = {};
@@ -209,13 +211,28 @@ function bindLogin(){
     if(PIN.length < 10){ PIN += k; render(); }
   });
 }
-function cartTotal(){ return CART.reduce((a, i) => a + i.price * i.qty, 0); }
+// Lot discount per cart line (lines of the same product are added up; the
+// discount sits on the last one). Typed prices are never discounted.
+function lotOffs(){
+  const offs = CART.map(() => 0), by = {};
+  CART.forEach((it, i) => { if(it.typed) return; const k = bkey(it.bc); if(k) (by[k] = by[k] || []).push(i); });
+  Object.keys(by).forEach(k => {
+    const r = LOTS.find(l => bkey(l.barcode) === k); if(!r || !(r.n >= 2)) return;
+    const idx = by[k], qty = idx.reduce((a, i) => a + CART[i].qty, 0), sets = Math.floor(qty / r.n);
+    let off = sets * (r.n * CART[idx[0]].price - r.price);
+    idx.forEach(i => { if(off <= 0) return; const a = Math.min(off, CART[i].price * CART[i].qty); offs[i] = a; off -= a; });
+  });
+  return offs;
+}
+function lotRule(bc){ const k = bkey(bc); return LOTS.find(l => bkey(l.barcode) === k); }
+function cartTotal(){ const o = lotOffs(); return CART.reduce((a, i, j) => a + i.price * i.qty - o[j], 0); }
 function saleHTML(){
   const n = CART.reduce((a, i) => a + i.qty, 0);
   let h = `<div class="tabs"><button class="on">🛒 Vente</button><button data-view="day">📋 Aujourd’hui</button></div>
     <button class="big scanbtn" id="scan">📷 Scanner un article</button>
     <div class="row2"><input id="code" inputmode="numeric" autocomplete="off" placeholder="ou tapez le code-barres"><button id="add">Ajouter</button></div>`;
-  h += '<div class="cart">' + (CART.length ? CART.map((it, i) => `<div class="it"><div class="nm"><b>${esc(it.name)}</b><small class="${it.typed ? 'typed' : ''}">${fmt(it.price)}${it.typed ? ' · prix tapé' : ''}</small></div>
+  const OFF = lotOffs();
+  h += '<div class="cart">' + (CART.length ? CART.map((it, i) => `<div class="it"><div class="nm"><b>${esc(it.name)}</b><small class="${it.typed ? 'typed' : ''}">${fmt(it.price)}${it.typed ? ' · prix tapé' : ''}</small>${OFF[i] ? `<small style="display:block;color:#7e22ce;font-weight:700">🏷 Lot ${lotRule(it.bc).n} = ${fmt(lotRule(it.bc).price)} · −${fmt(OFF[i])}</small>` : ''}</div>
       <div class="q"><button data-dec="${i}">−</button><span>${it.qty}</span><button data-inc="${i}">+</button></div></div>`).join('') : '<div class="empty">Scannez le premier article du client.</div>') + '</div>';
   if(CART.length){
     h += `<div class="total"><span>${n} article(s)</span><b>${fmt(cartTotal())}</b></div>
@@ -273,7 +290,7 @@ function finishSale(method){
   const code = String(CFG.loc || 'S').replace(/\D/g, '') || 'X';
   const id = 'SEC-' + code + '-' + String(now.getFullYear()).slice(2) + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + '-' + Math.random().toString(36).slice(2, 5).toUpperCase();
   const sale = { txnId: id, date: frDate(now), time: frTime(now), employee: USER, store: CFG.st || '', payMethod: method,
-    items: CART.slice().reverse().map(i => ({ barcode: i.bc, name: i.name, qty: i.qty, unitPrice: i.price, typed: !!i.typed })), total: cartTotal(), ts: now.toISOString() };
+    items: (() => { const o = lotOffs(); return CART.map((i, j) => ({ barcode: i.bc, name: i.name, qty: i.qty, unitPrice: i.price, off: o[j] || 0, typed: !!i.typed })).reverse(); })(), total: cartTotal(), ts: now.toISOString() };
   QUEUE.push(sale); ls('sec_queue', JSON.stringify(QUEUE));
   CART = []; saveCart();
   const s = sheet(`<div class="ok-big"><div class="c">✅</div><b>${fmt(sale.total)}</b><p>${esc(PAY[method])} · ${esc(sale.time.slice(0, 5))}<br>Vente enregistrée sur le téléphone.</p></div><button class="big scanbtn" id="nx">🛒 Client suivant</button>`);
