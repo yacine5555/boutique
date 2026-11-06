@@ -340,6 +340,9 @@ select.t{appearance:auto}
 .pzone .pwrap img{display:block;max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:12px;cursor:zoom-in}
 .pbox{position:absolute;padding:0;margin:0;border:2px dashed #ffb24d;background:rgba(255,160,40,.12);border-radius:6px;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.45);line-height:1}
 .pbox.ok{border:2px solid #3fd18a;background:rgba(40,190,110,.18)}
+.pbox.nwarn{border:2px solid #f59e0b;background:rgba(245,158,11,.32)}
+.pbox.nbad{border:2px solid #ef4444;background:rgba(239,68,68,.38)}
+.pbox.nwarn .pn{background:rgba(180,83,9,.92)}.pbox.nbad .pn{background:rgba(185,28,28,.92)}
 .pbox:focus-visible{outline:3px solid #fff}
 .pbox .pt{position:absolute;left:2px;top:2px;font:800 11px var(--body);color:#fff;background:rgba(0,0,0,.6);padding:1px 4px;border-radius:4px}
 .pbox .pn{position:absolute;right:2px;bottom:2px;font:800 12px var(--body);color:#fff;background:rgba(23,120,74,.9);padding:1px 5px;border-radius:4px}
@@ -348,6 +351,7 @@ select.t{appearance:auto}
 .plegend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:12px;color:var(--muted);margin-top:8px}
 .plegend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:2px dashed #ffb24d}
 .plegend i.ok{border:2px solid #3fd18a;background:rgba(40,190,110,.18)}
+.plegend i.nwarn{border:2px solid #f59e0b;background:#f59e0b}.plegend i.nbad{border:2px solid #ef4444;background:#ef4444}
 .pviewer{position:fixed;inset:0;z-index:50;background:#0d0609;color:#fff;display:flex;flex-direction:column}
 .pvbar{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px))}
 .pvbar b{font:800 20px var(--display)}
@@ -1773,12 +1777,67 @@ function spotState(loc, zone, code){
   const last = items.reduce((a, r) => r[6] > a ? r[6] : a, '');
   return { items, last, by: (items.find(r => r[6] === last) || [])[7] || '', units: items.reduce((a, r) => a + (Number(r[5]) || 0), 0), counted: items.length > 0 };
 }
+// ══════════════════════════════════════════════════════════════════
+//  📊 MAINTENANT (6 Nov 2026) — what is on each shelf now ≈ its last count
+//  minus the till's sales (and transfers out) since that count. A product on
+//  several shelves: sales are taken from the shelf that has the most
+//  left (among shelves counted before the sale); a return goes back to the
+//  biggest shelf. Sales come from getSorties (14 days), already used by
+//  Sorties / Réassort. Colours: ≤ 25 % left red, ≤ 50 % orange, else green.
+// ══════════════════════════════════════════════════════════════════
+let NOW_ON = ls('s1981_now') === '1', _nowC = {};
+function _spotT(v){ if(!v) return 0; const sv = String(v); const t = /^\d{4}-\d{2}-\d{2}$/.test(sv) ? new Date(sv + 'T00:00:00').getTime() : new Date(sv).getTime(); return isNaN(t) ? 0 : t; }
+function nowMap(loc){
+  const c = SOR[loc]; if(!c || !DATA) return null;
+  const key = c.at + '|' + (DATA.spots || []).length + '|' + (DATA.at || '');
+  if(_nowC[loc] && _nowC[loc].key === key) return _nowC[loc].map;
+  const byP = {}, map = {};
+  (DATA.spots || []).forEach(r => {
+    if(r[0] !== loc) return;
+    const q = Number(r[5]) || 0, e = { counted: q, left: q, sold: 0, t: _spotT(r[6]) };
+    map[r[1] + '|' + r[2] + '|' + bkey(r[3])] = e;
+    (byP[bkey(r[3])] = byP[bkey(r[3])] || []).push(e);
+  });
+  const ev = (c.sales || []).map(x => [x[0], Number(x[2]) || 0, x[3]])
+    .concat((c.moves || []).filter(m => m.fromLoc === loc && m.toLoc !== loc).map(m => [bkey(m.bc), Number(m.qty) || 0, sorMoveT(m)]))
+    .sort((a, b) => a[2] - b[2]);
+  ev.forEach(([bk, q, t]) => {
+    const L = (byP[bk] || []).filter(e => e.t && e.t <= t); if(!L.length || !q) return;
+    if(q < 0){ const e = L.reduce((a, b) => b.counted > a.counted ? b : a); e.left = Math.min(e.counted, e.left - q); e.sold += q; return; }
+    let r = q;
+    while(r > 0){ const e = L.reduce((a, b) => b.left > a.left ? b : a); if(e.left <= 0) break; const a = Math.min(r, e.left); e.left -= a; e.sold += a; r -= a; }
+  });
+  _nowC[loc] = { key, map };
+  return map;
+}
+function nowItem(loc, zone, code, bc){ const m = nowMap(loc); return m ? m[zone + '|' + code + '|' + bkey(bc)] : null; }
+function spotNow(loc, zone, code){
+  if(!nowMap(loc)) return null;
+  let counted = 0, left = 0;
+  spotsAt(loc, zone).filter(r => r[2] === code).forEach(r => { const e = nowItem(loc, zone, code, r[3]); counted += Number(r[5]) || 0; left += e ? e.left : (Number(r[5]) || 0); });
+  const ratio = counted ? left / counted : 1;
+  return { counted, left, cls: ratio <= 0.25 ? 'nbad' : ratio <= 0.5 ? 'nwarn' : 'ok' };
+}
+function nowAgo(loc){ const c = SOR[loc]; if(!c) return ''; const m = Math.round((Date.now() - c.at) / 60000); return m < 1 ? 'à l’instant' : m < 60 ? 'il y a ' + m + ' min' : 'il y a ' + Math.round(m / 60) + ' h'; }
+function spotItemsHTML(loc, zone, code, st){
+  const has = !!nowMap(loc);
+  if(!has && !SOR_BUSY[loc]) loadSorties(loc).then(() => { if(S && S.spotOpen === zone + '|' + code) openSpot(loc, zone, code); });
+  const rows = st.items.map(r => { const e = has ? nowItem(loc, zone, code, r[3]) : null; return { name: r[4] || r[3], c: Number(r[5]) || 0, sold: e ? e.sold : 0, left: e ? e.left : (Number(r[5]) || 0) }; })
+    .sort((a, b) => (a.left / (a.c || 1)) - (b.left / (b.c || 1)) || b.c - a.c);
+  return `<div class="where"><div class="here"><span><b>Produit</b></span><b class="num">${has ? 'compté → vendu → maintenant' : 'compté'}</b></div>` + rows.map(x => {
+    const low = has && x.c && x.left / x.c <= 0.25, mid = has && x.c && !low && x.left / x.c <= 0.5;
+    return `<div><span>${esc(x.name)}</span><b class="num" style="${low ? 'color:#b91c1c' : mid ? 'color:#b45309' : ''}">${has ? fmt(x.c) + ' → −' + fmt(x.sold) + ' → ≈' + fmt(x.left) : fmt(x.c)}</b></div>`;
+  }).join('') + '</div>' +
+  `<p class="sub" style="margin-top:8px">${has ? '≈ maintenant = dernier comptage moins les ventes de la caisse depuis (ventes chargées ' + esc(nowAgo(loc)) + '). Un produit sur plusieurs étagères : les ventes sont prises sur la plus remplie.' : (SOR_BUSY[loc] ? 'Chargement des ventes…' : 'Quantités du dernier comptage (ventes pas encore chargées : connexion ?).')}</p>`;
+}
 function boxesHTML(loc, zone, t, spots){
   if(!t) return '';
   return spots.filter(s => t.spots[s.code]).map(s => {
     const [x, y, w, h] = t.spots[s.code];
     const st = spotState(loc, zone, s.code);
     const hl = VIEW.hl && st.items.some(r => bkey(r[3]) === VIEW.hl);
+    const nw = NOW_ON && st.counted ? spotNow(loc, zone, s.code) : null;
+    if(nw) return `<button class="pbox ${nw.cls}${hl ? ' hl' : ''}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}, environ ${nw.left} articles maintenant sur ${nw.counted} comptés"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span><span class="pn">≈${fmt(nw.left)}</span></button>`;
     return `<button class="pbox ${st.counted ? 'ok' : emptyAt(loc, s.code) ? 'empty' : 'todo'}${hl ? ' hl' : ''}" data-spot="${esc(s.code)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" aria-label="${esc(s.label)}${st.counted ? ', ' + st.units + ' articles' : ', jamais comptée'}"><span class="pt">${esc(s.code.slice(zone.length + 1))}</span>${st.counted ? `<span class="pn">${fmt(st.units)}</span>` : ''}</button>`;
   }).join('');
 }
@@ -1787,11 +1846,14 @@ function photoHTML(loc, zone, z){
   if(!src) return '<div class="pzone nophoto">Pas de photo</div>';
   const t = traceFor(loc, zone);
   const spots = zoneSpots(z);
+  if(NOW_ON && !SOR[loc] && !SOR_BUSY[loc]) setTimeout(() => loadSorties(loc), 0);
   return `<div class="pzone"><div class="pwrap" id="pwrap" data-pw="${t ? t.pw : ''}" data-ph="${t ? t.ph : ''}">
       <img src="${src}" alt="Photo de la zone ${esc(zone)}" onload="photoLoaded(this)" onerror="this.closest('.pzone').classList.add('nophoto');this.closest('.pzone').textContent='Pas de photo'">
       ${boxesHTML(loc, zone, t, spots)}
       <button class="pfull" data-act="pfull" aria-label="Agrandir la photo">⤢</button>
-    </div>${t ? '<div class="plegend"><span><i class="ok"></i>comptée</span><span><i class="todo"></i>jamais comptée</span><span>Touchez une étagère sur la photo.</span></div>' : ''}</div>`;
+    </div>${t ? `<div class="chips" style="margin:8px 0 0"><button data-act="nowtog" aria-pressed="${!NOW_ON}">Dernier comptage</button><button data-act="nowtog" aria-pressed="${NOW_ON}">📊 Maintenant (ventes déduites)</button></div>` + (NOW_ON
+      ? '<div class="plegend"><span><i class="ok"></i>bien rempli</span><span><i class="nwarn"></i>à moitié</span><span><i class="nbad"></i>presque vide</span><span><i class="todo"></i>jamais comptée</span>' + (SOR[loc] ? '<span>≈ = comptage − ventes depuis (' + esc(nowAgo(loc)) + ')</span>' : '<span>' + (SOR_BUSY[loc] ? 'Chargement des ventes…' : esc(SOR_ERR || 'Ventes pas encore chargées')) + '</span>') + '</div>'
+      : '<div class="plegend"><span><i class="ok"></i>comptée</span><span><i class="todo"></i>jamais comptée</span><span>Touchez une étagère sur la photo.</span></div>') : ''}</div>`;
 }
 // Boxes drawn on another photo than this one: hide them.
 function photoLoaded(img){
@@ -1804,19 +1866,20 @@ function openSpot(loc, zone, code){
   const s = zoneSpots(z).find(x => x.code === code) || { code, label: code };
   const st = spotState(loc, zone, code);
   openSheet(`<h3>${esc(zone)} · ${esc(s.label)}</h3><div class="sub">${st.counted ? 'Comptée ' + esc(ago(st.last)) + (st.by ? ' par ' + esc(st.by) : '') + ' · ' + fmt(st.units) + ' article(s)' : 'Jamais comptée'}</div>
-    ${st.counted ? '<div class="where">' + st.items.sort((a, b) => b[5] - a[5]).map(r => `<div><span>${esc(r[4] || r[3])}</span><b class="num">${fmt(r[5])}</b></div>`).join('') + '</div>' : ''}
-    <p class="sub" style="margin-top:8px">Les quantités sont celles du dernier comptage (les ventes depuis ne sont pas déduites ici).</p>
+    ${st.counted ? spotItemsHTML(loc, zone, code, st) : ''}
     ${!st.counted && emptyAt(loc, code) ? '<p class="sub"><span class="vide">∅ vide</span> marquée ' + esc(ago(emptyAt(loc, code))) + '</p>' : ''}
     <button class="go" id="spadd">➕ Ajouter des articles ici</button>
     <button class="go" id="spc" style="background:var(--ink)">${st.counted ? '🔢 Recompter cette étagère' : '🔢 Compter cette étagère'}</button>
     <button class="ghost" id="spe">${emptyAt(loc, code) && !st.counted ? 'Ce n’est plus vide' : '∅ Marquer vide'}</button>
     <button class="ghost" id="spx">Fermer</button>`);
+  S = { spotOpen: zone + '|' + code };
   $('#spx').onclick = closeSheet;
   $('#spc').onclick = () => { closeSheet(); closeViewer(); startCount(loc, zone, code); };
   $('#spadd').onclick = () => { closeSheet(); closeViewer(); spotAdd(loc, zone, code); };
   $('#spe').onclick = () => { closeSheet(); setEmpty(loc, zone, [code], !(emptyAt(loc, code) && !st.counted)); };
 }
 function bindPhoto(){
+  document.querySelectorAll('[data-act="nowtog"]').forEach(b => b.onclick = () => { NOW_ON = !NOW_ON; ls('s1981_now', NOW_ON ? '1' : '0'); if(NOW_ON) loadSorties(VIEW.loc, true); render(); });
   document.querySelectorAll('.pzone [data-spot]').forEach(b => b.onclick = e => { e.stopPropagation(); openSpot(VIEW.loc, VIEW.zone, b.dataset.spot); });
   const f = document.querySelector('[data-act="pfull"]'); if(f) f.onclick = () => openViewer(VIEW.loc, VIEW.zone);
   const img = document.querySelector('.pwrap img'); if(img){ img.onclick = () => openViewer(VIEW.loc, VIEW.zone); if(img.complete && img.naturalWidth) photoLoaded(img); }
