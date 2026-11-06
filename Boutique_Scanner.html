@@ -8090,7 +8090,8 @@ function _ccDayData(dateStr){
 const SEC_URL = 'https://yacine5555.github.io/boutique/secours.html';
 let _secSales = {};   // dateStr -> { at, sales:[...] }
 function secLink(){
-  const cfg = { s: syncUrl, p: productSyncUrl, k: writeKey, st: storeBranding.name || '', loc: _defaultPriceLocation() };
+  // e = the till's employees (name + code): they live on the till, the Sheet's Employees tab is empty (6 Nov 2026)
+  const cfg = { s: syncUrl, p: productSyncUrl, k: writeKey, st: storeBranding.name || '', loc: _defaultPriceLocation(), e: (employees || []).filter(x => x && x.name).map(x => ({ name: x.name, pin: String(x.pin || '') })) };
   return SEC_URL + '#cfg=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))));
 }
 async function secShowQR(){

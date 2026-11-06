@@ -107,6 +107,7 @@ const PAY = { cash: '💵 Cash', orange: '🟠 Orange Money', wave: '🌊 Wave',
 })();
 let CFG = lsj('sec_cfg', null);
 let EMPS = lsj('sec_emps', []);          // [{name, pin}]
+if(typeof CFG !== 'undefined' && CFG && Array.isArray(CFG.e) && CFG.e.length){ EMPS = CFG.e.filter(x => x && x.name); ls('sec_emps', JSON.stringify(EMPS)); }   // from the till's QR
 let PRICES = lsj('sec_prices', {});      // bkey -> [name, price]
 let PRICES_AT = ls('sec_prices_at') || '';
 let LOTS = lsj('sec_lots', []);           // [{barcode, n, price}] — prix par lot (3 Dole = 14 000)
