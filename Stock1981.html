@@ -721,6 +721,7 @@ function homeHTML(){
   h += '<div class="tools">'
     + tool('pscan', '📷', 'Scanner', 'où est ce produit ?')
     + tool('restock', '🧺', 'Réassort', rsN ? rsN + ' produit(s)' : 'presque vides', rsN || '')
+    + tool('refill', '🔁', 'Remplir', 'scannez l’étagère')
     + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
@@ -839,6 +840,7 @@ function bindMain(){
   const so = document.querySelector('[data-act="sorties"]'); if(so) so.onclick = () => { go({ screen:'sorties' }); loadSorties(SOV.loc, true); try { loadData(); } catch(e){} };
   document.querySelectorAll('[data-zper]').forEach(b => b.onclick = () => { VIEW.zper = b.dataset.zper; history.replaceState(VIEW, ''); render(); });
   document.querySelectorAll('[data-zkind]').forEach(b => b.onclick = () => { VIEW.zkind = b.dataset.zkind; history.replaceState(VIEW, ''); render(); });
+  const rf = document.querySelector('[data-act="refill"]'); if(rf) rf.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh && sh.spot) spotAdd(sh.loc, sh.zone, sh.spot); else toast('Scannez l’étiquette d’une étagère (pas un produit).'); });
   const pk = document.querySelector('[data-act="pack"]'); if(pk) pk.onclick = () => openCamera(code => packScanned(code));
   const rv = document.querySelector('[data-act="recv"]'); if(rv) rv.onclick = () => { go({ screen:'recv' }); loadArrivals(); };
   const ct = document.querySelector('[data-act="ctl"]'); if(ct) ct.onclick = () => { go({ screen:'ctl' }); loadCtl(); };
@@ -882,18 +884,19 @@ function startCount(loc, zone, spot){
     return;
   }
   if(!C || C.spot !== spot || C.loc !== loc){ C = { loc, zone, spot, items: [], startedAt: new Date().toISOString() }; saveDraft(); }
+  if(loc !== 'Warehouse' && !SOR_BUSY[loc]) try { loadSorties(loc); } catch(e){}
   go({ screen:'count', loc, zone, spot });
 }
 function countHTML(){
   if(!C) return '<p class="empty">Aucun comptage en cours.</p>';
   const n = C.items.reduce((a, i) => a + i.count, 0);
   return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez ou tapez un code-barres" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo" title="Appareil photo">📷</button></div>
-    <div class="hint">Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d'autre.</div></div>
+    <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
     <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
-    <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
+    <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
 function bindCount(){
   const inp = $('#scan');
@@ -991,10 +994,37 @@ function finishCount(){
     if(C.items.some(it => !it.name)){ toast('Donnez un nom à chaque produit inconnu avant de terminer.'); render(); const x = document.querySelector('[data-name]'); if(x) x.focus(); return; }
   }
   const n = C.items.reduce((a, i) => a + i.count, 0);
+  if(C.adding){
+    const add = refillAdded(), na = add.reduce((a, x) => a + x.n, 0);
+    if(!na){ toast('Rien d’ajouté : scannez ce que vous posez sur l’étagère.'); return; }
+    openSheet(`<h3>🔁 Envoyer ce remplissage ?</h3><div class="sub">${esc(locName(C.loc))} · ${esc(C.zone)} · ${esc(spotLabelOf(C.loc, C.zone, C.spot))}${C.src ? ' · depuis ' + esc(REFILL_SRC[C.src]) : ''}</div>
+      <div class="where">${add.map(x => `<div><span>${esc(x.name || x.barcode)}</span><b class="num">+${fmt(x.n)}</b></div>`).join('')}<div class="here"><span>Ajouté</span><b class="num">+${fmt(na)}</b></div></div>
+      <button class="go" id="cok">Envoyer</button><button class="ghost" id="cno">Revenir</button>`);
+    $('#cno').onclick = closeSheet;
+    $('#cok').onclick = () => {
+      if(!user){ closeSheet(); lock(); return; }
+      refillOps().forEach((op, i) => { op.opId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + i; applyLocal(op); QUEUE.push({ op, by: user.name, hash: user.hash }); });
+      const body = { opId: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), location: C.loc, zone: C.zone, spot: C.spot,
+        at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
+      applyCountLocal(Object.assign({ by: user.name }, body));
+      QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+      ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
+      C = null; saveDraft(); closeSheet();
+      VIEW = { screen:'zone', loc: body.location, zone: body.zone, tab:'shelves' }; history.replaceState(VIEW, ''); render();
+      toast(online ? '🔁 Remplissage enregistré (+' + fmt(na) + ')' : 'Gardé sur le téléphone, envoi au retour de la connexion');
+      flushQueue();
+    };
+    return;
+  }
+  const gaps = recountGaps();
+  const gapsHTML = !gaps ? '' : !gaps.length ? '<div class="sub" style="color:#15803d;font-weight:700;margin-top:8px">✅ Conforme à ce qui était attendu (dernier comptage − ventes)</div>'
+    : '<div class="sect" style="margin-top:10px">⚖ Écarts avec ce qui était attendu (≈)</div><div class="where">' + gaps.slice(0, 10).map(x => `<div><span>${esc(x.name)}<br><small class="num">attendu ≈${fmt(x.exp)} · compté ${fmt(x.got)}</small></span><b class="num" style="color:${x.g < 0 ? '#b91c1c' : '#15803d'}">${x.g > 0 ? '+' : ''}${fmt(x.g)}${x.v != null ? '<br><small>' + (x.v > 0 ? '+' : '') + fmt(x.v) + ' F</small>' : ''}</b></div>`).join('') + (gaps.length > 10 ? `<div><span>… et ${gaps.length - 10} autre(s)</span></div>` : '') +
+      (() => { const v = gaps.reduce((a, x) => a + (x.v || 0), 0); return v ? `<div class="here"><span>Valeur</span><b class="num" style="color:${v < 0 ? '#b91c1c' : '#15803d'}">${v > 0 ? '+' : ''}${fmt(v)} F</b></div>` : ''; })() + '</div><div class="sub">Si un écart est une erreur de scan, touchez « Revenir au comptage ».</div>';
   openSheet(`<h3>${C.items.length ? 'Envoyer ce comptage ?' : 'Étagère vide ?'}</h3>
     <div class="sub">${esc(locName(C.loc))} · ${esc(C.zone)} · ${esc(spotLabelOf(C.loc, C.zone, C.spot))}</div>
     <div class="where"><div class="here"><span>${C.items.length} produit(s)</span><b class="num">${fmt(n)} article(s)</b></div></div>
     <div class="sub">${C.items.length ? 'Ce comptage remplace ce qui était enregistré pour cette étagère.' : 'Tout ce qui était enregistré sur cette étagère sera retiré.'}</div>
+    ${gapsHTML}
     <button class="go" id="cok">Envoyer</button><button class="ghost" id="cno">Revenir au comptage</button>`);
   $('#cno').onclick = () => { if(C) delete C.next; closeSheet(); };
   $('#cok').onclick = () => {
@@ -1789,7 +1819,7 @@ let NOW_ON = ls('s1981_now') === '1', _nowC = {};
 function _spotT(v){ if(!v) return 0; const sv = String(v); const t = /^\d{4}-\d{2}-\d{2}$/.test(sv) ? new Date(sv + 'T00:00:00').getTime() : new Date(sv).getTime(); return isNaN(t) ? 0 : t; }
 function nowMap(loc){
   const c = SOR[loc]; if(!c || !DATA) return null;
-  const key = c.at + '|' + (DATA.spots || []).length + '|' + (DATA.at || '');
+  const key = c.at + '|' + (DATA.spots || []).length + '|' + (DATA.spots || []).reduce((a, r) => r[0] === loc && String(r[6]) > a ? String(r[6]) : a, '') + '|' + (DATA.generatedAt || '');
   if(_nowC[loc] && _nowC[loc].key === key) return _nowC[loc].map;
   const byP = {}, map = {};
   (DATA.spots || []).forEach(r => {
@@ -1868,7 +1898,7 @@ function openSpot(loc, zone, code){
   openSheet(`<h3>${esc(zone)} · ${esc(s.label)}</h3><div class="sub">${st.counted ? 'Comptée ' + esc(ago(st.last)) + (st.by ? ' par ' + esc(st.by) : '') + ' · ' + fmt(st.units) + ' article(s)' : 'Jamais comptée'}</div>
     ${st.counted ? spotItemsHTML(loc, zone, code, st) : ''}
     ${!st.counted && emptyAt(loc, code) ? '<p class="sub"><span class="vide">∅ vide</span> marquée ' + esc(ago(emptyAt(loc, code))) + '</p>' : ''}
-    <button class="go" id="spadd">➕ Ajouter des articles ici</button>
+    <button class="go" id="spadd">🔁 Remplir l’étagère</button>
     <button class="go" id="spc" style="background:var(--ink)">${st.counted ? '🔢 Recompter cette étagère' : '🔢 Compter cette étagère'}</button>
     <button class="ghost" id="spe">${emptyAt(loc, code) && !st.counted ? 'Ce n’est plus vide' : '∅ Marquer vide'}</button>
     <button class="ghost" id="spx">Fermer</button>`);
@@ -2304,11 +2334,68 @@ function zonePickSpot(mode){
   $('#pkx').onclick = closeSheet;
 }
 // ➕ Ajouter sur une étagère : a count that starts from what the shelf already holds
-function spotAdd(loc, zone, spot){
-  const cur = spotsAt(loc, zone).filter(r => r[2] === spot);
-  C = { loc, zone, spot, items: cur.map(r => ({ barcode: r[3], name: r[4] || productName(r[3]), count: Number(r[5]) || 0 })).filter(i => i.count > 0), startedAt: new Date().toISOString(), adding: true };
+// 🔁 REMPLIR UNE ÉTAGÈRE (6 Nov 2026). Starts from what is on the shelf NOW
+// (≈ last count − sales since), the staff scan only what they put on it.
+// Where it comes from: Balkuy → the Entrepôt; Ouaga 2000 → the Entrepôt or
+// the Balkuy store (one big button). On send: a transfer source → shelf
+// zone (reason « Transfert ») + the shelf's new count (now + added).
+const REFILL_SRC = { 'Warehouse': 'l’entrepôt', 'Store 1': 'le magasin Balkuy' };
+function spotAdd(loc, zone, spot, src, tried){
+  if(src === undefined){
+    if(loc === 'Store 2'){
+      openSheet(`<h3>🔁 Remplir ${esc(zone)} · ${esc(spotLabelOf(loc, zone, spot))}</h3><div class="sub">D’où viennent les articles ?</div>
+        <button class="go" id="rfw" style="min-height:66px;font-size:18px">🏭 De l’entrepôt</button>
+        <button class="go" id="rfb" style="min-height:66px;font-size:18px;margin-top:10px;background:var(--sunk);color:var(--ink)">🏪 Du magasin Balkuy</button>
+        <button class="ghost" id="rfx">Annuler</button>`);
+      $('#rfw').onclick = () => { closeSheet(); spotAdd(loc, zone, spot, 'Warehouse'); };
+      $('#rfb').onclick = () => { closeSheet(); spotAdd(loc, zone, spot, 'Store 1'); };
+      $('#rfx').onclick = closeSheet;
+      return;
+    }
+    src = loc === 'Store 1' ? 'Warehouse' : null;
+  }
+  if(!nowMap(loc) && online && !tried){ toast('Chargement des ventes…'); loadSorties(loc, true).then(() => spotAdd(loc, zone, spot, src, true)); return; }
+  const base = {}, items = [];
+  spotsAt(loc, zone).filter(r => r[2] === spot).forEach(r => {
+    const e = nowItem(loc, zone, spot, r[3]), q = Math.max(0, e ? e.left : (Number(r[5]) || 0));
+    base[bkey(r[3])] = (base[bkey(r[3])] || 0) + q;
+    if(q > 0) items.push({ barcode: r[3], name: r[4] || productName(r[3]), count: q });
+  });
+  C = { loc, zone, spot, items, base, adding: true, src, startedAt: new Date().toISOString() };
   saveDraft(); go({ screen:'count', loc, zone, spot });
-  toast(cur.length ? 'Ce qui est déjà sur l’étagère est compté : scannez seulement les articles ajoutés.' : 'Scannez les articles que vous posez sur l’étagère.');
+  toast(src ? 'Remplissage depuis ' + REFILL_SRC[src] + ' : scannez seulement ce que vous ajoutez.' : 'Scannez seulement ce que vous ajoutez.');
+}
+function refillAdded(){
+  if(!C || !C.adding) return [];
+  return C.items.map(it => ({ barcode: it.barcode, name: it.name, n: it.count - ((C.base || {})[bkey(it.barcode)] || 0) })).filter(x => x.n > 0);
+}
+function refillOps(){
+  const add = refillAdded(); if(!C.src) return [];
+  const ops = [];
+  add.forEach(x => {
+    const rows = rowsAt(C.src).filter(r => bkey(r[2]) === bkey(x.barcode) && r[4] > 0).sort((a, b) => b[4] - a[4]);
+    const fz = rows.length ? rows[0][1] : (C.src === 'Warehouse' ? 'Entrepôt' : UNPLACED);
+    const note = 'remplissage ' + locName(C.loc) + ' · ' + C.zone + ' · étagère ' + C.spot + (rows.length && rows[0][4] >= x.n ? '' : ' · origine à vérifier');
+    ops.push({ barcode: x.barcode, name: x.name, mode:'delta', reason:'Transfert', location: C.src, zone: fz, qty: -x.n, note });
+    ops.push({ barcode: x.barcode, name: x.name, mode:'delta', reason:'Transfert', location: C.loc, zone: C.zone, qty: x.n, note: 'depuis ' + locName(C.src) + ' · ' + fz + ' · étagère ' + C.spot });
+  });
+  return ops;
+}
+// ⚖ Écarts on a recount: what the app expected (≈ now) vs what was counted.
+function recountGaps(){
+  if(!C || C.adding || C.control || !nowMap(C.loc)) return null;
+  const prev = spotsAt(C.loc, C.zone).filter(r => r[2] === C.spot);
+  if(!prev.length) return null;
+  const exp = {}, nm = {}, got = {};
+  prev.forEach(r => { const k = bkey(r[3]), e = nowItem(C.loc, C.zone, C.spot, r[3]); exp[k] = (exp[k] || 0) + Math.max(0, e ? e.left : (Number(r[5]) || 0)); nm[k] = r[4] || productName(r[3]) || r[3]; });
+  C.items.forEach(it => { const k = bkey(it.barcode); got[k] = (got[k] || 0) + it.count; nm[k] = nm[k] || it.name || it.barcode; });
+  const out = [];
+  new Set(Object.keys(exp).concat(Object.keys(got))).forEach(k => {
+    const g = (got[k] || 0) - (exp[k] || 0); if(!g) return;
+    const pr = Number((DATA.prices || {})[k]) || 0;
+    out.push({ name: nm[k], exp: exp[k] || 0, got: got[k] || 0, g, v: pr ? g * pr : null });
+  });
+  return out.sort((a, b) => Math.abs(b.v || b.g) - Math.abs(a.v || a.g));
 }
 // ↔ Déplacer : pick the product of the zone, then the move sheet
 function zoneMovePick(loc, zone){
