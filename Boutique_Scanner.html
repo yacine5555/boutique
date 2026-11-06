@@ -1581,7 +1581,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v5-nov-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v6-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1998,6 +1998,35 @@ input,select{font-family:inherit}
         <div id="cc-warn" style="font-size:13px;color:var(--orange);margin:8px 0 0;min-height:4px"></div>
         <button id="cc-go" class="btn-sm" onclick="ccCreate()" style="margin-top:8px;width:100%;padding:11px;font-size:15px;font-weight:700;background:var(--ink);color:#fff;border:0;border-radius:8px">Créer le code</button>
         <div id="cc-done" style="margin-top:10px"></div>
+      </div>
+
+      <!-- v6-nov-a: Promos (remise sur le prix normal, affiches) -->
+      <div class="admin-card" id="promo-card">
+        <div class="admin-card-title">🔥 Promos &amp; déstockage</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">
+          La remise se fait toute seule à la caisse (Remise sur le prix normal), et s'arrête toute seule après la date de fin.
+          Sans date de fin = « jusqu'à épuisement du stock » (arrêtez-la à la main). Les affiches et étiquettes s'impriment depuis chaque promo.
+        </div>
+        <div class="dlv-lbl">Nom de la promo</div>
+        <input class="dlv-field" id="pr-name" placeholder="ex. Déstockage produits Thaïlande"/>
+        <div class="dlv-lbl">Sur quoi ?</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select class="dlv-field" id="pr-kind" style="flex:1;min-width:140px" onchange="promoFormSync()"><option value="list">📚 Toute une liste du catalogue</option><option value="product">🔎 Un seul produit</option></select>
+          <select class="dlv-field" id="pr-list" style="flex:1;min-width:140px"></select>
+          <input class="dlv-field" id="pr-bc" style="flex:1;min-width:140px;display:none" inputmode="numeric" placeholder="Scannez le produit"/>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:140px"><div class="dlv-lbl">Remise</div><select class="dlv-field" id="pr-type"><option value="percent">% de réduction</option><option value="price">Prix promo (F)</option></select></div>
+          <div style="flex:1;min-width:100px"><div class="dlv-lbl">Valeur</div><input class="dlv-field" id="pr-val" type="number" min="1" placeholder="50"/></div>
+          <div style="flex:1;min-width:140px"><div class="dlv-lbl">Magasin</div><select class="dlv-field" id="pr-store"><option value="all">Les deux magasins</option><option value="Store 1">Balkuy seulement</option><option value="Store 2">Ouaga 2000 seulement</option></select></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:130px"><div class="dlv-lbl">Début</div><input class="dlv-field" id="pr-start" type="date"/></div>
+          <div style="flex:1;min-width:130px"><div class="dlv-lbl">Fin (vide = jusqu'à épuisement)</div><input class="dlv-field" id="pr-end" type="date"/></div>
+          <div style="flex:1;min-width:140px"><div class="dlv-lbl">Couleur des affiches</div><select class="dlv-field" id="pr-style"><option value="destock">🔴 Déstockage (papier rouge)</option><option value="promo">🟡 Promo (papier jaune)</option></select></div>
+        </div>
+        <button class="btn-sm btn-blue" style="margin:8px 0 12px" onclick="promoSave()">＋ Créer la promo</button>
+        <div id="promo-list"></div>
       </div>
 
       <!-- v5-nov-b: Prix par lot (3 Dole = 14 000 F) -->
@@ -2591,7 +2620,7 @@ function showScreen(s) {
     renderDriverAdmin();
     renderCashCheck(false);
     renderTop25();
-    renderExWatch('ex-admin-body'); renderLosses(); loadLosses(true); renderPriceAdmin(); renderPtAdmin(); try { renderLotAdmin(); } catch(e){} _renderPricePinStatus(); loadPriceList(true); loadPriceTasks(true); loadActivityLog(true);
+    renderExWatch('ex-admin-body'); renderLosses(); loadLosses(true); renderPriceAdmin(); renderPtAdmin(); try { renderLotAdmin(); } catch(e){} try { renderPromoAdmin(); } catch(e){} _renderPricePinStatus(); loadPriceList(true); loadPriceTasks(true); loadActivityLog(true);
     renderTransferAdmin();
     refreshTransfers();
     renderCustomerRequests();
@@ -2935,7 +2964,7 @@ function renderCurrentCart() {
       : `<b class="bag-price">${formatCFA(it.lineTotal ?? base)}</b>`;
     return `<div class="bag-row${k === 0 ? ' newest' : ''}">
       <div class="bag-ph">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<i>${ini(it.name)}</i>'">` : `<i>${ini(it.name)}</i>`}</div>
-      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}${it.discount && it.discount.type === 'lot' ? `<div class="bag-unit" style="color:#7e22ce;font-weight:700">🏷 ${it.discount.label || 'Prix par lot'}</div>` : ''}
+      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}${it.discount && it.discount.type === 'lot' ? `<div class="bag-unit" style="color:#7e22ce;font-weight:700">🏷 ${it.discount.label || 'Prix par lot'}</div>` : ''}${it.discount && it.discount.type === 'promo' ? `<div class="bag-unit" style="color:#c2410c;font-weight:700">🔥 ${it.discount.label || 'Promo'}</div>` : ''}
         <span class="bag-qty">
           <button type="button" onclick="changeCartQty(${idx},-1);_bagFocus()" title="${fr ? 'Moins' : 'Less'}">−</button>
           <input type="number" min="1" max="999" inputmode="numeric" value="${q}" onfocus="this.select()" onchange="setCartQty(${idx},this.value)" onkeydown="if(event.key==='Enter'){this.blur();_bagFocus();}"/>
@@ -4771,14 +4800,15 @@ function printLabelQueue(){
   _lblQ.forEach(it => { it.price = lblPriceFor(it.barcode, it.price); });
   lblPrint(_lblQ);
 }
-function printLabels(list){
+function printLabels(list, opts){
   const pages = [];
   // "Tournée" (default): Chrome treats the 40×30 paper as a tall 30×40 page and the
   // driver turns it back, so the label is drawn turned 90° inside a tall page and
   // comes out straight on the sticker. "Normale" = for the Mac's own print window.
   const rot = _lblOpt.orient !== 'normal';
   const wrap = h => rot ? '<div class="Rw"><div class="Rin">' + h + '</div></div>' : h;
-  list.forEach(it => { for(let i = 0; i < Math.max(1, it.qty || 1); i++) pages.push(wrap(lblLabelHTML(it))); });
+  const mk = (opts && opts.html) || lblLabelHTML;
+  list.forEach(it => { for(let i = 0; i < Math.max(1, it.qty || 1); i++) pages.push(wrap(mk(it))); });
   if(!pages.length) return;
   const old = document.getElementById('lbl-print-frame'); if(old) old.remove();
   const fr = document.createElement('iframe');
@@ -4788,7 +4818,7 @@ function printLabels(list){
   const doc = fr.contentWindow.document;
   doc.open();
   doc.write('<!doctype html><html><head><meta charset="utf-8"><title>Étiquettes</title><style>@page{' + (_lblOpt.pageSize === 'css' ? 'size:' + LBL_SIZE.w + 'mm ' + LBL_SIZE.h + 'mm;' : '') + 'margin:0}html,body{margin:0;padding:0;background:#fff}' +
-    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' + LBL_CSS + '.L{margin:0 auto}.L:last-child{page-break-after:auto;break-after:auto}' +
+    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' + LBL_CSS + ((opts && opts.css) || '') + '.L{margin:0 auto}.L:last-child{page-break-after:auto;break-after:auto}' +
     '.Rw{width:29.4mm;height:39.4mm;position:relative;overflow:hidden;page-break-after:always;break-after:page}.Rw:last-child{page-break-after:auto;break-after:auto}' +
     '.Rin{position:absolute;left:0;top:0;width:39.4mm;height:29.4mm;transform-origin:0 0;transform:translateX(29.4mm) rotate(90deg)}.Rin .L{margin:0;page-break-after:auto;break-after:auto}</style></head><body>' + pages.join('') + '</body></html>');
   doc.close();
@@ -6811,7 +6841,7 @@ const ADMIN_CARD_TAB = [
   [/Résumé quotidien/, 'ventes', 4], [/Mensualités/, 'ventes', 5], [/Réservations/, 'ventes', 6], [/Top 25/, 'ventes', 7],
   [/Base Clients/, 'ventes', 8], [/sans code-barres/, 'ventes', 9], [/Restaurer les ventes/, 'ventes', 10, 'collapsible'],
   [/Contrôle de caisse du soir/, 'caisse', 1], [/Caisse de secours/, 'caisse', 1.5], [/Écarts de caisse/, 'caisse', 2], [/Sorties de caisse/, 'caisse', 3],
-  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Prix par lot/, 'prix', 1.13], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
+  [/Liste des prix/, 'prix', 1], [/Nouveaux produits scannés/, 'prix', 1.1], [/Créer un code-barres/, 'prix', 1.12], [/Prix par lot/, 'prix', 1.13], [/Promos &(amp;)? déstockage|Promos & déstockage/, 'prix', 1.115], [/Codes maison/, 'prix', 1.15], [/Imprimer des étiquettes/, 'prix', 1.2], [/Photos produits/, 'prix', 1.5], [/Catalogue/, 'prix', 2], [/Péremptions/, 'prix', 3], [/Pertes/, 'prix', 4], [/Mouvements de stock/, 'prix', 4.5],
   [/Export for Inventory/, 'prix', 5, 'collapsible'], [/Scan Log/, 'prix', 6], [/Transfer Log/, 'prix', 7], [/Unmatched/, 'prix', 8],
   [/État de la synchro/, 'reglages', 1], [/Sales Sync/, 'reglages', 2, 'collapsible'], [/Product Sync/, 'reglages', 3, 'collapsible'],
   [/Daily Email/, 'reglages', 4, 'collapsible'], [/Infos Boutique/, 'reglages', 5, 'collapsible'], [/Livreurs/, 'reglages', 6, 'collapsible'],
@@ -8839,6 +8869,7 @@ setTimeout(() => {
 // ══════════════════════════════════════════
 let _plAll = null, _plMap = {}, _plTs = 0;
 let _lots = (function(){ try { return JSON.parse(localStorage.getItem('bc_lots') || '[]'); } catch(e){ return []; } })();   // Prix par lot (5 Nov 2026)
+let _promos = (function(){ try { return JSON.parse(localStorage.getItem('bc_promos') || '[]'); } catch(e){ return []; } })();   // Promos (6 Nov 2026)
 const PL_STORES = [['Store 1', 's1', 'Balkuy'], ['Store 2', 's2', 'Ouaga 2000']];
 function _plCol(loc){ return loc === 'Store 1' ? 's1' : (loc === 'Store 2' ? 's2' : ''); }
 function _plIndex(){ _plMap = {}; (_plAll || []).forEach(p => { _plMap[_bcKeyClient(p.barcode)] = p; }); }
@@ -8848,6 +8879,7 @@ async function loadPriceList(silent){
     const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getPriceList' + (writeKey ? '&key=' + encodeURIComponent(writeKey) : ''), { cache: 'no-store' });
     const d = await r.json();
     if(d && Array.isArray(d.lots)){ _lots = d.lots; try { localStorage.setItem('bc_lots', JSON.stringify(_lots)); } catch(e){} try { renderLotAdmin(); } catch(e){} }
+    if(d && Array.isArray(d.promos)){ _promos = d.promos; try { localStorage.setItem('bc_promos', JSON.stringify(_promos)); } catch(e){} try { renderPromoAdmin(); } catch(e){} }
     if(d && Array.isArray(d.products)){ _plAll = d.products; _plTs = Date.now(); _plIndex(); renderPriceAdmin(); return true; }
     if(!silent) showToast('❌ Liste des prix : réponse inattendue (redéployez Code_updated.gs).', 5000);
   } catch(e){ if(!silent) showToast('❌ Liste des prix : connexion impossible.', 4000); }
@@ -11215,7 +11247,7 @@ function renderEndShift(){
   if(_endShift.step === 1){
     _esMoveCard(null);
     const pend = dlvPendingForCheck(today);
-    let h = '<div class="modal-title">🌙 Fin de service — 1/2 · Livraisons</div><div class="modal-sub">' + _dlvEsc(currentEmployee || '') + ' — pour chaque livraison en cours : ✓ Livrée, 🌅 Demain ou ❌ Annulée.</div>';
+    let h = promoEndedNotice() + '<div class="modal-title">🌙 Fin de service — 1/2 · Livraisons</div><div class="modal-sub">' + _dlvEsc(currentEmployee || '') + ' — pour chaque livraison en cours : ✓ Livrée, 🌅 Demain ou ❌ Annulée.</div>';
     h += pend.length ? pend.map(d => {
       const u = _dlvEsc(d.uid);
       return '<div class="dlv-card"><div class="dlv-card-top"><b>' + _dlvEsc(d.name) + '</b> <span class="dlv-id">' + _dlvEsc(d.dlvId) + '</span></div>' +
@@ -11272,6 +11304,171 @@ function endShiftSkip(){
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  🔥 PROMOS (v6-nov-a, 6 Nov 2026) — tab « Promos » of the inventory
+//  Sheet (Code GS setPromo / getPriceList → promos). A promo is a % off or
+//  a promo price, on one product or a whole Catalogue list (Thaïlande),
+//  for one store or both, from a start date to an end date (none = until the
+//  stock is gone). At the till it is a Remise on the normal price (applyLots
+//  above), checked against today's date on this till, so it stops by itself
+//  at midnight even offline. Posters: A4, A5 ×2, 40×30 tags (crossed price).
+//  Fin de service reminds to take the posters down when a promo has ended.
+// ══════════════════════════════════════════════════════════════════
+function promoToday(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function promoDayFR(d){ const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] : d; }
+function promoShort(pr){ return pr.type === 'price' ? 'Promo ' + formatCFA(pr.value) : 'Promo −' + pr.value + ' %'; }
+function promoLive(pr){
+  if(!pr || pr.on === false) return false;
+  const t = promoToday();
+  if(pr.start && pr.start > t) return false;
+  if(pr.end && pr.end < t) return false;
+  return pr.store === 'all' || !pr.store || pr.store === _defaultPriceLocation();
+}
+function promoFor(bc){
+  const k = _bcKeyClient(bc); if(!k || !_promos.length) return null;
+  let best = null, bestOff = -1;
+  const unit = 1000;   // compare promos on a notional price
+  _promos.forEach(pr => {
+    if(!promoLive(pr) || !(pr.barcodes || []).some(b => _bcKeyClient(b) === k)) return;
+    const p0 = psPriceFor(bc) || unit, off = pr.type === 'price' ? p0 - pr.value : p0 * pr.value / 100;
+    if(off > bestOff){ best = pr; bestOff = off; }
+  });
+  return best;
+}
+function _prEsc(s){ return _dlvEsc(s); }
+function promoFormSync(){
+  const kind = document.getElementById('pr-kind'); if(!kind) return;
+  document.getElementById('pr-list').style.display = kind.value === 'list' ? '' : 'none';
+  document.getElementById('pr-bc').style.display = kind.value === 'list' ? 'none' : '';
+}
+function promoItems(pr){
+  const cat = pr.kind === 'list' ? (CATALOGUE[pr.target] || []) : [];
+  return (pr.barcodes || []).map(bc => {
+    const c = cat.find(x => _bcKeyClient(x.barcode) === _bcKeyClient(bc));
+    const name = (c && c.name) || (lookupBarcode(bc) || {}).name || ((_plAll || []).find(x => _bcKeyClient(x.barcode) === _bcKeyClient(bc)) || {}).name || bc;
+    const price = psPriceFor(bc);
+    const now = price ? (pr.type === 'price' ? Math.min(price, Math.round(pr.value)) : price - Math.round(price * pr.value / 100)) : null;
+    return { barcode: bc, name, price, now };
+  });
+}
+function renderPromoAdmin(){
+  const sel = document.getElementById('pr-list'); if(!sel) return;
+  const lists = Object.keys(CATALOGUE || {});
+  if(!lists.length && productSyncUrl && !renderPromoAdmin._t){ renderPromoAdmin._t = 1; loadCatalogue().then(ok => { if(ok) renderPromoAdmin(); }); }
+  const cur = sel.value;
+  sel.innerHTML = lists.length ? lists.map(l => '<option' + (l === cur ? ' selected' : '') + '>' + _prEsc(l) + '</option>').join('') : '<option value="">(aucune liste)</option>';
+  const st = document.getElementById('pr-start'); if(st && !st.value) st.value = promoToday();
+  promoFormSync();
+  const el = document.getElementById('promo-list'); if(!el) return;
+  if(!_promos.length){ el.innerHTML = '<div class="dlv-dim">Aucune promo.</div>'; return; }
+  const order = { active: 0, soon: 1, ended: 2, off: 3 };
+  const t = promoToday();
+  const state = pr => pr.on === false ? 'off' : (pr.end && pr.end < t) ? 'ended' : (pr.start && pr.start > t) ? 'soon' : 'active';
+  el.innerHTML = _promos.slice().sort((a, b) => order[state(a)] - order[state(b)]).map(pr => {
+    const s = state(pr), id = _prEsc(pr.id);
+    const badge = { active: '🟢 En cours', soon: '⏳ À venir', ended: '⏹ Finie', off: '⏸ Arrêtée' }[s];
+    const where = pr.store === 'Store 1' ? 'Balkuy' : pr.store === 'Store 2' ? 'Ouaga 2000' : 'Les deux magasins';
+    return '<div style="border:1px solid var(--border2);border-radius:12px;padding:10px;margin:8px 0;' + (s === 'active' ? '' : 'opacity:.7') + '">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + (pr.style === 'promo' ? '🟡 ' : '🔴 ') + _prEsc(pr.name) + '</b><span style="font-size:12px;font-weight:700">' + badge + '</span></div>' +
+      '<div class="dlv-dim" style="margin:3px 0 8px">' + _prEsc(promoShort(pr)) + ' · ' + (pr.kind === 'list' ? 'liste « ' + _prEsc(pr.target) + ' »' : 'produit ' + _prEsc(pr.target)) + ' · ' + (pr.barcodes || []).length + ' produit(s) · ' + where +
+        ' · ' + (pr.start ? 'du ' + promoDayFR(pr.start) + ' ' : '') + (pr.end ? 'au ' + promoDayFR(pr.end) : 'jusqu’à épuisement') + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn-sm btn-outline" onclick="promoPoster(\'' + id + '\',\'A4\')">🖨 Affiche A4</button>' +
+        '<button class="btn-sm btn-outline" onclick="promoPoster(\'' + id + '\',\'A5\')">🖨 2 affiches A5</button>' +
+        '<button class="btn-sm btn-outline" onclick="promoTags(\'' + id + '\')">🏷 Étiquettes 40×30</button>' +
+        (s === 'active' || s === 'soon' ? '<button class="btn-sm btn-outline" style="color:#b03a2e;border-color:#e8b4ac" onclick="promoStop(\'' + id + '\')">⏹ Arrêter</button>'
+          : '<button class="btn-sm btn-outline" style="color:#b03a2e;border-color:#e8b4ac" onclick="promoDelete(\'' + id + '\')">🗑 Supprimer</button>') +
+      '</div></div>';
+  }).join('');
+}
+async function _promoPost(payload){
+  if(!productSyncUrl || !writeKey) throw new Error('Synchro des produits non configurée.');
+  const d = await _postProductSync(Object.assign({ key: writeKey, action: 'setPromo' }, payload));
+  if(!d || !d.success) throw new Error((d && d.error) || 'Collez « LATEST - Code GS » et redéployez.');
+  _promos = d.promos || []; localStorage.setItem('bc_promos', JSON.stringify(_promos)); renderPromoAdmin();
+  try { updateSaleUI(); } catch(e){}
+  return d;
+}
+async function promoSave(){
+  const kind = document.getElementById('pr-kind').value;
+  const target = kind === 'list' ? document.getElementById('pr-list').value : document.getElementById('pr-bc').value.trim();
+  const type = document.getElementById('pr-type').value, value = Number(document.getElementById('pr-val').value);
+  const start = document.getElementById('pr-start').value, end = document.getElementById('pr-end').value;
+  if(!target){ showToast(kind === 'list' ? 'Choisissez une liste.' : 'Scannez le produit.'); return; }
+  if(!(value > 0) || (type === 'percent' && value >= 100)){ showToast(type === 'percent' ? 'Pourcentage entre 1 et 99.' : 'Prix promo requis.'); return; }
+  if(end && start && end < start){ showToast('La date de fin est avant le début.'); return; }
+  const name = document.getElementById('pr-name').value.trim() || ((document.getElementById('pr-style').value === 'promo' ? 'Promo ' : 'Déstockage ') + (kind === 'list' ? target : ((lookupBarcode(target) || {}).name || target)));
+  try {
+    await _promoPost({ name, kind, target, type, value, store: document.getElementById('pr-store').value, start, end, style: document.getElementById('pr-style').value, by: currentEmployee || 'Admin' });
+    document.getElementById('pr-name').value = ''; document.getElementById('pr-val').value = ''; document.getElementById('pr-end').value = ''; document.getElementById('pr-bc').value = '';
+    showToast('🔥 Promo créée : ' + name + '. Imprimez les affiches depuis la liste.', 5000);
+  } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : e.message), 6000); }
+}
+async function promoStop(id){ if(!confirm('Arrêter cette promo maintenant ? Les prix normaux reviennent tout de suite.')) return; try { await _promoPost({ id, off: true }); showToast('⏹ Promo arrêtée : retirez les affiches.', 5000); } catch(e){ showToast('❌ ' + e.message); } }
+async function promoDelete(id){ if(!confirm('Supprimer cette promo de la liste ?')) return; try { await _promoPost({ id, remove: true }); } catch(e){ showToast('❌ ' + e.message); } }
+function _promoFrame(html){
+  const old = document.getElementById('promo-print-frame'); if(old) old.remove();
+  const fr = document.createElement('iframe'); fr.id = 'promo-print-frame';
+  fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(fr);
+  const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
+  setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch(e){ showToast('⚠ Impression impossible : ' + e.message, 4000); } }, 250);
+}
+function _promoSignHTML(pr, small){
+  const items = promoItems(pr), one = pr.kind === 'product' && items[0];
+  const title = pr.style === 'promo' ? 'PROMO' : 'DÉSTOCKAGE';
+  const big = pr.type === 'price' ? _prEsc(formatCFA(pr.value)) : '−' + pr.value + '<span style="font-size:.55em">%</span>';
+  const sub = one ? _prEsc(one.name) : _prEsc(pr.name.replace(/^(déstockage|promo)\s*/i, '') || pr.target);
+  const was = one && one.price && one.now != null && one.now < one.price ? '<div class="was">au lieu de <s>' + _prEsc(formatCFA(one.price)) + '</s></div>' : '';
+  const until = pr.end ? 'Jusqu’au ' + promoDayFR(pr.end) : 'Jusqu’à épuisement du stock';
+  return '<div class="sign' + (small ? ' a5' : '') + '"><div class="t">' + title + '</div><div class="sub">' + sub + '</div><div class="big">' + big + '</div>' + was +
+    '<div class="until">' + until + '</div><div class="foot">Prix réduit directement à la caisse · Beauty Empire' + (storeBranding.name ? ' · ' + _prEsc(storeBranding.name) : '') + '</div></div>';
+}
+function promoPoster(id, fmt){
+  const pr = _promos.find(p => p.id === id); if(!pr) return;
+  const css = '@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;font-family:Arial Black,Arial,Helvetica,sans-serif;color:#000}' +
+    '.sign{box-sizing:border-box;width:210mm;height:297mm;padding:14mm 12mm;border:5mm solid #000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;overflow:hidden}' +
+    '.sign.a5{height:148.5mm;border-width:3mm;padding:7mm 10mm}' +
+    '.t{font-size:22mm;line-height:1;font-weight:900;letter-spacing:.6mm;background:#000;color:#fff;padding:3mm 8mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.a5 .t{font-size:15mm;padding:1.5mm 5mm}.sub{font-size:13mm;font-weight:800;line-height:1.1;max-height:30mm;overflow:hidden}.a5 .sub{font-size:8mm;max-height:18mm}' +
+    '.big{font-size:80mm;line-height:.95;font-weight:900}.a5 .big{font-size:42mm}.was{font-size:10mm;font-weight:700}.a5 .was{font-size:6mm}' +
+    '.until{font-size:11mm;font-weight:800;border-top:1.5mm solid #000;padding-top:4mm;width:100%}.a5 .until{font-size:6.5mm;padding-top:2mm;border-top-width:1mm}' +
+    '.foot{font-size:5mm;font-family:Arial,Helvetica,sans-serif}.a5 .foot{font-size:3.5mm}.cut{height:0;border-top:.3mm dashed #888}';
+  const body = fmt === 'A5' ? _promoSignHTML(pr, true) + '<div class="cut"></div>' + _promoSignHTML(pr, true) : _promoSignHTML(pr, false);
+  _promoFrame('<!doctype html><html><head><meta charset="utf-8"><title>Affiche promo</title><style>' + css + '</style></head><body>' + body + '</body></html>');
+  showToast('🖨 Imprimez sur du papier ' + (pr.style === 'promo' ? 'JAUNE' : 'ROUGE') + (fmt === 'A5' ? ' puis coupez en deux' : ''), 5000);
+}
+const PROMO_TAG_CSS = '.P .pt{width:100%;background:#000;color:#fff;font-weight:900;font-size:2.6mm;text-align:center;letter-spacing:.3mm;padding:.3mm 0}' +
+  '.P .pn{font-size:2.5mm;font-weight:700;line-height:1.1;text-align:center;max-height:5.6mm;overflow:hidden}' +
+  '.P .pw{font-size:2.8mm}.P .pw s{font-weight:700}.P .pv{font-size:7.2mm;font-weight:900;line-height:1}.P .pv small{font-size:2.4mm;margin-left:.4mm}.P .pp{font-size:2.6mm;font-weight:900}';
+function promoTagHTML(it){
+  const pr = it._pr, title = pr.style === 'promo' ? 'PROMO' : 'DÉSTOCKAGE';
+  const pct = pr.type === 'percent' ? '−' + pr.value + ' %' : '';
+  return '<div class="L P"><div class="pt">' + title + (pct ? ' ' + pct : '') + '</div><div class="pn">' + _lblEsc(it.name) + '</div>' +
+    (it.price && it.now != null && it.now < it.price ? '<div class="pw"><s>' + _lblFmtPrice(it.price) + '</s> F</div><div class="pv">' + _lblFmtPrice(it.now) + '<small>F</small></div>'
+      : '<div class="pv">' + (pct || _lblFmtPrice(pr.value) + '<small>F</small>') + '</div>') +
+    '<div class="pp">' + (pr.end ? 'jusqu’au ' + promoDayFR(pr.end) : 'jusqu’à épuisement') + '</div></div>';
+}
+function promoTags(id){
+  const pr = _promos.find(p => p.id === id); if(!pr) return;
+  const items = promoItems(pr).map(x => Object.assign(x, { _pr: pr, qty: 1 }));
+  if(!items.length){ showToast('Aucun produit dans cette promo.'); return; }
+  if(items.length > 12 && !confirm(items.length + ' étiquettes vont s’imprimer (une par produit). Continuer ?')) return;
+  printLabels(items, { html: promoTagHTML, css: PROMO_TAG_CSS });
+  if(items.some(x => !x.price)) showToast('⚠ Certains produits n’ont pas de prix dans cette caisse : l’étiquette montre seulement la remise.', 5000);
+}
+// Fin de service: promos that ended in the last 7 days → take the posters down (once per till)
+function promoEndedNotice(){
+  let ack = []; try { ack = JSON.parse(localStorage.getItem('bc_promo_ack') || '[]'); } catch(e){}
+  const t = promoToday(), wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const here = _defaultPriceLocation();
+  const done = _promos.filter(pr => (pr.on === false || (pr.end && pr.end < t)) && (!pr.end || pr.end >= wk) && (pr.store === 'all' || pr.store === here) && ack.indexOf(pr.id) < 0);
+  if(!done.length) return '';
+  return '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:10px;margin-bottom:10px">' + done.map(pr =>
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin:4px 0"><span>⏹ <b>Promo finie :</b> retirez les affiches et étiquettes « ' + _prEsc(pr.name) + ' »</span>' +
+    '<button class="btn-sm btn-green" onclick="promoAck(\'' + _prEsc(pr.id) + '\')">✓ Retirées</button></div>').join('') + '</div>';
+}
+function promoAck(id){ let a = []; try { a = JSON.parse(localStorage.getItem('bc_promo_ack') || '[]'); } catch(e){} a.push(id); localStorage.setItem('bc_promo_ack', JSON.stringify(a.slice(-50))); try { renderEndShift(); } catch(e){} }
+// ══════════════════════════════════════════════════════════════════
 //  🏷 PRIX PAR LOT (v5-nov-b, 5 Nov 2026) — e.g. 3 Dole = 14 000 F.
 //  Rules come with the price list (Code GS getPriceList → lots, tab
 //  « Prix par lot »). Every time the bag changes, the difference is taken
@@ -11282,7 +11479,16 @@ function endShiftSkip(){
 function _lotRule(bc){ const k = _bcKeyClient(bc); return k ? _lots.find(l => _bcKeyClient(l.barcode) === k) : null; }
 function applyLots(txn){
   if(!txn || !Array.isArray(txn.items)) return;
-  txn.items.forEach(it => { if(it.discount && it.discount.type === 'lot') it.discount = null; if(!it.discount) it.lineTotal = (it.price || 0) * (it.qty || 1); });
+  txn.items.forEach(it => { if(it.discount && (it.discount.type === 'lot' || it.discount.type === 'promo')) it.discount = null; if(!it.discount) it.lineTotal = (it.price || 0) * (it.qty || 1); });
+  txn.items.forEach(it => {
+    if(it.discount) return;
+    const pr = promoFor(it.barcode); if(!pr) return;
+    const base = (it.price || 0) * (it.qty || 1);
+    const off = Math.min(base, pr.type === 'price' ? Math.max(0, base - Math.round(pr.value) * (it.qty || 1)) : Math.round(base * pr.value / 100));
+    if(!(off > 0)) return;
+    it.discount = { type: 'promo', value: off, amountOff: off, appliedBy: 'Promo', label: promoShort(pr) + (pr.end ? ' jusqu’au ' + promoDayFR(pr.end) : ''), promoId: pr.id };
+    it.lineTotal = base - off;
+  });
   if(!_lots.length) return;
   const byK = {};
   txn.items.forEach((it, i) => { if(it.discount) return; const k = _bcKeyClient(it.barcode); if(k && _lotRule(it.barcode)) (byK[k] = byK[k] || []).push(i); });
