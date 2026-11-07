@@ -1581,7 +1581,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v6-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v6-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -4585,9 +4585,9 @@ function lblLabelHTML(it){
     : mode === 'image' && _lblLogo ? '<div class="L-top"><img src="' + _lblLogo + '" alt=""></div>'
     : mode === 'none' ? '' : '<div class="L-top">' + _lblEsc(brand) + '</div>';
   let bc = '';
-  if(_lblOpt.barcode && it.barcode){ const b = lblBarcodeSVG(it.barcode, 34, 6.2); bc = '<div class="L-bc">' + b.svg + '<div>' + _lblEsc(b.text) + '</div></div>'; }
+  if((_lblOpt.barcode || it.place) && it.barcode){ const b = lblBarcodeSVG(it.barcode, 34, 6.2); bc = '<div class="L-bc">' + b.svg + '<div>' + _lblEsc(b.text) + '</div></div>'; }
   return '<div class="L' + (bc ? '' : ' nobc') + '">' + top + '<div class="L-nm">' + _lblEsc(it.name || it.barcode) + '</div>' +
-    '<div class="L-pr">' + (it.box ? '× ' + it.box + '<small>UNITÉS</small>' : _lblFmtPrice(it.price) + '<small>CFA</small>') + '</div>' + bc + '</div>';
+    '<div class="L-pr">' + (it.place ? _lblEsc(it.place) : it.box ? '× ' + it.box + '<small>UNITÉS</small>' : _lblFmtPrice(it.price) + '<small>CFA</small>') + '</div>' + bc + '</div>';
 }
 
 // ── Queue ──
@@ -4774,13 +4774,15 @@ async function lblPrintRemote(gi){
   const group = keys[gi];
   const items = (_lblRemote || []).filter(x => _lblGroupOf(x) === group);
   if(!items.length) return;
-  const mk = () => items.map(x => x.kind === 'box'
+  const mk = () => items.map(x => _isPlaceCode(x.barcode)
+    ? { barcode: x.barcode, name: x.name || x.barcode, place: /^B/i.test(x.barcode) ? 'BOÎTE' : 'ÉTAGÈRE', qty: x.qty || 1 }
+    : x.kind === 'box'
     ? { barcode: x.barcode, name: 'CARTON · ' + (x.name || x.barcode), box: x.qty, qty: 1 }
     : { barcode: x.barcode, name: x.name || x.barcode, price: _lblPriceAt(x.barcode, x.store), qty: x.qty });
   let list = mk();
   // a price may have been set since the list was loaded: reload once before asking
-  if(list.some(x => !x.box && x.price == null)){ try { await loadPriceList(true); } catch(e){} list = mk(); }
-  const missing = list.filter(x => !x.box && x.price == null);
+  if(list.some(x => !x.box && !x.place && x.price == null)){ try { await loadPriceList(true); } catch(e){} list = mk(); }
+  const missing = list.filter(x => !x.box && !x.place && x.price == null);
   const noPrice = missing.length;
   if(noPrice && !confirm(noPrice + ' produit(s) sans prix pour ' + group + ' : ' + missing.slice(0, 5).map(x => x.name).join(', ') + '. L’étiquette affichera « — ». Imprimer quand même ?')) return;
   let ok;
@@ -4869,7 +4871,7 @@ function lblDrawCanvas(it){
   const padX = 1.6 * d, padTop = 1.1 * d, padBot = 0.8 * d, inner = W - 2 * padX;
   const font = (px, w) => w + ' ' + px + 'px Arial, Helvetica, sans-serif';
   const mode = _lblOpt.top || (_lblOpt.logo === false ? 'none' : 'be');
-  const withBc = _lblOpt.barcode && it.barcode;
+  const withBc = (_lblOpt.barcode || it.place) && it.barcode;
   // block heights
   const topH = mode === 'be' ? 5.2 * d : (mode === 'none' ? 0 : 3.4 * d);
   const nameSize = Math.round((withBc ? 2.7 : 3.1) * d), priceSize = Math.round((withBc ? 6.2 : 8.5) * d);
@@ -4903,8 +4905,8 @@ function lblDrawCanvas(it){
   lines.forEach((l, i) => c.fillText(l, W / 2, y + i * nameSize * 1.12));
   y += nameH + gap;
   // price
-  const pr = it.box ? '× ' + it.box : _lblFmtPrice(it.price).replace(/ | /g, ' ');
-  const unit = it.box ? 'UNITÉS' : 'CFA';
+  const pr = it.place ? it.place : it.box ? '× ' + it.box : _lblFmtPrice(it.price).replace(/ | /g, ' ');
+  const unit = it.place ? '' : it.box ? 'UNITÉS' : 'CFA';
   c.font = font(priceSize, '900'); const pw = c.measureText(pr).width;
   c.font = font(Math.round(2.8 * d), 'bold'); const cw = c.measureText(unit).width;
   const sx = (W - pw - 0.6 * d - cw) / 2;
@@ -13528,7 +13530,37 @@ function reorgKey(ev, el){
   if(!raw) return;
   reorgScan(raw);
 }
+// ── Shelf / box labels in Réorganisation (7 Nov 2026) ──
+// A shelf label (S1-1A-2) or a box label (B1-BOX3) scanned at the till starts
+// a new zone tied to that shelf/box: Stock1981 → Réorg. gets it already
+// matched. « 📦 Nouvelle boîte » = a box without a label (B1-?, chosen later).
+// Labels travel as scans (b = the label text) and are never counted as items.
+function _isPlaceCode(b){ return /^[SB][12]-./i.test(String(b || '')); }
+function _reorgLabel(raw){
+  let t = String(raw || '').trim();
+  if(/^[SBsb][&é]/.test(t)) t = t.replace(/[&é"'(§è!çà)]/g, c => ({ '&':'1', 'é':'2', '"':'3', "'":'4', '(':'5', '§':'6', 'è':'7', '!':'8', 'ç':'9', 'à':'0', ')':'-' }[c]));
+  const m = /^([SB])([12])-(.+)$/i.exec(t); if(!m) return null;
+  return { kind: m[1].toUpperCase(), store: 'Store ' + m[2], code: m[3], text: m[1].toUpperCase() + m[2] + '-' + m[3] };
+}
+function _reorgItems(list){ return list.filter(x => !_isPlaceCode(x.b)); }
+function _reorgZoneLabel(sess, z){ const l = _reorg.log.scans.filter(x => x.s === sess.id && (x.z || 1) === z && _isPlaceCode(x.b)).pop(); return l ? l.b : ''; }
+function _reorgPlaceName(b){ const m = /^([SB])\d-(.+)$/i.exec(b || ''); return !m ? '' : m[2] === '?' ? '📦 Boîte à choisir' : (m[1].toUpperCase() === 'B' ? '📦 Boîte ' : '🧺 Étagère ') + m[2]; }
+function reorgPlace(text){
+  const sess = _reorgSession(); if(!sess) return;
+  const z = sess.zone || 1;
+  if(_reorgItems(_reorg.log.scans.filter(x => x.s === sess.id && (x.z || 1) === z)).length){ sess.zone = z + 1; _reorgEvent('zone:' + sess.zone); }
+  _reorg.log.scans.push({ b: text, t: Date.now(), s: sess.id, z: sess.zone || 1 });
+  _reorgSave(); _reorgBeep(true); _reorgSendSoon();
+  _reorgFlash('ok', '▶ ' + _reorgPlaceName(text) + ' — scannez ses articles'); _reorgRender(); _reorgFocus();
+}
+function reorgNewBox(){ const sess = _reorgSession(); if(!sess) return; reorgPlace('B' + (sess.loc === 'Store 2' ? '2' : '1') + '-?'); }
 function reorgScan(raw){
+  const lab = _reorgLabel(raw);
+  if(lab){
+    const sess = _reorgSession();
+    if(sess && sess.loc && lab.store !== sess.loc){ _reorgBeep(false); _reorgFlash('bad', '⚠ Étiquette d’un autre magasin (' + lab.text + ')'); return; }
+    return reorgPlace(lab.text);
+  }
   if(!isCleanBarcode(raw) || raw.length < 4){ _reorgBeep(false); _reorgFlash('bad', '⚠ Code illisible — vérifiez le clavier et rescannez'); return; }
   // no real barcode is longer than 14 digits: two readings glued together (scanner read twice) → rescan
   if(raw.length > 14){ _reorgBeep(false); _reorgFlash('bad', '⚠ Lecture double (' + raw.length + ' chiffres) — rescannez l\'article une fois'); return; }
@@ -13543,7 +13575,7 @@ function reorgScan(raw){
 function reorgNextZone(){
   const sess = _reorgSession(); if(!sess) return;
   const z = sess.zone || 1;
-  if(!_reorg.log.scans.some(x => x.s === sess.id && (x.z || 1) === z)){ showToast('La zone ' + z + ' est encore vide — scannez d\'abord ses articles', 3500); _reorgFocus(); return; }
+  if(!_reorgItems(_reorg.log.scans).some(x => x.s === sess.id && (x.z || 1) === z)){ showToast('La zone ' + z + ' est encore vide — scannez d\'abord ses articles', 3500); _reorgFocus(); return; }
   sess.zone = z + 1; _reorgEvent('zone:' + sess.zone); _reorgSave();
   _reorgBeep(true); _reorgFlash('ok', '▶ Zone ' + sess.zone + ' commencée'); _reorgRender(); _reorgFocus();
 }
@@ -13574,11 +13606,12 @@ function _reorgFlash(kind, txt){
 }
 function _reorgRender(){
   const sess = _reorgSession(); if(!sess) return;
-  const mine = _reorg.log.scans.filter(x => x.s === sess.id);
+  const mine = _reorgItems(_reorg.log.scans.filter(x => x.s === sess.id));
   const z = sess.zone || 1, inZone = mine.filter(x => (x.z || 1) === z);
-  const today = _reorg.log.scans.filter(x => x.t >= _reorgToday()).length;
+  const today = _reorgItems(_reorg.log.scans.filter(x => x.t >= _reorgToday())).length;
   document.getElementById('reorg-n').textContent = inZone.length;
-  document.getElementById('reorg-z').textContent = 'Zone ' + z;
+  const zl = _reorgZoneLabel(sess, z);
+  document.getElementById('reorg-z').textContent = 'Zone ' + z + (zl ? ' · ' + _reorgPlaceName(zl) : '');
   const prev = []; for(let i = Math.max(1, z - 3); i < z; i++) prev.push('Zone ' + i + ' : ' + mine.filter(x => (x.z || 1) === i).length);
   document.getElementById('reorg-prev').textContent = prev.join('  ·  ');
   document.getElementById('reorg-sub').textContent = today + ' articles aujourd\'hui · ' + (sess.by || '') + ' · depuis ' + new Date(sess.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -13881,14 +13914,15 @@ closeSale = function(){
       <div class="reorg-n" id="reorg-n">0</div>
       <input id="reorg-in" class="reorg-in" type="text" autocomplete="off" spellcheck="false" placeholder="Scannez l'article…" onkeydown="reorgKey(event,this)">
       <div class="reorg-last" id="reorg-last">Prêt</div>
-      <button type="button" class="reorg-next" onclick="reorgNextZone()">▶ Nouvelle zone</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="reorg-next" onclick="reorgNextZone()">▶ Nouvelle zone</button><button type="button" class="reorg-next" style="background:#7c3aed" onclick="reorgNewBox()">📦 Nouvelle boîte</button></div>
       <div class="reorg-prev" id="reorg-prev"></div>
     </div>
     <div class="reorg-side">
       <div class="reorg-rule">
         <b>1 article à la fois</b>
         <span>Scannez-le, puis posez-le <u>de l'autre côté</u>.<br>Jamais deux fois le même article.</span>
-        <span>Nouvelle zone qui arrive ? Touchez <b style="font-size:inherit">▶ Nouvelle zone</b> avant de scanner.</span>
+        <span>Étiquette sur l'étagère ou la boîte ? <b style="font-size:inherit">Scannez-la d'abord</b> : la zone change toute seule.</span>
+        <span>Pas d'étiquette ? Touchez <b style="font-size:inherit">▶ Nouvelle zone</b> (étagère) ou <b style="font-size:inherit">📦 Nouvelle boîte</b> avant de scanner.</span>
         <span>Pas de code-barres ? Mettez-le de côté et prévenez le patron.</span>
       </div>
       <div class="reorg-list" id="reorg-list"></div>

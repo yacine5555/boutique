@@ -828,6 +828,10 @@ function bindMain(){
   const zp = document.querySelector('[data-act="zphoto"]'); if(zp) zp.onclick = () => zonePhotoTake(VIEW.loc, VIEW.zone);
   const off = document.querySelector('[data-act="offline"]'); if(off) off.onclick = () => offlinePrep(true);
   document.querySelectorAll('[data-boxmark]').forEach(b => b.onclick = () => boxMark(b.dataset.bloc || VIEW.loc, VIEW.zone, b.dataset.boxmark));
+  const bxl = document.querySelector('[data-act="boxlabel"]'); if(bxl) bxl.onclick = () => {
+    const loc = VIEW.loc, zone = VIEW.zone, code = 'B' + (loc === 'Store 2' ? '2' : '1') + '-' + zone;
+    queueWork([], [{ id: 'bl' + Date.now().toString(36), barcode: code, name: '📦 ' + boxName(loc, zone), qty: 1, store: locName(loc), kind: 'unit' }], 'Étiquette de la boîte envoyée à l’imprimante (Scanner → étiquettes à imprimer)');
+  };
   const bxn = document.querySelector('[data-act="boxnew"]'); if(bxn) bxn.onclick = () => boxCreate(VIEW.loc);
   const bxc = document.querySelector('[data-act="boxcount"]'); if(bxc) bxc.onclick = () => startCount(VIEW.loc, VIEW.zone, VIEW.zone + '-W');
   const bxa = document.querySelector('[data-act="boxadd"]'); if(bxa) bxa.onclick = () => boxAdd(VIEW.loc, VIEW.zone);
@@ -1147,6 +1151,14 @@ function queueReorg(kind, body){
   flushQueue();
 }
 
+// S1-1A-2 → that shelf (parseShelf) · B1-BOX3 → that box · B1-? → box to choose
+function placeOfLabel(lab){
+  const m = /^([SB])([12])-(.+)$/i.exec(String(lab || '')); if(!m) return null;
+  if(m[1].toUpperCase() === 'S'){ const sh = parseShelf(lab); return sh && sh.spot ? sh : null; }
+  if(m[3] === '?') return null;
+  const loc = 'Store ' + m[2], z = boxesOf(loc).find(q => q.c.toLowerCase() === m[3].toLowerCase());
+  return z ? { loc, zone: z.c, spot: z.c + '-W', box: true } : null;
+}
 // ── matching: till zones ↔ shelves noted by the admin ──
 function reMatch(day){
   const marks = (RE ? RE.marks : []).filter(m => m.day === day && m.location === RE_LOC).sort((a, b) => (a.order - b.order) || String(a.at).localeCompare(String(b.at)));
@@ -1155,14 +1167,29 @@ function reMatch(day){
     if(reDay(s[0]) !== day) return;
     const k = s[1] + '|' + s[2];
     const g = gm[k] || (gm[k] = { key: k, sess: s[1], z: s[2], t0: s[0], t1: s[0], items: [], by: s[4] || '' });
+    if(/^[SB][12]-./i.test(String(s[3]))){ g.label = String(s[3]); return; }   // shelf / box label scanned at the till (7 Nov)
     g.items.push(s[3]); if(s[0] < g.t0) g.t0 = s[0]; if(s[0] > g.t1) g.t1 = s[0];
   });
+  Object.keys(gm).forEach(k => { if(!gm[k].items.length) delete gm[k]; });
   const groups = Object.values(gm).sort((a, b) => a.t0 - b.t0);
   groups.forEach((g, i) => { g.n = i + 1; g.keys = new Set(g.items.map(bkey)); });
   const res = marks.map(m => ({ m, g: null, hits: 0, how: '' }));
   const byGroup = {};
   // 1. groups already tied to a shelf (validated / to recount)
   res.forEach(r => { const mm = /^g:(.+)$/.exec(r.m.note || ''); if(mm){ const g = groups.find(x => x.key === mm[1]); if(g && !byGroup[g.key]){ r.g = g; r.how = 'lié'; byGroup[g.key] = r; } } });
+  // 1b. groups started with a shelf / box label: tied to that place (existing
+  //     mark of the day for it, or a new one made from the label)
+  groups.forEach(g => {
+    if(byGroup[g.key] || !g.label) return;
+    const pl = placeOfLabel(g.label); g.place = pl;
+    if(!pl || pl.loc !== RE_LOC) return;
+    let r = res.find(x => !x.g && x.m.zone === pl.zone && x.m.spot === pl.spot && x.m.status !== 'Validé');
+    if(!r){
+      r = { m: { id: 'L' + g.sess.slice(-6) + g.z + String(g.t0).slice(-5), day, location: RE_LOC, order: 1000 + g.n, zone: pl.zone, spot: pl.spot, total: g.items.length, prints: [], status: '', note: '', virtual: true }, g: null, hits: 0, how: '' };
+      res.push(r);
+    }
+    r.g = g; r.how = 'étiquette'; byGroup[g.key] = r;
+  });
   // 2. fingerprints
   groups.forEach(g => {
     if(byGroup[g.key]) return;
@@ -1184,6 +1211,7 @@ function reMatch(day){
     const elsewhere = groups.filter(x => x !== g && (m.prints || []).some(p => x.keys.has(bkey(p)))).map(x => x.n);
     r.scanned = g ? g.items.length : 0;
     if(m.status === 'Validé'){ r.st = 'done'; r.msg = 'Validé'; }
+    else if(m.virtual){ r.st = 'ok'; r.msg = (isBox(m.location, m.zone) ? '📦 Boîte' : '🧺 Étagère') + ' scannée avec son étiquette : ' + g.items.length + ' article(s) — vérifiez, puis validez'; }
     else if(!g){ r.st = 'wait'; r.msg = 'Pas encore scanné à la caisse'; }
     else if(elsewhere.length){ r.st = 'bad'; r.msg = 'Mélangé : ses articles repères sont aussi dans la zone caisse n°' + elsewhere.join(', '); }
     else if(np && !r.hits){ r.st = 'bad'; r.msg = 'Aucun article repère trouvé dans la zone caisse n°' + g.n; }
@@ -1220,17 +1248,18 @@ function reorgHTML(){
   const reTodo = res.filter(r => r.st !== 'done'), reDone = res.filter(r => r.st === 'done');
   const reRow = r => {
     const m = r.m, s = RE_ST[r.st];
-    return `<div class="shelf" style="border-left:4px solid ${s[1]}"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${m.order}. ${esc(m.zone)} · ${esc(spotLabelOf(m.location, m.zone, m.spot))}</b>
+    const title = isBox(m.location, m.zone) ? '📦 ' + esc(boxName(m.location, m.zone)) : esc(m.zone) + ' · ' + esc(spotLabelOf(m.location, m.zone, m.spot));
+    return `<div class="shelf" style="border-left:4px solid ${s[1]}"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${m.virtual ? '🏷' : m.order + '.'} ${title}</b>
       <div style="font-weight:600;font-size:13px;color:${s[1]};margin-top:2px">${s[0]} ${esc(r.msg)}</div>
-      <div style="color:var(--muted);font-size:12px;margin-top:2px">Vous : ${m.total} article(s) · ${(m.prints || []).length} repère(s)${r.g ? ' · zone caisse n°' + r.g.n + ' (' + r.scanned + ')' : ''}</div></div>
+      <div style="color:var(--muted);font-size:12px;margin-top:2px">${m.virtual ? 'Étiquette scannée à la caisse' : 'Vous : ' + m.total + ' article(s) · ' + (m.prints || []).length + ' repère(s)'}${r.g ? ' · zone caisse n°' + r.g.n + ' (' + r.scanned + ')' : ''}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px">${r.st !== 'done' && r.g ? `<button class="cbtn" data-reval="${esc(m.id)}">${r.st === 'ok' ? '✓ Valider' : 'Voir'}</button>` : ''}
-      ${r.st !== 'done' ? `<button class="cbtn alt" data-reedit="${esc(m.id)}">Modifier</button>` : ''}</div></div></div>`;
+      ${r.st !== 'done' && !m.virtual ? `<button class="cbtn alt" data-reedit="${esc(m.id)}">Modifier</button>` : ''}</div></div></div>`;
   };
   h += '<div class="sect">Étagères à traiter, dans l’ordre du tour' + (res.length ? ' (' + reTodo.length + ')' : '') + '</div>';
   h += res.length ? (reTodo.length ? '<div class="list">' + reTodo.map(reRow).join('') + '</div>' : '<p class="empty">Tout est validé 👍</p>') +
     (reDone.length ? `<button class="cbtn alt" data-act="re-done" style="margin:12px 0 6px;width:100%">${RE_SHOW_DONE ? '▾ Masquer' : '▸ Voir'} les étagères validées (${reDone.length})</button>` +
       (RE_SHOW_DONE ? '<div class="list" style="opacity:.75">' + reDone.map(reRow).join('') + '</div>' : '') : '') : `<p class="empty">${day === reToday() ? 'Aucune étagère repérée aujourd’hui.<br>Commencez par « Repérer l’étagère suivante », dans l’ordre où les chariots partiront.' : 'Rien ce jour-là.'}</p>`;
-  if(loose.length) h += '<div class="sect">Zones scannées à la caisse sans étagère</div><div class="list">' + loose.map(g => `<div class="shelf"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">Zone caisse n°${g.n} · ${g.items.length} article(s)</b><div style="color:var(--muted);font-size:12px;margin-top:2px">${new Date(g.t0).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}–${new Date(g.t1).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${g.by ? ' · ' + esc(g.by) : ''} — aucun article repère ne correspond</div></div></div></div>`).join('') + '</div>';
+  if(loose.length) h += '<div class="sect">Zones scannées à la caisse sans étagère</div><div class="list">' + loose.map(g => `<div class="shelf"><div class="shelfhead"><div style="flex:1;min-width:0"><b style="font-size:15px">${g.label && /-\?$/.test(g.label) ? '📦 Boîte à choisir' : 'Zone caisse n°' + g.n} · ${g.items.length} article(s)</b><div style="color:var(--muted);font-size:12px;margin-top:2px">${new Date(g.t0).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}–${new Date(g.t1).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}${g.by ? ' · ' + esc(g.by) : ''}${g.label && /-\?$/.test(g.label) ? '' : ' — aucun article repère ne correspond'}</div></div><button class="cbtn" data-relink="${esc(g.key)}">${g.label && /-\?$/.test(g.label) ? 'Choisir la boîte' : 'Choisir l’étagère'}</button></div></div>`).join('') + '</div>';
   return h;
 }
 function bindReorg(){
@@ -1244,6 +1273,31 @@ function bindReorg(){
   const im = document.querySelector('.pzone .pwrap img'); if(im && im.complete && im.naturalWidth) photoLoaded(im);
   document.querySelectorAll('[data-reedit]').forEach(b => b.onclick = () => reEdit(b.dataset.reedit));
   document.querySelectorAll('[data-reval]').forEach(b => b.onclick = () => reValidate(b.dataset.reval));
+  document.querySelectorAll('[data-relink]').forEach(b => b.onclick = () => reLink(b.dataset.relink));
+}
+// A till zone that matched nothing (or a « 📦 Nouvelle boîte » without label):
+// the admin says which box / shelf it was → a mark tied to it, then ✓ Valider.
+function reLink(key){
+  const day = RE_DAY || reToday(), { groups } = reMatch(day), g = groups.find(x => x.key === key); if(!g) return;
+  const bx = boxesOf(RE_LOC), zs = zoneList(RE_LOC).filter(z => !z.b && z.c !== UNPLACED);
+  const tie = (zone, spot) => {
+    if(!user){ closeSheet(); lock(); return; }
+    const id = rid('m');
+    queueReorg('reorgmark', { id, location: RE_LOC, order: 1000 + g.n, zone, spot, total: g.items.length, prints: [], at: new Date(g.t0).toISOString(), by: user.name, note: 'g:' + g.key });
+    closeSheet(); render(); setTimeout(() => reValidate(id), 80);
+  };
+  openSheet(`<h3>Zone caisse n°${g.n} · ${g.items.length} article(s)</h3><div class="sub">C’était quelle boîte ou quelle étagère ?</div>
+    <div class="sect">📦 Boîtes</div>${bx.length ? '<div class="chips">' + bx.map(z => `<button data-lb="${esc(z.c)}">${esc(z.k || z.c)}</button>`).join('') + '</div>' : '<p class="sub">Aucune boîte : créez-la dans 📦 Boîtes, puis revenez ici.</p>'}
+    <div class="sect">🧺 Étagères</div><div class="chips">${zs.map(z => `<button data-lz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>
+    <button class="ghost" id="lkx">Annuler</button>`);
+  $('#lkx').onclick = closeSheet;
+  document.querySelectorAll('[data-lb]').forEach(b => b.onclick = () => tie(b.dataset.lb, b.dataset.lb + '-W'));
+  document.querySelectorAll('[data-lz]').forEach(b => b.onclick = () => {
+    const z = zs.find(q => q.c === b.dataset.lz), sp = zoneSpots(z);
+    if(sp.length <= 1) return tie(z.c, sp.length ? sp[0].code : z.c + '-W');
+    openSheet(`<h3>Quelle étagère ?</h3><div class="sub">Zone ${esc(z.c)}</div><div class="chips">${sp.map(x => `<button data-ls="${esc(x.code)}">${esc(x.label)}</button>`).join('')}</div>`);
+    document.querySelectorAll('[data-ls]').forEach(x => x.onclick = () => tie(z.c, x.dataset.ls));
+  });
 }
 // ── 🗺 map + zone photo for the Réorganisation (31 Oct 2026) ──
 // state per shelf: validated (any day) / noted on the chosen day + its match result
@@ -1389,17 +1443,18 @@ function reValidate(id){
   g.items.forEach(b => { const k = bkey(b); (agg[k] = agg[k] || { barcode: b, name: productName(b) || '', count: 0 }).count++; });
   const items = Object.values(agg).sort((a, b) => b.count - a.count);
   const unknown = items.filter(it => !it.name).length, s = RE_ST[r.st];
-  openSheet(`<h3>${esc(m.zone)} · ${esc(spotLabelOf(m.location, m.zone, m.spot))}</h3>
+  openSheet(`<h3>${isBox(m.location, m.zone) ? '📦 ' + esc(boxName(m.location, m.zone)) : esc(m.zone) + ' · ' + esc(spotLabelOf(m.location, m.zone, m.spot))}</h3>
     <div class="sub" style="color:${s[1]};font-weight:700">${s[0]} ${esc(r.msg)}</div>
-    <div class="where"><div class="here"><span>Vous avez compté</span><b class="num">${m.total}</b></div><div class="here"><span>Scanné à la caisse (zone n°${g.n})</span><b class="num">${g.items.length}</b></div></div>
+    <div class="where">${m.virtual ? '' : `<div class="here"><span>Vous avez compté</span><b class="num">${m.total}</b></div>`}<div class="here"><span>Scanné à la caisse (zone n°${g.n})</span><b class="num">${g.items.length}</b></div></div>
     <ul style="margin:10px 0;max-height:34vh;overflow:auto;padding:0;list-style:none">${items.map(it => `<li style="display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px solid var(--line)"><span>${esc(it.name || 'Inconnu · ' + it.barcode)}${(m.prints || []).some(p => bkey(p) === bkey(it.barcode)) ? ' 📍' : ''}</span><b>${it.count}</b></li>`).join('')}</ul>
     ${unknown ? `<div class="sub">${unknown} code(s) inconnu(s) : ils seront enregistrés sans nom — nommez-les ensuite dans 📷 Photos produits.</div>` : ''}
     <div class="sub">✓ Valider remplace ce qui était enregistré pour cette étagère par ce qui a été scanné.</div>
     <button class="go" id="rv1">✓ Valider</button><button class="ghost" id="rv2">↺ À recompter</button><button class="ghost" id="rv0">Fermer</button>`);
   $('#rv0').onclick = closeSheet;
-  $('#rv2').onclick = () => { queueReorg('reorgstatus', { id: m.id, location: m.location, status: 'À recompter', note: 'g:' + g.key }); closeSheet(); render(); toast('À recompter : faites rescanner cette étagère, puis repérez-la de nouveau.'); };
+  $('#rv2').onclick = () => { if(m.virtual && user) queueReorg('reorgmark', { id: m.id, location: m.location, order: m.order, zone: m.zone, spot: m.spot, total: g.items.length, prints: [], at: new Date(g.t0).toISOString(), by: user.name, note: 'g:' + g.key }); queueReorg('reorgstatus', { id: m.id, location: m.location, status: 'À recompter', note: 'g:' + g.key }); closeSheet(); render(); toast('À recompter : faites rescanner cette étagère, puis repérez-la de nouveau.'); };
   $('#rv1').onclick = () => {
     if(!user){ closeSheet(); lock(); return; }
+    if(m.virtual) queueReorg('reorgmark', { id: m.id, location: m.location, order: m.order, zone: m.zone, spot: m.spot, total: g.items.length, prints: [], at: new Date(g.t0).toISOString(), by: user.name, note: 'g:' + g.key });
     const body = { opId: 'rv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), location: m.location, zone: m.zone, spot: m.spot, at: new Date(g.t1).toISOString(),
       items: items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
     applyCountLocal(Object.assign({ by: user.name }, body));
@@ -2622,7 +2677,7 @@ function boxZoneActions(loc, zone){
   const t = totals(rowsAt(loc, zone));
   const z = zoneList(loc).find(q => q.c === zone) || {}, w = boxWhere(z);
   const marks = meIsAdmin() ? `<div class="chips" style="margin:0 0 10px">${BOX_MARKS.map(([k, l]) => `<button data-boxmark="${k}" data-bloc="${esc(loc)}" aria-pressed="${w === k}">${l}</button>`).join('')}</div>` : '';
-  return marks + boxZoneActionsBase(loc, zone, t);
+  return marks + (meIsAdmin() && loc !== 'Warehouse' ? `<button class="cbtn alt" data-act="boxlabel" style="margin:0 0 10px">🏷 Étiquette de la boîte (réorganisation)</button>` : '') + boxZoneActionsBase(loc, zone, t);
 }
 function boxZoneActionsBase(loc, zone, t){
   return `<div class="boxbar"><button class="cbtn" data-act="boxcount">${t.units ? 'Recompter la boîte' : 'Compter la boîte'}</button>${t.units ? '<button class="cbtn" data-act="boxadd">＋ Ajouter des articles</button><button class="cbtn" data-act="boxput">📲 Ranger en scannant</button><button class="cbtn" data-act="boxout">📤 Ranger (liste)</button>' : ''}${meIsAdmin() && !t.units ? '<button class="cbtn alt" data-act="boxclose">Fermer la boîte</button>' : ''}</div>`;
