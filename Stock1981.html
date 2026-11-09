@@ -1191,16 +1191,27 @@ function placeOfLabel(lab){
 function reMatch(day){
   const marks = (RE ? RE.marks : []).filter(m => m.day === day && m.location === RE_LOC).sort((a, b) => (a.order - b.order) || String(a.at).localeCompare(String(b.at)));
   const gm = {};
+  // Till scans of the 3 days before / after count too (9 Nov 2026): a shelf
+  // noted one day is often scanned at the till the next day, or noted again
+  // later. Groups of other days only pair by link or fingerprints (never by
+  // order, never listed as loose), and not if a shelf of another day already
+  // validated them.
+  const dayT = Date.parse(day + 'T12:00:00'), near = t => Math.abs(Date.parse(reDay(t) + 'T12:00:00') - dayT) <= 3 * 864e5;
+  const takenElsewhere = new Set();
+  (RE ? RE.marks : []).forEach(m => { if(m.day !== day && m.location === RE_LOC && m.status === 'Validé'){ const mm = /^g:(.+)$/.exec(m.note || ''); if(mm) takenElsewhere.add(mm[1]); } });
   (RE ? RE.scans : []).forEach(s => {
-    if(reDay(s[0]) !== day) return;
+    if(!near(s[0])) return;
     const k = s[1] + '|' + s[2];
+    if(takenElsewhere.has(k)) return;
     const g = gm[k] || (gm[k] = { key: k, sess: s[1], z: s[2], t0: s[0], t1: s[0], items: [], by: s[4] || '' });
     if(/^[SB][12]-./i.test(String(s[3]))){ g.label = String(s[3]); return; }   // shelf / box label scanned at the till (7 Nov)
     g.items.push(s[3]); if(s[0] < g.t0) g.t0 = s[0]; if(s[0] > g.t1) g.t1 = s[0];
   });
   Object.keys(gm).forEach(k => { if(!gm[k].items.length) delete gm[k]; });
   const groups = Object.values(gm).sort((a, b) => a.t0 - b.t0);
-  groups.forEach((g, i) => { g.n = i + 1; g.keys = new Set(g.items.map(bkey)); });
+  // numbered within their own day, as before; another day's group shows its date
+  const perDay = {};
+  groups.forEach(g => { const d = reDay(g.t0); g.other = d !== day; perDay[d] = (perDay[d] || 0) + 1; g.n = perDay[d] + (g.other ? ' du ' + new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' }) : ''); g.keys = new Set(g.items.map(bkey)); });
   const res = marks.map(m => ({ m, g: null, hits: 0, how: '' }));
   const byGroup = {};
   // 1. groups already tied to a shelf (validated / to recount)
@@ -1208,7 +1219,7 @@ function reMatch(day){
   // 1b. groups started with a shelf / box label: tied to that place (existing
   //     mark of the day for it, or a new one made from the label)
   groups.forEach(g => {
-    if(byGroup[g.key] || !g.label) return;
+    if(byGroup[g.key] || !g.label || g.other) return;
     const pl = placeOfLabel(g.label); g.place = pl;
     if(!pl || pl.loc !== RE_LOC) return;
     let r = res.find(x => !x.g && x.m.zone === pl.zone && x.m.spot === pl.spot && x.m.status !== 'Validé');
@@ -1219,16 +1230,20 @@ function reMatch(day){
     r.g = g; r.how = 'étiquette'; byGroup[g.key] = r;
   });
   // 2. fingerprints
-  groups.forEach(g => {
-    if(byGroup[g.key]) return;
-    let best = null, bestHits = 0, tie = false;
-    res.forEach(r => { if(r.g) return; const h = (r.m.prints || []).filter(p => g.keys.has(bkey(p))).length; if(h > bestHits){ best = r; bestHits = h; tie = false; } else if(h && h === bestHits) tie = true; });
-    if(best && !tie){ best.g = g; best.hits = bestHits; best.how = 'empreinte'; byGroup[g.key] = best; }
+  //    strongest pairs first (9 Nov 2026), so a small group sharing one
+  //    fingerprint can't take a shelf from the group that has all of them
+  const pairs = [];
+  groups.forEach(g => { if(byGroup[g.key]) return; res.forEach(r => { if(r.g) return; const h = (r.m.prints || []).filter(p => g.keys.has(bkey(p))).length; if(h) pairs.push({ g, r, h }); }); });
+  pairs.sort((x, y) => y.h - x.h || x.g.t0 - y.g.t0);
+  pairs.forEach(({ g, r, h }) => {
+    if(byGroup[g.key] || r.g) return;
+    if(pairs.some(o => o.g === g && o.r !== r && o.h === h && !o.r.g)) return;   // two shelves fit as well: leave it
+    r.g = g; r.hits = h; r.how = 'empreinte'; byGroup[g.key] = r;
   });
   // 3. order, for what is left (same position between two matched neighbours)
   groups.forEach((g, gi) => {
-    if(byGroup[g.key]) return;
-    const prev = groups.slice(0, gi).reverse().find(x => byGroup[x.key]), next = groups.slice(gi + 1).find(x => byGroup[x.key]);
+    if(byGroup[g.key] || g.other) return;
+    const prev = groups.slice(0, gi).reverse().find(x => !x.other && byGroup[x.key]), next = groups.slice(gi + 1).find(x => !x.other && byGroup[x.key]);
     const lo = prev ? res.indexOf(byGroup[prev.key]) : -1, hi = next ? res.indexOf(byGroup[next.key]) : res.length;
     const cand = res.slice(lo + 1, hi).find(r => !r.g);
     if(cand){ cand.g = g; cand.how = 'ordre'; byGroup[g.key] = cand; }
@@ -1236,7 +1251,7 @@ function reMatch(day){
   res.forEach(r => {
     const m = r.m, g = r.g, np = (m.prints || []).length;
     if(r.g && r.how !== 'empreinte') r.hits = (m.prints || []).filter(p => g.keys.has(bkey(p))).length;
-    const elsewhere = groups.filter(x => x !== g && (m.prints || []).some(p => x.keys.has(bkey(p)))).map(x => x.n);
+    const elsewhere = groups.filter(x => x !== g && !x.other && (!g || !g.other) && (m.prints || []).some(p => x.keys.has(bkey(p)))).map(x => x.n);
     r.scanned = g ? g.items.length : 0;
     if(m.status === 'Validé'){ r.st = 'done'; r.msg = 'Validé'; }
     else if(m.virtual){ r.st = 'ok'; r.msg = (isBox(m.location, m.zone) ? '📦 Boîte' : '🧺 Étagère') + ' scannée avec son étiquette : ' + g.items.length + ' article(s) — vérifiez, puis validez'; }
@@ -1248,7 +1263,7 @@ function reMatch(day){
     else { r.st = 'ok'; r.msg = 'Total juste (' + m.total + ') et articles repères trouvés'; }
     if(m.status === 'À recompter'){ r.st = 'recount'; r.msg = 'À recompter'; }
   });
-  const loose = groups.filter(g => !byGroup[g.key]);
+  const loose = groups.filter(g => !byGroup[g.key] && !g.other);
   return { res, groups, loose };
 }
 function reDays(){
