@@ -510,12 +510,20 @@ async function refreshUsers(){
   if(!URL_ || !KEY) return;
   try { const d = await api({ action:'getCounterUsers' }); if(d && d.success && Array.isArray(d.users)){ USERS = d.users; ls('inv_count_users', JSON.stringify(USERS)); } } catch(e){}
 }
-async function flushQueue(){
+// One op the Sheet refuses (an error that isn't about the user/code) must not
+// block everything behind it (9 Nov 2026): it is moved to the back of the
+// queue and the others still go. `tried` = ops already moved this round, so
+// a round stops once only refused ops are left (they stay, retried next time).
+async function flushQueue(tried){
+  if(!(tried instanceof Set)) tried = new Set();
   if(sending || !QUEUE.length || !user || !URL_) return;
   sending = true; render();
-  let progress = false;
+  let progress = false, netFail = false;
+  const first = QUEUE[0];
+  const headBatch = [];
+  if(first.kind) headBatch.push(first);
+  else for(const o of QUEUE){ if(o.kind || headBatch.length >= 40) break; headBatch.push(o); }
   try {
-    const first = QUEUE[0];
     if(first.kind === 'labels'){
       const d = await post({ action:'stock1981Labels', by: first.by, userHash: first.hash, labels: first.labels });
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
@@ -558,10 +566,20 @@ async function flushQueue(){
         if(/Utilisateur|code/i.test(d.error)){ QUEUE = QUEUE.filter(o => !batch.includes(o)); progress = true; }
       }
     }
-  } catch(e){ online = false; }
+  } catch(e){ online = false; netFail = true; }
+  if(!netFail && QUEUE[0] === first && QUEUE.length > headBatch.length){
+    // refused by the Sheet: put it (or its batch) at the back, keep sending the rest
+    headBatch.forEach(o => tried.add(o));
+    const rest = QUEUE.filter(o => !headBatch.includes(o));
+    // a refused shelf count that has a newer count of the same shelf behind it
+    // is dropped, so it can never overwrite that newer count later
+    const newer = first.kind === 'count' && first.body && rest.some(o => o.kind === 'count' && o.body && o.body.location === first.body.location && o.body.spot === first.body.spot);
+    QUEUE = newer ? rest : rest.concat(headBatch);
+    progress = true;
+  }
   ls('s1981_queue', JSON.stringify(QUEUE));
   sending = false;
-  if(progress && online && QUEUE.length) return flushQueue();
+  if(progress && online && QUEUE.length && !tried.has(QUEUE[0])) return flushQueue(tried);
   if(progress && online){ await loadData(); if(/^reorg/.test(VIEW.screen)) loadReorg(); } else render();
 }
 window.addEventListener('online', () => { online = true; flushQueue(); loadData(); });
