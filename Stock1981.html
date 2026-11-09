@@ -1242,6 +1242,7 @@ function reorgHTML(){
   h += `<div class="stats"><div class="stat"><b class="num">${res.length}</b><span>étagères repérées</span></div><div class="stat"><b class="num">${groups.length}</b><span>zones scannées à la caisse</span></div><div class="stat"><b class="num">${n('done')}</b><span>validées</span></div></div>`;
   const info = reSpotInfo();
   h += `<div class="sect">${VIEW.rz ? '<button class="cbtn alt" data-act="remap" style="margin-right:8px">← Plan</button>' : ''}${day === reToday() ? 'Touchez une zone, puis l’étagère à repérer · ordre n°' + ((res.length ? Math.max(...res.map(r => r.m.order || 0)) : 0) + 1) : 'Plan'}</div>`;
+  if(day === reToday() && !VIEW.rz) h += `<button class="go" data-act="rebox" style="margin:0 0 10px">📦 Repérer une boîte</button>`;
   h += VIEW.rz ? reZoneHTML(VIEW.rz, info) : reMapHTML(info);
   // 2 Nov: validated shelves go in a folded section at the bottom, so the
   // list shows only what still needs attention.
@@ -1267,6 +1268,7 @@ function bindReorg(){
   document.querySelectorAll('[data-reday]').forEach(b => b.onclick = () => { RE_DAY = b.dataset.reday === reToday() ? '' : b.dataset.reday; render(); });
   const rl = document.querySelector('[data-act="reload-re"]'); if(rl) rl.onclick = loadReorg;
   const rd = document.querySelector('[data-act="re-done"]'); if(rd) rd.onclick = () => { RE_SHOW_DONE = !RE_SHOW_DONE; render(); };
+  const rbx = document.querySelector('[data-act="rebox"]'); if(rbx) rbx.onclick = reBoxPick;
   document.querySelectorAll('[data-rmz]').forEach(b => { b.onclick = () => { VIEW.rz = b.dataset.rmz; history.pushState(VIEW, ''); render(); }; b.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); b.onclick(); } }; });
   const rp = document.querySelector('[data-act="remap"]'); if(rp) rp.onclick = () => history.back();
   document.querySelectorAll('[data-rsp]').forEach(b => b.onclick = () => reTapSpot(VIEW.rz, b.dataset.rsp));
@@ -1353,6 +1355,17 @@ function reTapSpot(zone, code){
 }
 
 // ── the walk: pick the shelf, scan 2–3 fingerprints, type the total ──
+function reBoxPick(){
+  const bx = boxesOf(RE_LOC);
+  openSheet(`<h3>📦 Quelle boîte ?</h3><div class="sub">${esc(locName(RE_LOC))} · scannez 2–3 articles de la boîte, puis tapez son total.</div>
+    <button class="go" data-rbnew="1">＋ Nouvelle boîte</button>
+    ${bx.length ? '<div class="sect">Boîtes existantes</div><div class="chips">' + bx.map(z => `<button data-rb="${esc(z.c)}">📦 ${esc(z.k || z.c)}</button>`).join('') + '</div>' : ''}
+    <p class="sub">À la caisse, le caissier touche « 📦 Nouvelle boîte » avant de scanner chaque boîte, dans le même ordre que vous.</p>
+    <button class="ghost" id="rbx">Annuler</button>`);
+  $('#rbx').onclick = closeSheet;
+  document.querySelectorAll('[data-rb]').forEach(b => b.onclick = () => reStartMark(b.dataset.rb, b.dataset.rb + '-W'));
+  document.querySelector('[data-rbnew]').onclick = () => reNewBox(code => reStartMark(code, code + '-W'));
+}
 function rePickZone(){
   const zs = zoneList(RE_LOC).filter(z => z.c !== UNPLACED && !z.b), bx = boxesOf(RE_LOC);
   openSheet(`<h3>Quelle zone ?</h3><div class="sub">${esc(locName(RE_LOC))}</div><div class="chips">${zs.map(z => `<button data-rz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>
