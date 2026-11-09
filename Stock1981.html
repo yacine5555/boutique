@@ -1287,11 +1287,12 @@ function reLink(key){
     closeSheet(); render(); setTimeout(() => reValidate(id), 80);
   };
   openSheet(`<h3>Zone caisse n°${g.n} · ${g.items.length} article(s)</h3><div class="sub">C’était quelle boîte ou quelle étagère ?</div>
-    <div class="sect">📦 Boîtes</div>${bx.length ? '<div class="chips">' + bx.map(z => `<button data-lb="${esc(z.c)}">${esc(z.k || z.c)}</button>`).join('') + '</div>' : '<p class="sub">Aucune boîte : créez-la dans 📦 Boîtes, puis revenez ici.</p>'}
+    <div class="sect">📦 Boîtes</div><div class="chips">${bx.map(z => `<button data-lb="${esc(z.c)}">${esc(z.k || z.c)}</button>`).join('')}<button data-lbnew="1">＋ Nouvelle boîte</button></div>
     <div class="sect">🧺 Étagères</div><div class="chips">${zs.map(z => `<button data-lz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>
     <button class="ghost" id="lkx">Annuler</button>`);
   $('#lkx').onclick = closeSheet;
   document.querySelectorAll('[data-lb]').forEach(b => b.onclick = () => tie(b.dataset.lb, b.dataset.lb + '-W'));
+  const lbn = document.querySelector('[data-lbnew]'); if(lbn) lbn.onclick = () => reNewBox(code => tie(code, code + '-W'));
   document.querySelectorAll('[data-lz]').forEach(b => b.onclick = () => {
     const z = zs.find(q => q.c === b.dataset.lz), sp = zoneSpots(z);
     if(sp.length <= 1) return tie(z.c, sp.length ? sp[0].code : z.c + '-W');
@@ -1353,14 +1354,36 @@ function reTapSpot(zone, code){
 
 // ── the walk: pick the shelf, scan 2–3 fingerprints, type the total ──
 function rePickZone(){
-  const zs = zoneList(RE_LOC).filter(z => z.c !== UNPLACED);
-  openSheet(`<h3>Quelle zone ?</h3><div class="sub">${esc(locName(RE_LOC))}</div><div class="chips">${zs.map(z => `<button data-rz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>`);
+  const zs = zoneList(RE_LOC).filter(z => z.c !== UNPLACED && !z.b), bx = boxesOf(RE_LOC);
+  openSheet(`<h3>Quelle zone ?</h3><div class="sub">${esc(locName(RE_LOC))}</div><div class="chips">${zs.map(z => `<button data-rz="${esc(z.c)}">${esc(z.c)}</button>`).join('')}</div>
+    <div class="sect">📦 Ou une boîte</div><div class="chips">${bx.map(z => `<button data-rb="${esc(z.c)}">📦 ${esc(z.k || z.c)}</button>`).join('')}<button data-rbnew="1">＋ Nouvelle boîte</button></div>
+    <p class="sub">À la caisse, le caissier touche « 📦 Nouvelle boîte » avant de scanner chaque boîte.</p>`);
+  document.querySelectorAll('[data-rb]').forEach(b => b.onclick = () => reStartMark(b.dataset.rb, b.dataset.rb + '-W'));
+  const nb = document.querySelector('[data-rbnew]'); if(nb) nb.onclick = () => reNewBox(code => reStartMark(code, code + '-W'));
   document.querySelectorAll('[data-rz]').forEach(b => b.onclick = () => {
     const z = zs.find(q => q.c === b.dataset.rz), sp = zoneSpots(z);
     if(sp.length <= 1) return reStartMark(z.c, sp.length ? sp[0].code : z.c + '-W');
     openSheet(`<h3>Quelle étagère ?</h3><div class="sub">Zone ${esc(z.c)}</div><div class="chips">${sp.map(s => `<button data-rs="${esc(s.code)}">${esc(s.label)}</button>`).join('')}</div>`);
     document.querySelectorAll('[data-rs]').forEach(x => x.onclick = () => reStartMark(z.c, x.dataset.rs));
   });
+}
+// ＋ Nouvelle boîte straight from the Réorganisation (9 Nov 2026): name ready
+// (Boîte N · date), can be changed later in 📦 Boîtes.
+function reNewBox(then){
+  if(!meIsAdmin()){ toast('Réservé aux administrateurs.'); return; }
+  const n = boxesOf(RE_LOC).length + 1, d = new Date();
+  const def = 'Boîte ' + n + ' · ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+  openSheet(`<h3>📦 Nouvelle boîte</h3><div class="sub">${esc(locName(RE_LOC))} · vous pourrez la renommer ou la placer plus tard.</div>
+    <label class="f" for="rbn">Nom</label><input class="t" id="rbn" value="${esc(def)}" maxlength="40">
+    <button class="go" id="rbgo">Créer et continuer</button><button class="ghost" id="rbno">Annuler</button>`);
+  $('#rbno').onclick = closeSheet;
+  $('#rbgo').onclick = async () => {
+    const name = $('#rbn').value.trim() || def;
+    if(!online){ toast('Il faut une connexion pour créer une boîte.'); return; }
+    const b = $('#rbgo'); b.disabled = true; b.textContent = 'Création…';
+    try { const code = await boxMake(RE_LOC, name, ''); toast('📦 « ' + name + ' » créée'); then(code); }
+    catch(e){ toast('Boîte non créée : ' + (e.message || 'pas de connexion')); b.disabled = false; b.textContent = 'Créer et continuer'; }
+  };
 }
 function reStartMark(zone, spot){
   closeSheet();
@@ -1375,12 +1398,12 @@ function reEdit(id){
 }
 function reorgMarkHTML(){
   if(!REM) return '<p class="empty">Aucun repérage en cours.</p>';
-  return `<div class="zhead"><h2>${esc(REM.zone)} · ${esc(spotLabelOf(REM.loc, REM.zone, REM.spot))}</h2><p>${esc(locName(REM.loc))} · ordre n° <span class="rord"><button type="button" data-ro="-1" aria-label="Ordre moins">−</button><b id="rordv">${esc(REM.order)}</b><button type="button" data-ro="1" aria-label="Ordre plus">+</button></span></p></div>
-    <div class="sect" style="margin-top:8px">1. Scannez 2 ou 3 articles de cette étagère</div>
+  return `<div class="zhead"><h2>${isBox(REM.loc, REM.zone) ? '📦 ' + esc(boxName(REM.loc, REM.zone)) : esc(REM.zone) + ' · ' + esc(spotLabelOf(REM.loc, REM.zone, REM.spot))}</h2><p>${esc(locName(REM.loc))} · ordre n° <span class="rord"><button type="button" data-ro="-1" aria-label="Ordre moins">−</button><b id="rordv">${esc(REM.order)}</b><button type="button" data-ro="1" aria-label="Ordre plus">+</button></span></p></div>
+    <div class="sect" style="margin-top:8px">1. Scannez 2 ou 3 articles de cette ${isBox(REM.loc, REM.zone) ? 'boîte' : 'étagère'}</div>
     <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Article repère (code-barres)"><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
-    <div class="hint">Choisissez des articles qui ne sont que sur cette étagère.</div></div>
+    <div class="hint">Choisissez des articles qui ne sont que ${isBox(REM.loc, REM.zone) ? 'dans cette boîte' : 'sur cette étagère'}.</div></div>
     <div class="list">${REM.prints.map((p, i) => `<div class="citem">${thumb(p, productName(p))}<div class="nm"><strong>${esc(productName(p) || 'Produit inconnu')}</strong><small class="num">${esc(p)}</small></div><button data-rpx="${i}" aria-label="Retirer">×</button></div>`).join('') || '<p class="empty" style="padding:10px">Aucun article repère.</p>'}</div>
-    <div class="sect">2. Combien d’articles au total sur l’étagère ?</div>
+    <div class="sect">2. Combien d’articles au total ${isBox(REM.loc, REM.zone) ? 'dans la boîte' : 'sur l’étagère'} ?</div>
     <div class="rtotbox">
       <div class="rwheel" id="rwheel" aria-label="Faites défiler pour choisir le total"><div class="rw-pad"></div>${Array.from({ length: 301 }, (_, i) => `<div class="rw-i">${i}</div>`).join('')}<div class="rw-pad"></div></div>
       <div class="rtotr">
