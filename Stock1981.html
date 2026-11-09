@@ -293,6 +293,7 @@ select.t{appearance:auto}
 .scanin{display:flex;gap:8px}
 .scanin input{flex:1;min-width:0;border:2px solid var(--brand);background:var(--surface);color:var(--ink);border-radius:14px;padding:13px;font:600 18px var(--body)}
 .scanin button{border:0;border-radius:14px;padding:0 16px;font-weight:700;cursor:pointer;background:var(--ink);color:var(--bg);font-size:20px}
+.scanin button.okb{background:var(--brand);color:#fff;font-size:17px;padding:0 14px}
 .hint{font-size:13px;color:var(--muted);margin:6px 2px 0}
 .citem{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 12px}
 .citem .nm{flex:1;min-width:0}
@@ -582,6 +583,15 @@ async function flushQueue(tried){
   if(progress && online && QUEUE.length && !tried.has(QUEUE[0])) return flushQueue(tried);
   if(progress && online){ await loadData(); if(/^reorg/.test(VIEW.screen)) loadReorg(); } else render();
 }
+// ✓ OK next to the scan field (9 Nov 2026): the iPhone number keypad has no
+// Entrée key, so a typed barcode is validated with this button instead.
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-scanok]'); if(!b) return;
+  e.preventDefault();
+  const inp = $('#scan'); if(!inp) return;
+  if(!inp.value.trim()){ inp.focus(); return; }
+  if(typeof inp.onkeydown === 'function') inp.onkeydown({ key:'Enter', preventDefault(){} });
+});
 window.addEventListener('online', () => { online = true; flushQueue(); loadData(); });
 window.addEventListener('offline', () => { online = false; render(); });
 
@@ -912,7 +922,7 @@ function startCount(loc, zone, spot){
 function countHTML(){
   if(!C) return '<p class="empty">Aucun comptage en cours.</p>';
   const n = C.items.reduce((a, i) => a + i.count, 0);
-  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez ou tapez un code-barres" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo" title="Appareil photo">📷</button></div>
+  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez ou tapez un code-barres" aria-label="Code-barres"><button type="button" class="okb" data-scanok aria-label="Valider le code tapé">OK</button><button id="camb" aria-label="Scanner avec l'appareil photo" title="Appareil photo">📷</button></div>
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
@@ -1431,7 +1441,7 @@ function reorgMarkHTML(){
   if(!REM) return '<p class="empty">Aucun repérage en cours.</p>';
   return `<div class="zhead"><h2>${isBox(REM.loc, REM.zone) ? '📦 ' + esc(boxName(REM.loc, REM.zone)) : esc(REM.zone) + ' · ' + esc(spotLabelOf(REM.loc, REM.zone, REM.spot))}</h2><p>${esc(locName(REM.loc))} · ordre n° <span class="rord"><button type="button" data-ro="-1" aria-label="Ordre moins">−</button><b id="rordv">${esc(REM.order)}</b><button type="button" data-ro="1" aria-label="Ordre plus">+</button></span></p></div>
     <div class="sect" style="margin-top:8px">1. Scannez 2 ou 3 articles de cette ${isBox(REM.loc, REM.zone) ? 'boîte' : 'étagère'}</div>
-    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Article repère (code-barres)"><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
+    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Article repère (code-barres)"><button type="button" class="okb" data-scanok aria-label="Valider le code tapé">OK</button><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
     <div class="hint">Choisissez des articles qui ne sont que ${isBox(REM.loc, REM.zone) ? 'dans cette boîte' : 'sur cette étagère'}.</div></div>
     <div class="list">${REM.prints.map((p, i) => `<div class="citem">${thumb(p, productName(p))}<div class="nm"><strong>${esc(productName(p) || 'Produit inconnu')}</strong><small class="num">${esc(p)}</small></div><button data-rpx="${i}" aria-label="Retirer">×</button></div>`).join('') || '<p class="empty" style="padding:10px">Aucun article repère.</p>'}</div>
     <div class="sect">2. Combien d’articles au total ${isBox(REM.loc, REM.zone) ? 'dans la boîte' : 'sur l’étagère'} ?</div>
@@ -1684,7 +1694,7 @@ function arrivalHTML(id){
 function unitHTML(){
   if(!R) return '<p class="empty">Aucune glacière en cours.</p>';
   const n = R.lines.reduce((a, l) => a + l.qty, 0);
-  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez un article" aria-label="Code-barres"><button id="camb" aria-label="Scanner avec l'appareil photo">📷</button></div>
+  return `<div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez un article" aria-label="Code-barres"><button type="button" class="okb" data-scanok aria-label="Valider le code tapé">OK</button><button id="camb" aria-label="Scanner avec l'appareil photo">📷</button></div>
     <div class="hint">Chaque scan ajoute 1. Touchez un produit pour changer sa date.</div></div>
     ${R.lines.length ? lastCard(R.lines[0].barcode, R.lines[0].name, R.lines.filter(x => bkey(x.barcode) === bkey(R.lines[0].barcode)).reduce((a, x) => a + x.qty, 0), ' · ' + expBadge(R.lines[0])) : ''}
     <div class="sect" style="margin-top:6px">${R.lines.length} ligne(s) · ${fmt(n)} article(s)</div>
@@ -2869,7 +2879,7 @@ function boxPutHTML(){
     return h;
   }
   h += `<div class="sect" style="margin-top:6px">2. Scannez chaque article que vous posez en <b style="font-size:18px">${esc(BP.toZone)}</b></div>
-    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez l’article posé" aria-label="Code-barres"><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
+    <div class="countbar"><div class="scanin"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Scannez l’article posé" aria-label="Code-barres"><button type="button" class="okb" data-scanok aria-label="Valider le code tapé">OK</button><button id="camb" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
     <div class="hint">Chaque scan : −1 dans la boîte, +1 en ${esc(BP.toZone)}.</div></div>`;
   const L = BP.last;
   if(L && L.bad) h += `<div class="notice" style="background:#fee2e2;color:#991b1b;font-weight:700">${esc(L.bad)}<br><small>${esc(productName(L.barcode) || L.barcode)}</small></div>`;
