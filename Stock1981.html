@@ -497,7 +497,7 @@ async function loadData(){
   try {
     const d = await api({ action:'getStock1981' });
     if(!d || !d.success) throw new Error((d && d.error) || 'Réponse invalide');
-    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt, empty: Array.isArray(d.empty) ? d.empty : ((DATA && DATA.empty) || []), packs: (d.packs && typeof d.packs === 'object') ? d.packs : ((DATA && DATA.packs) || {}) };
+    DATA = { zones: d.zones, spots: d.spots, prices: d.prices || {}, names: d.names || {}, aliases: d.aliases || {}, images: d.images || (DATA && DATA.images) || {}, generatedAt: d.generatedAt, empty: Array.isArray(d.empty) ? d.empty : ((DATA && DATA.empty) || []), packs: (d.packs && typeof d.packs === 'object') ? d.packs : ((DATA && DATA.packs) || {}), flags: Array.isArray(d.flags) ? d.flags : ((DATA && DATA.flags) || []) };
     applyZoneResets(DATA);
     reapplyQueue();
     ls('s1981_cache', JSON.stringify(DATA));
@@ -754,6 +754,7 @@ function homeHTML(){
     + tool('restock', '🧺', 'Réassort', rsN ? rsN + ' produit(s)' : 'presque vides', rsN || '')
     + tool('refill', '🔁', 'Remplir', 'scannez l’étagère')
     + tool('valeur', '💰', 'Valeur', 'stock & dormants')
+    + ((DATA && DATA.flags && DATA.flags.length) ? tool('flags', '⚠', 'Introuvables', 'signalés à la caisse', DATA.flags.length) : '')
     + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
@@ -886,6 +887,7 @@ function bindMain(){
   const q = $('#q');
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; q.onkeydown = e => { if(e.key === 'Enter'){ const sh = parseShelf(q.value); if(sh){ e.preventDefault(); q.value = ''; VIEW.q = ''; shelfScanned(sh); } else if(/^\d{6,}$/.test(q.value.trim())){ e.preventDefault(); productWhere(q.value.trim()); } } }; renderResults(); }
   const ps = document.querySelector('[data-act="pscan"]'); if(ps) ps.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh) shelfScanned(sh); else productWhere(code); });
+  const fl = document.querySelector('[data-act="flags"]'); if(fl) fl.onclick = flagsOpen;
   const vl = document.querySelector('[data-act="valeur"]'); if(vl) vl.onclick = () => { go({ screen:'valeur' }); loadSSum(); };
   const rs = document.querySelector('[data-act="restock"]'); if(rs) rs.onclick = () => { go({ screen:'restock' }); ['Store 1', 'Store 2'].forEach(l => loadSorties(l)); };
   const sp = document.querySelector('[data-act="sphoto"]'); if(sp) sp.onclick = () => zonePhotoTake(VIEW.loc, '__store');
@@ -2745,6 +2747,24 @@ function restockHTML(){
     h += `<div class="sect" style="margin-top:12px">${esc(z)} · ${esc((zoneList(loc).find(q => q.c === z) || {}).k || '')}</div><div class="list">` + by[z].map(o => `<button class="row" data-bc="${esc(o.bc)}" data-loc2="${esc(loc)}" data-zone2="${esc(z)}">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong><small>reste ~${fmt(o.left)} sur ${fmt(o.counted)} comptés${o.shelf ? ' · étagère ' + esc(o.shelf) : ''}${o.also && o.also.length ? ' · aussi en ' + o.also.map(esc).join(', ') : ''}</small><small style="font-weight:700;color:${o.w ? 'var(--ok)' : 'var(--warn)'}">${o.w ? '📦 ' + fmt(o.w) + ' à l’entrepôt' : '⚠ rien à l’entrepôt'}</small></div><div class="qty num" style="color:var(--warn)">${fmt(o.left)}</div></button>`).join('') + '</div>';
   });
   return h;
+}
+// ⚠ INTROUVABLES (10 Nov 2026): « Pas trouvé en rayon » pressed by staff in
+// the Scanner's « Où est-il ? » (Code GS reportMissing). Recount the shelf,
+// then mark it réglé (resolveMissing).
+function flagsOpen(){
+  const F = (DATA && DATA.flags) || [];
+  if(!F.length){ toast('Rien de signalé.'); return; }
+  openSheet(`<h3>⚠ Introuvables</h3><div class="sub">Produits que le personnel n’a pas trouvés là où l’appli les montre.</div>` +
+    F.map(f => `<div class="where" style="margin-top:8px"><div><span><b>${esc(f.name || f.barcode)}</b><br><small>${esc(locName(f.loc))} · ${esc(f.zone || '?')}${f.spot ? ' · ' + esc(spotLabelOf(f.loc, f.zone, f.spot)) : ''} · ${esc(f.by)} · ${esc(String(f.at).slice(0, 16).replace('T', ' '))}</small></span></div>
+      <div style="display:flex;gap:6px;margin-top:6px">${f.zone ? `<button class="cbtn" data-frc="${esc(f.id)}">Recompter</button>` : ''}<button class="cbtn alt" data-fok="${esc(f.id)}">✓ Réglé</button></div></div>`).join('') +
+    '<button class="ghost" id="fx">Fermer</button>');
+  $('#fx').onclick = closeSheet;
+  document.querySelectorAll('[data-frc]').forEach(b => b.onclick = () => { const f = F.find(x => x.id === b.dataset.frc); closeSheet(); if(f.spot) startCount(f.loc, f.zone, f.spot); else go({ screen:'zone', loc: f.loc, zone: f.zone, tab:'shelves' }); });
+  document.querySelectorAll('[data-fok]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { const d = await post({ action:'resolveMissing', id: b.dataset.fok }); if(!d || !d.success) throw new Error('refusé'); DATA.flags = d.flags || []; ls('s1981_cache', JSON.stringify(DATA)); closeSheet(); render(); if(DATA.flags.length) flagsOpen(); else toast('Tout est réglé 👍'); }
+    catch(e){ b.disabled = false; toast('Pas enregistré (connexion ?)'); }
+  });
 }
 // ══════════════════════════════════════════════════════════════════
 //  💰 VALEUR & DORMANTS (10 Nov 2026). Stock = zone quantities (counts,

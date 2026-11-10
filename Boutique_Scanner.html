@@ -190,6 +190,15 @@ input,select{font-family:inherit}
 .sale-act:hover{background:color-mix(in srgb, var(--c) 10%, #fff)}
 .sale-act.danger{border-style:dashed}
 /* Bottom tiles (were long rectangles) */
+.ou-card{border:1px solid var(--border2);border-radius:14px;padding:12px;margin:8px 0;background:var(--surface,#fff)}
+.ou-here{font-size:20px;font-weight:800;line-height:1.25}
+.ou-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:15px}
+.ou-row:last-child{border-bottom:0}.ou-row b{white-space:nowrap}
+.ou-map{width:100%;height:auto;max-height:340px;background:#faf7f2;border-radius:10px;margin-top:8px}
+.ou-map rect{fill:#efe8dc;stroke:#c9bba5;stroke-width:1}.ou-map text{font-size:12px;fill:#6b5d4b;text-anchor:middle;dominant-baseline:middle;font-weight:700}
+.ou-map .hl rect{fill:#7c3aed;stroke:#4c1d95;stroke-width:3}.ou-map .hl text{fill:#fff;font-size:15px}
+.ou-res{display:flex;justify-content:space-between;gap:8px;padding:10px;border:1px solid var(--border2);border-radius:10px;margin:6px 0;cursor:pointer;font-size:15px}
+.ou-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.ou-btns button{flex:1;min-width:150px;min-height:46px}
 .pos-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:10px}
 .pos-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   min-height:68px;padding:8px 4px;border:1.5px solid color-mix(in srgb, var(--c) 40%, #fff);border-radius:10px;
@@ -1421,6 +1430,7 @@ input,select{font-family:inherit}
               onclick="openPinModal()">Admin ›</span>
           </div>
           <div class="pos-tiles">
+            <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
             <button class="pos-tile" style="--c:#0e7490" onclick="openRequestsModal()"><span class="i">📋</span><span class="l">Demandes clients</span><span class="b" id="req-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#b03a2e" onclick="openPinModal('return')"><span class="i">↩</span><span class="l">Retour</span></button>
@@ -1581,7 +1591,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v6-nov-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3345,6 +3355,7 @@ function processScan() {
   input.value = ""; input.focus();
   if(!raw) return;
   if(_reorgCatch(raw)) return;
+  if(_ouCatch(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
   raw = resolveAlias(raw);
   if(_lblTill(raw)) return;
@@ -11306,6 +11317,168 @@ function endShiftSkip(){
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  🔎 OÙ EST-IL ? (v7-nov-a, 10 Nov 2026) — for the staff at the till.
+//  Scan or type a name → where it is in THIS store (zone, shelf, how many,
+//  map with the zone lit), in a box, in the other store, at the Entrepôt;
+//  price + promo. Buttons: 📨 Demander (transfer request, existing system),
+//  ⚠ Pas trouvé en rayon (Code GS reportMissing → Stock1981 « Introuvables »),
+//  🙋 Le client le demande (Code GS customerRequest → February list),
+//  and « À la place » (similar products in stock here) when it is nowhere.
+//  Data = Code GS getStock1981 + getMapLayouts, kept on the till (offline),
+//  refreshed every 15 min.
+// ══════════════════════════════════════════════════════════════════
+let OU = (function(){ try { return JSON.parse(localStorage.getItem('bc_ou') || 'null'); } catch(e){ return null; } })(), _ouBusy = false, _ouCur = null;
+function _ouOpen(){ const m = document.getElementById('ou-modal'); return !!(m && m.classList.contains('open')); }
+function _ouCatch(raw){ if(!_ouOpen()) return false; document.getElementById('ou-in').value = raw; ouEnter(raw); return true; }
+function _ouHere(){ return _defaultPriceLocation() === 'Store 2' ? 'Store 2' : 'Store 1'; }
+function _ouGet(action){ return fetch(productSyncUrl + (productSyncUrl.includes('?') ? '&' : '?') + 'action=' + action + '&key=' + encodeURIComponent(writeKey), { cache: 'no-store' }).then(r => r.json()); }
+async function ouLoad(force){
+  if(_ouBusy || !productSyncUrl || !writeKey || !navigator.onLine) return;
+  if(!force && OU && Date.now() - (OU.at || 0) < 15 * 60000) return;
+  _ouBusy = true; _ouStatus('Mise à jour des emplacements…');
+  try {
+    const [d, m] = await Promise.all([_ouGet('getStock1981'), _ouGet('getMapLayouts').catch(() => null)]);
+    if(!d || !d.success) throw new Error((d && d.error) || 'réponse invalide');
+    OU = { zones: d.zones || [], spots: d.spots || [], names: d.names || {}, prices: d.prices || {}, layouts: (m && m.layouts) || (OU && OU.layouts) || {}, at: Date.now() };
+    try { localStorage.setItem('bc_ou', JSON.stringify(OU)); } catch(e){ try { localStorage.setItem('bc_ou', JSON.stringify(Object.assign({}, OU, { spots: [] }))); } catch(e2){} }
+    _ouStatus('');
+    if(_ouCur) ouShow(_ouCur);
+  } catch(e){ _ouStatus(OU ? 'Hors ligne : emplacements du ' + new Date(OU.at).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'Emplacements pas encore chargés (connexion ?).'); }
+  _ouBusy = false;
+}
+setInterval(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 5 * 60000);
+setTimeout(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 8000);
+function _ouStatus(t){ const el = document.getElementById('ou-status'); if(el) el.textContent = t; }
+function ouOpen(){
+  document.getElementById('ou-modal').classList.add('open');
+  _ouCur = null; document.getElementById('ou-in').value = ''; document.getElementById('ou-body').innerHTML = '<div class="dlv-dim" style="padding:10px 2px">Scannez le produit, ou tapez au moins 3 lettres du nom.</div>';
+  _ouStatus(OU ? '' : 'Chargement des emplacements…'); ouLoad();
+  setTimeout(() => document.getElementById('ou-in').focus(), 80);
+}
+function ouClose(){ document.getElementById('ou-modal').classList.remove('open'); _ouCur = null; try { document.getElementById('scan-input').focus(); } catch(e){} }
+function _ouName(bc){
+  const k = _bcKeyClient(bc);
+  return (OU && OU.names && OU.names[k]) || (lookupBarcode(bc) || {}).name || (((_plAll || []).find(x => _bcKeyClient(x.barcode) === k)) || {}).name || '';
+}
+function _ouCatalog(){
+  const m = {};
+  (_plAll || []).forEach(p => { const k = _bcKeyClient(p.barcode); if(k && p.name) m[k] = { bc: p.barcode, name: p.name }; });
+  if(OU) (OU.zones || []).forEach(r => { const k = _bcKeyClient(r[2]); if(k && !m[k] && r[3]) m[k] = { bc: r[2], name: r[3] }; });
+  return Object.values(m);
+}
+function _ouNorm(t){ return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function _ouStockOf(k){ return OU ? (OU.zones || []).filter(r => _bcKeyClient(r[2]) === k && Number(r[4]) > 0) : []; }
+function ouType(v){
+  const t = _ouNorm(v).trim();
+  if(/^\d+$/.test(t) || t.length < 3){ if(!t) document.getElementById('ou-body').innerHTML = ''; return; }
+  const words = t.split(/\s+/);
+  const res = _ouCatalog().filter(p => { const n = _ouNorm(p.name); return words.every(w => n.includes(w)); })
+    .map(p => { const st = _ouStockOf(_bcKeyClient(p.bc)); return Object.assign({ here: st.filter(r => r[0] === _ouHere()).reduce((a, r) => a + Number(r[4]), 0), all: st.reduce((a, r) => a + Number(r[4]), 0) }, p); })
+    .sort((a, b) => b.here - a.here || b.all - a.all).slice(0, 12);
+  _ouCur = null;
+  document.getElementById('ou-body').innerHTML = res.length
+    ? res.map(p => `<div class="ou-res" onclick="ouShow('${_dlvEsc(p.bc)}')"><span>${_dlvEsc(p.name)}</span><b style="color:${p.here ? '#15803d' : p.all ? '#b45309' : '#b91c1c'}">${p.here ? p.here + ' ici' : p.all ? 'ailleurs' : 'aucun'}</b></div>`).join('')
+    : `<div class="ou-card"><b>Aucun produit à ce nom.</b><div class="dlv-dim" style="margin:4px 0 8px">On ne le vend pas encore ?</div><button class="btn-sm btn-blue" onclick="ouAsk(null, ${JSON.stringify(String(v).trim()).replace(/"/g, '&quot;')})">🙋 Le client le demande</button></div>`;
+}
+function ouEnter(v){
+  const raw = String(v || '').trim(); if(!raw) return;
+  if(/^\d{4,}$/.test(raw)){ ouShow(resolveAlias ? resolveAlias(raw) : raw); document.getElementById('ou-in').value = ''; return; }
+  ouType(raw);
+}
+function _ouMap(loc, zonesHl){
+  const L = OU && OU.layouts && OU.layouts[loc]; if(!L || !L.layout || !Array.isArray(L.layout.items)) return '';
+  const zs = L.layout.items.filter(i => i.t === 'zone' && i.code);
+  if(!zs.length) return '';
+  return `<svg class="ou-map" viewBox="${_dlvEsc(L.layout.viewBox || '0 0 1000 680')}" preserveAspectRatio="xMidYMid meet">` + zs.map(i => {
+    const hl = zonesHl.indexOf(i.code) >= 0;
+    return `<g class="${hl ? 'hl' : ''}"><rect x="${i.x}" y="${i.y}" width="${i.w}" height="${i.h}" rx="3"/><text x="${i.x + i.w / 2}" y="${i.y + i.h / 2}">${_dlvEsc(i.box ? '📦' : i.code)}</text></g>`;
+  }).join('') + '</svg>';
+}
+function _ouZoneInfo(loc, code){
+  const L = OU && OU.layouts && OU.layouts[loc];
+  const it = L && L.layout && Array.isArray(L.layout.items) ? L.layout.items.find(i => i.t === 'zone' && i.code === code) : null;
+  return { name: it ? (it.k || '') : '', box: !!(it && it.box) };
+}
+function _ouShelves(loc, zone, k){
+  return (OU.spots || []).filter(r => r[0] === loc && r[1] === zone && _bcKeyClient(r[3]) === k && Number(r[5]) > 0).map(r => r[2]);
+}
+function ouShow(bc){
+  _ouCur = bc;
+  const k = _bcKeyClient(bc), here = _ouHere(), name = _ouName(bc) || bc;
+  const price = psPriceFor(bc), pr = typeof promoFor === 'function' ? promoFor(bc) : null;
+  const now = pr && price ? (pr.type === 'price' ? Math.min(price, pr.value) : price - Math.round(price * pr.value / 100)) : null;
+  const st = OU ? _ouStockOf(k) : [];
+  const atHere = st.filter(r => r[0] === here), shelves = atHere.filter(r => !_ouZoneInfo(here, r[1]).box), boxes = atHere.filter(r => _ouZoneInfo(here, r[1]).box);
+  const sum = rs => rs.reduce((a, r) => a + Number(r[4]), 0);
+  const other = here === 'Store 1' ? 'Store 2' : 'Store 1', atOther = st.filter(r => r[0] === other), atWh = st.filter(r => r[0] === 'Warehouse');
+  let h = `<div class="ou-card"><div style="font-size:17px;font-weight:800">${_dlvEsc(name)}</div><div class="dlv-dim">${_dlvEsc(bc)}</div>` +
+    (price ? `<div style="font-size:20px;font-weight:800;margin-top:4px">${now != null ? `<s style="opacity:.55;font-size:15px">${formatCFA(price)}</s> ${formatCFA(now)} <span style="color:#c2410c;font-size:14px">🔥 ${_dlvEsc(promoShort(pr))}</span>` : formatCFA(price)}</div>` : '') + '</div>';
+  if(!OU){ h += '<div class="ou-card">Emplacements pas encore chargés : reconnectez la caisse à internet.</div>'; document.getElementById('ou-body').innerHTML = h; return; }
+  if(shelves.length || boxes.length){
+    h += `<div class="ou-card"><div class="ou-here" style="color:#15803d">✅ Ici : ${sum(atHere)} en stock</div>` +
+      shelves.map(r => { const zi = _ouZoneInfo(here, r[1]), sh = _ouShelves(here, r[1], k); return `<div class="ou-row"><span>Zone <b>${_dlvEsc(r[1])}</b>${zi.name ? ' · ' + _dlvEsc(zi.name) : ''}${sh.length ? '<br><span class="dlv-dim">Étagère ' + sh.map(_dlvEsc).join(', ') + '</span>' : ''}</span><b>${r[4]}</b></div>`; }).join('') +
+      boxes.map(r => `<div class="ou-row"><span>📦 Boîte <b>${_dlvEsc(_ouZoneInfo(here, r[1]).name || r[1])}</b></span><b>${r[4]}</b></div>`).join('') +
+      _ouMap(here, shelves.map(r => r[1])) +
+      `<div class="ou-btns"><button class="btn-sm btn-outline" style="color:#b45309;border-color:#f3c98b" onclick="ouMissing('${_dlvEsc(bc)}')">⚠ Pas trouvé en rayon</button></div></div>`;
+  } else {
+    h += `<div class="ou-card"><div class="ou-here" style="color:#b91c1c">❌ Pas en stock ici</div></div>`;
+  }
+  if(atOther.length || atWh.length){
+    h += '<div class="ou-card"><div style="font-weight:800;margin-bottom:4px">Ailleurs</div>' +
+      (atWh.length ? `<div class="ou-row"><span>🏭 Entrepôt</span><b>${sum(atWh)}</b></div>` : '') +
+      (atOther.length ? `<div class="ou-row"><span>🏪 ${_dlvEsc(TF_LABEL[other])}</span><b>${sum(atOther)}</b></div>` : '') +
+      `<div class="ou-btns">` + (atWh.length ? `<button class="btn-sm btn-blue" onclick="ouRequest('${_dlvEsc(bc)}','Warehouse')">📨 Demander à l’entrepôt</button>` : '') +
+      (atOther.length ? `<button class="btn-sm btn-outline" onclick="ouRequest('${_dlvEsc(bc)}','${other}')">📨 Demander à ${_dlvEsc(TF_LABEL[other])}</button>` : '') + '</div></div>';
+  }
+  if(!st.length){
+    const alt = _ouAlternatives(bc, name);
+    h += `<div class="ou-card"><b>Plus en stock nulle part.</b><div class="ou-btns"><button class="btn-sm btn-blue" onclick="ouAsk('${_dlvEsc(bc)}', null)">🙋 Le client le demande</button></div></div>`;
+    if(alt.length) h += '<div class="ou-card"><div style="font-weight:800;margin-bottom:4px">👉 À la place (en stock ici)</div>' + alt.map(a => `<div class="ou-res" onclick="ouShow('${_dlvEsc(a.bc)}')"><span>${_dlvEsc(a.name)}<br><span class="dlv-dim">Zone ${_dlvEsc(a.zones.join(', '))}${a.price ? ' · ' + formatCFA(a.price) : ''}</span></span><b style="color:#15803d">${a.qty}</b></div>`).join('') + '</div>';
+  } else if(!atHere.length){
+    h += `<div class="ou-card"><div class="ou-btns"><button class="btn-sm btn-outline" onclick="ouAsk('${_dlvEsc(bc)}', null)">🙋 Le client le voulait ici</button></div></div>`;
+  }
+  document.getElementById('ou-body').innerHTML = h;
+}
+// similar products in stock here: same brand (first word) or ≥ 2 shared words
+function _ouAlternatives(bc, name){
+  const here = _ouHere(), k0 = _bcKeyClient(bc);
+  const stop = new Set(['the','and','for','with','de','la','le','les','du','des','et','pour','avec','oz','ml','fl','g','kg','pack','lot']);
+  const words = n => _ouNorm(n).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stop.has(w) && !/^\d+$/.test(w));
+  const w0 = words(name); if(!w0.length) return [];
+  const by = {};
+  (OU.zones || []).forEach(r => { if(r[0] !== here || !(Number(r[4]) > 0)) return; const k = _bcKeyClient(r[2]); if(k === k0) return; const o = by[k] || (by[k] = { bc: r[2], name: r[3] || _ouName(r[2]), qty: 0, zones: [] }); o.qty += Number(r[4]); if(o.zones.indexOf(r[1]) < 0) o.zones.push(r[1]); });
+  return Object.values(by).map(o => { const w = words(o.name); o.score = (w[0] && w[0] === w0[0] ? 2 : 0) + w.filter(x => w0.indexOf(x) >= 0).length; o.price = psPriceFor(o.bc); return o; })
+    .filter(o => o.score >= 2).sort((a, b) => b.score - a.score || b.qty - a.qty).slice(0, 3);
+}
+function ouRequest(bc, from){
+  const to = _ouHere(), name = _ouName(bc) || bc;
+  const n = parseInt(prompt('Combien en demander à ' + TF_LABEL[from] + ' ?\n' + name, '1'), 10);
+  if(!(n > 0)) return;
+  const grp = 'G' + Date.now().toString(36) + _devTag(), gid = _txNewId(), now = new Date(), note = 'Demandé depuis « Où est-il ? »';
+  _tfSave({ uid: grp + '-0', grp, gid, id: gid, ts: now.toISOString(), reqTs: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
+    from, to, fulfiller: from, barcode: bc, name, qty: n, reqQty: n, notes: note, note, by: currentEmployee || '?', status: 'requested', qtyReceived: null, zoneIn: 'Non placé' });
+  try { updateTfBadge(); } catch(e){}
+  showToast('📨 Demande ' + gid + ' envoyée à ' + TF_LABEL[from] + ' (' + n + ').', 4000);
+}
+async function ouMissing(bc){
+  const here = _ouHere(), k = _bcKeyClient(bc);
+  const r = _ouStockOf(k).filter(x => x[0] === here && !_ouZoneInfo(here, x[1]).box)[0];
+  const sh = r ? _ouShelves(here, r[1], k)[0] || '' : '';
+  try {
+    const d = await _postProductSync({ key: writeKey, action: 'reportMissing', location: here, zone: r ? r[1] : '', spot: sh, barcode: bc, name: _ouName(bc), by: currentEmployee || '?' });
+    if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+    showToast('⚠ Signalé : l’étagère sera recomptée. Merci !', 4000);
+  } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas envoyé (connexion ?)'), 5000); }
+}
+async function ouAsk(bc, typedName){
+  const name = typedName || _ouName(bc) || bc;
+  try {
+    const d = await _postProductSync({ key: writeKey, action: 'customerRequest', barcode: bc || '', name, store: TF_LABEL[_ouHere()], by: currentEmployee || '?' });
+    if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+    showToast('🙋 Noté pour le prochain container' + (d.count > 1 ? ' (demandé ' + d.count + ' fois)' : '') + '. Merci !', 4500);
+  } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas envoyé (connexion ?)'), 5000); }
+}
+// ══════════════════════════════════════════════════════════════════
 //  🔥 PROMOS (v6-nov-a, 6 Nov 2026) — tab « Promos » of the inventory
 //  Sheet (Code GS setPromo / getPriceList → promos). A promo is a % off or
 //  a promo price, on one product or a whole Catalogue list (Thaïlande),
@@ -14418,6 +14591,15 @@ closeSale = function(){
 </div>
 
 <!-- ══ HOLD / RESERVATION MODAL ══ -->
+<div class="modal-bg" id="ou-modal">
+  <div class="modal" style="width:min(560px,96vw);text-align:left;max-height:92vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🔎 Où est-il ?</div><button class="btn-sm btn-outline" onclick="ouClose()">Fermer</button></div>
+    <input class="dlv-field" id="ou-in" style="font-size:18px;margin-top:10px" placeholder="Scannez le produit ou tapez son nom" autocomplete="off"
+      oninput="ouType(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();ouEnter(this.value)}"/>
+    <div id="ou-status" class="dlv-dim" style="margin:4px 0 6px;min-height:15px"></div>
+    <div id="ou-body"></div>
+  </div>
+</div>
 <div class="modal-bg" id="hold-modal">
   <div class="modal" style="width:min(420px,95vw);text-align:left">
     <div class="modal-title">🔖 Nouvelle réservation</div>
