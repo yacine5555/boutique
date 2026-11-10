@@ -2494,7 +2494,9 @@ function spotAdd(loc, zone, spot, src, tried){
       openSheet(`<h3>🔁 Remplir ${esc(zone)} · ${esc(spotLabelOf(loc, zone, spot))}</h3><div class="sub">D’où viennent les articles ?</div>
         <button class="go" id="rfw" style="min-height:66px;font-size:18px">🏭 De l’entrepôt</button>
         <button class="go" id="rfb" style="min-height:66px;font-size:18px;margin-top:10px;background:var(--sunk);color:var(--ink)">🏪 Du magasin Balkuy</button>
+        <button class="go" id="rfn" style="min-height:56px;font-size:16px;margin-top:10px;background:var(--sunk);color:var(--ink)">📦 Déjà retiré ailleurs (transfert)</button>
         <button class="ghost" id="rfx">Annuler</button>`);
+      $('#rfn').onclick = () => { closeSheet(); spotAdd(loc, zone, spot, null); };
       $('#rfw').onclick = () => { closeSheet(); spotAdd(loc, zone, spot, 'Warehouse'); };
       $('#rfb').onclick = () => { closeSheet(); spotAdd(loc, zone, spot, 'Store 1'); };
       $('#rfx').onclick = closeSheet;
