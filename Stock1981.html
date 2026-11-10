@@ -683,7 +683,14 @@ function ago(iso){
 }
 
 // ── rendering ───────────────────────────────────────────
-function go(v){ VIEW = Object.assign({ tab:'products' }, v); history.pushState(VIEW, ''); render(); window.scrollTo(0, 0); }
+// Moving sideways (zone → zone, shelf → shelf, tab → tab) replaces the page
+// instead of stacking it, so ‹ always goes up one level (10 Nov 2026).
+function go(v){
+  const prev = VIEW, nv = Object.assign({ tab:'products' }, v);
+  const side = prev && prev.screen === nv.screen && nv.screen !== 'home';
+  VIEW = nv; if(side) history.replaceState(VIEW, ''); else history.pushState(VIEW, '');
+  render(); window.scrollTo(0, 0);
+}
 window.addEventListener('popstate', e => { VIEW = e.state || { screen:'home' }; closeSheet(); render(); });
 $('#back').onclick = () => history.back();
 $('#who').onclick = () => openSettings();

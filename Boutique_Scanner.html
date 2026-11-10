@@ -1144,6 +1144,7 @@ input,select{font-family:inherit}
 .sh-row{display:flex;gap:8px;align-items:baseline;}
 .sh-row .k{color:var(--ink3);min-width:190px;}
 .sh-ok{color:#15803d;font-weight:700;} .sh-bad{color:#dc2626;font-weight:700;} .sh-warn{color:#b45309;font-weight:700;}
+#login-pin,#pin-input,#discount-pin,#emp-pin,#new-pin,#new-pin2,#new-price-pin{-webkit-text-security:disc}
 </style>
 </head>
 <body>
@@ -1177,7 +1178,7 @@ input,select{font-family:inherit}
     <div id="pin-wrap" style="display:none">
       <div class="field-wrap">
         <div class="field-label" id="lbl-pin">PIN</div>
-        <input class="field" id="login-pin" type="password" maxlength="10"
+        <input class="field" id="login-pin" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore style="-webkit-text-security:disc" maxlength="10"
           autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"/>
       </div>
     </div>
@@ -2212,7 +2213,7 @@ input,select{font-family:inherit}
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
         <div style="flex:1;min-width:140px">
           <div class="setup-lbl">Nouveau PIN prix</div>
-          <input class="setup-field" id="new-price-pin" type="password" inputmode="numeric" placeholder="Chiffres uniquement (4 min.)" style="margin-bottom:0"/>
+          <input class="setup-field" id="new-price-pin" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore inputmode="numeric" placeholder="Chiffres uniquement (4 min.)" style="margin-bottom:0;-webkit-text-security:disc"/>
         </div>
         <button class="btn-sm btn-green" onclick="savePricePin()">Enregistrer</button>
         <button class="btn-sm btn-outline" onclick="clearPricePin()">Désactiver</button>
@@ -2226,11 +2227,11 @@ input,select{font-family:inherit}
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
         <div style="flex:1;min-width:140px">
           <div class="setup-lbl">New PIN</div>
-          <input class="setup-field" id="new-pin" type="password" placeholder="Numbers only" style="margin-bottom:0"/>
+          <input class="setup-field" id="new-pin" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore placeholder="Numbers only" style="margin-bottom:0;-webkit-text-security:disc"/>
         </div>
         <div style="flex:1;min-width:140px">
           <div class="setup-lbl">Confirm</div>
-          <input class="setup-field" id="new-pin2" type="password" placeholder="Repeat" style="margin-bottom:0"/>
+          <input class="setup-field" id="new-pin2" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore placeholder="Repeat" style="margin-bottom:0;-webkit-text-security:disc"/>
         </div>
         <button class="btn-sm btn-green" onclick="changePin()">Update</button>
       </div>
@@ -2251,7 +2252,7 @@ input,select{font-family:inherit}
           </div>
           <div style="flex:1;min-width:100px">
             <div class="setup-lbl">4-Digit PIN</div>
-            <input class="setup-field" id="emp-pin" type="password"
+            <input class="setup-field" id="emp-pin" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore
               maxlength="4" placeholder="e.g. 2241" style="margin-bottom:0"
               onkeydown="if(event.key==='Enter')addEmployee()"/>
           </div>
@@ -2341,7 +2342,7 @@ input,select{font-family:inherit}
   <div class="modal">
     <div class="modal-title">🔒 Admin</div>
     <div class="modal-sub">Enter your PIN</div>
-    <input class="pin-field" id="pin-input" type="password" maxlength="10"
+    <input class="pin-field" id="pin-input" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore style="-webkit-text-security:disc" maxlength="10"
       placeholder="••••" onkeydown="if(event.key==='Enter')checkPin()"/>
     <div class="pin-err" id="pin-err"></div>
     <div class="modal-btns">
@@ -2369,7 +2370,7 @@ input,select{font-family:inherit}
     <input class="pin-field" id="discount-value" type="number" min="0" inputmode="numeric"
       placeholder="Valeur de la remise" style="margin-bottom:12px"/>
     <div class="modal-sub" style="margin-bottom:6px">PIN employé (pour attribution)</div>
-    <input class="pin-field" id="discount-pin" type="password" maxlength="10"
+    <input class="pin-field" id="discount-pin" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore style="-webkit-text-security:disc" maxlength="10"
       placeholder="••••" onkeydown="if(event.key==='Enter')confirmDiscount()"/>
     <div class="pin-err" id="discount-err"></div>
     <div class="modal-btns">
