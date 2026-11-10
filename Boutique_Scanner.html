@@ -721,6 +721,8 @@ input,select{font-family:inherit}
 .bag-list{max-height:min(58vh,560px);overflow-y:auto;display:flex;flex-direction:column}
 .bag-row{display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border)}
 .bag-row.newest{grid-template-columns:150px 1fr auto;animation:bagIn .45s ease-out}
+.bag-row.promo{background:#fef2f2;border-left:5px solid #dc2626;padding-left:8px}.bag-row.promo .bag-price.disc{color:#dc2626}.bag-promo{color:#fff!important;background:#dc2626;display:inline-block;border-radius:6px;padding:1px 7px;font-weight:800;margin-top:2px}
+.pn-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px}.pn-sec{margin-top:12px;padding-top:6px;border-top:2px solid var(--border)}
 @keyframes bagIn{from{background:#ecfdf5}to{background:transparent}}
 .bag-ph{width:76px;height:76px;border-radius:10px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .bag-row.newest .bag-ph{width:150px;height:150px}
@@ -1432,6 +1434,7 @@ input,select{font-family:inherit}
           </div>
           <div class="pos-tiles">
             <button class="pos-tile" style="--c:#be185d" onclick="openFormation()"><span class="i">🎓</span><span class="l">Formation</span></button>
+            <button class="pos-tile" style="--c:#b91c1c" onclick="pnOpen()"><span class="i">🏷</span><span class="l">Étiquettes</span><span class="b" id="pn-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
             <button class="pos-tile" style="--c:#0e7490" onclick="openRequestsModal()"><span class="i">📋</span><span class="l">Demandes clients</span><span class="b" id="req-tile-badge"></span></button>
@@ -1593,7 +1596,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-c</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-d</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2728,6 +2731,7 @@ function confirmShiftStartBalances(){
   // Auto-start first sale
   startNewSale();
   showScreen("pos");
+  setTimeout(() => { try { pnAfterLogin(sel); } catch(e){} }, 400);
   applyTranslations();
 }
 function doLogout() {
@@ -2974,9 +2978,9 @@ function renderCurrentCart() {
     const priceHtml = it.discount
       ? `<span class="bag-orig">${formatCFA(base)}</span><b class="bag-price disc">${formatCFA(it.lineTotal)}</b>`
       : `<b class="bag-price">${formatCFA(it.lineTotal ?? base)}</b>`;
-    return `<div class="bag-row${k === 0 ? ' newest' : ''}">
+    return `<div class="bag-row${k === 0 ? ' newest' : ''}${it.discount && it.discount.type === 'promo' ? ' promo' : ''}">
       <div class="bag-ph">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<i>${ini(it.name)}</i>'">` : `<i>${ini(it.name)}</i>`}</div>
-      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}${it.discount && it.discount.type === 'lot' ? `<div class="bag-unit" style="color:#7e22ce;font-weight:700">🏷 ${it.discount.label || 'Prix par lot'}</div>` : ''}${it.discount && it.discount.type === 'promo' ? `<div class="bag-unit" style="color:#c2410c;font-weight:700">🔥 ${it.discount.label || 'Promo'}</div>` : ''}
+      <div class="bag-mid"><div class="bag-nm">${it.name}</div>${q > 1 ? `<div class="bag-unit">${formatCFA(it.price || 0)} × ${q}</div>` : ''}${it.discount && it.discount.type === 'lot' ? `<div class="bag-unit" style="color:#7e22ce;font-weight:700">🏷 ${it.discount.label || 'Prix par lot'}</div>` : ''}${it.discount && it.discount.type === 'promo' ? `<div class="bag-unit bag-promo">🔥 PROMO · ${(it.discount.label || '').replace(/^Promo\s*/, '')}</div>` : ''}
         <span class="bag-qty">
           <button type="button" onclick="changeCartQty(${idx},-1);_bagFocus()" title="${fr ? 'Moins' : 'Less'}">−</button>
           <input type="number" min="1" max="999" inputmode="numeric" value="${q}" onfocus="this.select()" onchange="setCartQty(${idx},this.value)" onkeydown="if(event.key==='Enter'){this.blur();_bagFocus();}"/>
@@ -3358,6 +3362,7 @@ function processScan() {
   if(!raw) return;
   if(_reorgCatch(raw)) return;
   if(_ouCatch(raw)) return;
+  if(_pnCatch(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
   raw = resolveAlias(raw);
   if(_lblTill(raw)) return;
@@ -11575,6 +11580,161 @@ async function ouAsk(bc, typedName){
   } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas envoyé (connexion ?)'), 5000); }
 }
 // ══════════════════════════════════════════════════════════════════
+//  📢 JOUR DES PRIX (v7-nov-d, 10 Nov 2026) — price changes are grouped on
+//  Monday. Code GS getPriceNews gives this store's price changes (21 days),
+//  the promos, the shelf labels already swapped and who saw the news.
+//  • After the start-of-shift amounts: « 📢 Prix changés » (old → new, new
+//    promos) until the cashier taps « ✓ J'ai vu » (saved with his name).
+//  • Tile 🏷 Étiquettes: labels to swap — white = new normal price, red =
+//    promo, white again when a promo ended. Print all at once, then scan
+//    each product after its label is up to tick it off.
+//  • « 🔍 Vérifier 5 étiquettes » once a week: 5 random products of this
+//    store, Bon / Faux; a wrong one goes back on the list to reprint.
+// ══════════════════════════════════════════════════════════════════
+let _pn = (function(){ try { return JSON.parse(localStorage.getItem('bc_pn') || 'null'); } catch(e){ return null; } })();
+let _pnChk = null;
+function _pnLS(k, d){ try { return JSON.parse(localStorage.getItem(k) || '') || d; } catch(e){ return d; } }
+function _pnKey(bc, kind, price){ return _bcKeyClient(bc) + '|' + kind + '|' + (Math.round(Number(price) || 0)); }
+async function pnLoad(){
+  const here = _ouHere();
+  try { await ouLoad(); } catch(e){}
+  try {
+    const d = await _ouGet('getPriceNews&location=' + encodeURIComponent(here));
+    if(d && d.success){ d.loc = here; d.t = Date.now(); _pn = d; try { localStorage.setItem('bc_pn', JSON.stringify(d)); } catch(e){} }
+  } catch(e){}
+  pnBadge();
+  return _pn;
+}
+// Labels to swap in this store, newest first: [{barcode,name,price,old,kind:'prix'|'promo'|'fin',key,pr}]
+function pnLabels(){
+  const out = [], seen = {}, done = Object.assign({}, (_pn && _pn.done) || {}), mine = _pnLS('bc_pn_done', {});
+  Object.keys(mine).forEach(k => done[k] = 1);
+  const t = promoToday(), wk = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10), here = _ouHere();
+  // Promo lists can be a whole catalogue (Thaïlande): only products counted in this store
+  const inStore = {}; ((OU && OU.zones) || []).forEach(r => { if(r[0] === here && Number(r[4]) > 0) inStore[_bcKeyClient(r[2])] = 1; });
+  const hasOU = Object.keys(inStore).length > 0;
+  const add = (it, mustBeHere) => { const k = _bcKeyClient(it.barcode); if(done[it.key] || seen[k]) return; if(mustBeHere && hasOU && !inStore[k]) return; seen[k] = 1; it.here = !hasOU || !!inStore[k]; out.push(it); };
+  const prs = ((_pn && _pn.promos) || []).filter(pr => pr.store === 'all' || !pr.store || pr.store === here);
+  prs.filter(pr => pr.on !== false && (!pr.start || pr.start <= t) && (!pr.end || pr.end >= t)).forEach(pr => {
+    promoItems(pr).forEach(x => add({ barcode: x.barcode, name: x.name, price: x.price, now: x.now, kind: 'promo', _pr: pr, key: _pnKey(x.barcode, 'promo', x.now || pr.value) }, true));
+  });
+  _pnLS('bc_pn_reprint', []).forEach(x => { const p = psPriceFor(x.barcode) || x.price; add({ barcode: x.barcode, name: x.name, price: p, kind: 'prix', key: _pnKey(x.barcode, 'prix', p) + '|r' + x.t }); });
+  ((_pn && _pn.changes) || []).forEach(c => { const p = psPriceFor(c.barcode) || c.price; add({ barcode: c.barcode, name: c.name || _ouName(c.barcode), price: p, old: c.old, at: c.at, kind: 'prix', key: _pnKey(c.barcode, 'prix', p) }); });
+  prs.filter(pr => (pr.on === false || (pr.end && pr.end < t)) && (!pr.end || pr.end >= wk)).forEach(pr => {
+    promoItems(pr).forEach(x => { if(promoFor(x.barcode)) return; add({ barcode: x.barcode, name: x.name, price: x.price, kind: 'fin', key: _pnKey(x.barcode, 'fin', x.price) }, true); });
+  });
+  return out;
+}
+function pnBadge(){
+  const b = document.getElementById('pn-tile-badge'); if(!b) return;
+  const n = _pn ? pnLabels().length : 0;
+  b.textContent = n ? (n > 99 ? '99+' : n) : (Date.now() - (_pnLS('bc_pn_chk', 0) || 0) > 7 * 864e5 ? '🔍' : '');
+}
+// After the start-of-shift amounts: show the news this cashier has not seen yet
+async function pnAfterLogin(emp){
+  await pnLoad();
+  if(!_pn || !emp) return;
+  const seen = Math.max(Number((_pn.acks || {})[emp]) || 0, Number(_pnLS('bc_pn_ack', {})[emp]) || 0);
+  const ch = (_pn.changes || []).filter(c => c.at > seen);
+  const seenDay = seen ? new Date(seen).toISOString().slice(0, 10) : '';
+  const t = promoToday(), here = _ouHere();
+  const prs = (_pn.promos || []).filter(pr => (pr.store === 'all' || !pr.store || pr.store === here) && pr.on !== false && (!pr.start || pr.start <= t) && (!pr.end || pr.end >= t) && (!seenDay || (pr.start && pr.start >= seenDay)));
+  if(!ch.length && !prs.length) return;
+  pnNews(emp, ch, prs);
+}
+function pnNews(emp, ch, prs){
+  const E = _dlvEsc, m = document.getElementById('pn-news');
+  let h = '<div class="modal-title" style="margin:0 0 4px">📢 Nouveaux prix</div><div class="dlv-dim" style="margin-bottom:10px">' + E(emp) + ', lisez avant de commencer. La caisse connaît déjà les nouveaux prix.</div>';
+  if(ch.length) h += '<div style="font-weight:800;margin:6px 0">🏷 ' + ch.length + ' prix changé' + (ch.length > 1 ? 's' : '') + '</div>' + ch.slice(0, 40).map(c =>
+    '<div class="pn-row"><span>' + E(c.name || _ouName(c.barcode) || c.barcode) + '</span><span><s style="color:var(--ink3)">' + formatCFA(c.old || 0) + '</s> → <b style="color:' + (c.price > (c.old || 0) ? '#b91c1c' : '#15803d') + '">' + formatCFA(c.price) + '</b></span></div>').join('') + (ch.length > 40 ? '<div class="dlv-dim">… et ' + (ch.length - 40) + ' autres</div>' : '');
+  if(prs.length) h += '<div style="font-weight:800;margin:12px 0 6px;color:#b91c1c">🔥 Promos en cours</div>' + prs.map(pr =>
+    '<div class="pn-row"><span>' + E(pr.name) + '</span><b style="color:#b91c1c">' + E(promoShort(pr).replace('Promo ', '')) + (pr.end ? ' · jusqu’au ' + promoDayFR(pr.end) : '') + '</b></div>').join('');
+  const n = pnLabels().length;
+  if(n) h += '<div style="background:#fef3c7;border-radius:10px;padding:8px 10px;margin-top:12px">🏷 <b>' + n + ' étiquette' + (n > 1 ? 's' : '') + '</b> à changer en rayon' + (new Date().getDay() === 1 ? ' — c’est lundi, jour des prix !' : '.') + '</div>';
+  h += '<div style="display:flex;gap:8px;margin-top:14px">' + (n ? '<button class="btn-sm btn-outline" style="flex:1" onclick="pnAck(true)">🏷 Voir les étiquettes</button>' : '') +
+    '<button class="btn-sm btn-green" style="flex:1;font-size:16px;padding:12px" onclick="pnAck(false)">✓ J’ai vu</button></div>';
+  m.querySelector('.modal').innerHTML = h; m.dataset.emp = emp; m.classList.add('open');
+}
+function pnAck(openLabels){
+  const m = document.getElementById('pn-news'), emp = m.dataset.emp || currentEmployee || '?', now = Date.now();
+  m.classList.remove('open');
+  const a = _pnLS('bc_pn_ack', {}); a[emp] = now; localStorage.setItem('bc_pn_ack', JSON.stringify(a));
+  _postProductSync({ key: writeKey, action: 'priceAck', location: _ouHere(), by: emp, upTo: now }).catch(() => {});
+  if(openLabels) pnOpen(); else _bagFocus();
+}
+// ── 🏷 Étiquettes ──
+function pnOpen(){ document.getElementById('pn-modal').classList.add('open'); _pnChk = null; pnRender(); pnLoad().then(() => { if(_pnOpen()) pnRender(); }); setTimeout(() => { const i = document.getElementById('pn-in'); if(i) i.focus(); }, 80); }
+function pnClose(){ document.getElementById('pn-modal').classList.remove('open'); _pnChk = null; pnBadge(); _bagFocus(); }
+function _pnOpen(){ const m = document.getElementById('pn-modal'); return !!(m && m.classList.contains('open')); }
+function _pnCatch(raw){ if(!_pnOpen()) return false; pnScan(raw); return true; }
+function pnRender(){
+  const E = _dlvEsc, body = document.getElementById('pn-body'); if(!body) return;
+  if(_pnChk){ body.innerHTML = pnChkHTML(); return; }
+  if(!_pn){ body.innerHTML = '<div class="dlv-dim">Chargement…</div>'; return; }
+  const L = pnLabels(), W = L.filter(x => x.kind === 'prix'), R = L.filter(x => x.kind === 'promo'), F = L.filter(x => x.kind === 'fin');
+  const row = x => '<div class="pn-row"><span>' + E(x.name) + (x.old ? ' <small class="dlv-dim"><s>' + formatCFA(x.old) + '</s></small>' : '') + (x.here ? '' : ' <small class="dlv-dim">(pas compté ici)</small>') + '</span><span style="white-space:nowrap"><b' + (x.kind === 'promo' ? ' style="color:#b91c1c"' : '') + '>' + (x.kind === 'promo' && x.now ? formatCFA(x.now) : x.price ? formatCFA(x.price) : '—') + '</b> <button class="btn-sm btn-outline" onclick="pnDone(\'' + E(x.key) + '\')">✓</button></span></div>';
+  const sec = (title, list, btn) => list.length ? '<div class="pn-sec"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px"><b>' + title + ' (' + list.length + ')</b>' + btn + '</div>' + list.map(row).join('') + '</div>' : '';
+  const last = _pnLS('bc_pn_chk', 0), days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+  body.innerHTML = (L.length ? '<div class="dlv-dim" style="margin-bottom:8px">1. Imprimez. 2. Posez l’étiquette en rayon. 3. Scannez le produit : il disparaît de la liste.</div>' : '<div style="text-align:center;padding:14px;font-weight:700;color:#15803d">✓ Toutes les étiquettes sont à jour.</div>') +
+    sec('⬜ Nouveaux prix — étiquette blanche', W, '<button class="btn-sm btn-outline" onclick="pnPrint(\'prix\')">🖨 Imprimer</button>') +
+    sec('🟥 Promo — étiquette rouge', R, '<button class="btn-sm btn-outline" onclick="pnPrint(\'promo\')">🖨 Imprimer</button>') +
+    sec('⏹ Promo finie — remettre l’étiquette blanche', F, '<button class="btn-sm btn-outline" onclick="pnPrint(\'fin\')">🖨 Imprimer</button>') +
+    '<div class="pn-sec" style="text-align:center"><button class="btn-sm btn-outline" style="padding:10px 14px" onclick="pnCheckStart()">🔍 Vérifier 5 étiquettes</button><div class="dlv-dim" style="margin-top:4px">' +
+    (days == null ? 'Jamais fait sur cette caisse — 1 fois par semaine.' : days > 7 ? '⚠ Dernière vérification il y a ' + days + ' jours.' : 'Fait il y a ' + days + ' jour' + (days > 1 ? 's' : '') + '.') + '</div></div>';
+}
+function pnPrint(kind){
+  const L = pnLabels().filter(x => x.kind === kind);
+  if(!L.length) return;
+  if(L.length > 15 && !confirm(L.length + ' étiquettes vont s’imprimer. Continuer ?')) return;
+  if(kind === 'promo'){ printLabels(L.map(x => Object.assign({}, x, { qty: 1 })), { html: promoTagHTML, css: PROMO_TAG_CSS }); showToast('🖨 Étiquettes promo : papier rouge si vous en avez.', 4000); }
+  else { const noP = L.filter(x => !x.price).length; printLabels(L.filter(x => x.price).map(x => ({ barcode: x.barcode, name: x.name, price: x.price, qty: 1 }))); if(noP) showToast('⚠ ' + noP + ' produit(s) sans prix dans cette caisse : pas imprimé(s).', 5000); }
+}
+function _pnSend(items){
+  if(!items.length) return;
+  _postProductSync({ key: writeKey, action: 'labelDone', location: _ouHere(), by: currentEmployee || '?', items }).catch(() => {});
+}
+function pnDone(key, quiet){
+  const x = pnLabels().find(i => i.key === key); if(!x) return;
+  const mine = _pnLS('bc_pn_done', {}); mine[key] = Date.now(); localStorage.setItem('bc_pn_done', JSON.stringify(mine));
+  if(/\|r\d+$/.test(key)){ const r = _pnLS('bc_pn_reprint', []).filter(i => _bcKeyClient(i.barcode) !== _bcKeyClient(x.barcode)); localStorage.setItem('bc_pn_reprint', JSON.stringify(r)); }
+  _pnSend([{ barcode: x.barcode, name: x.name, price: x.kind === 'promo' ? (x.now || (x._pr && x._pr.value) || 0) : x.price, kind: x.kind }]);
+  if(!quiet) showToast('✓ ' + x.name, 1500);
+  pnRender(); pnBadge();
+}
+function pnScan(raw){
+  const inp = document.getElementById('pn-in'); if(inp) inp.value = '';
+  const code = resolveAlias(String(raw || '').trim()); if(!code) return;
+  if(_pnChk){ showToast('Répondez Bon ou Faux pour ce produit.'); return; }
+  const x = pnLabels().find(i => _bcKeyClient(i.barcode) === _bcKeyClient(code));
+  if(x){ pnDone(x.key); try { navigator.vibrate && navigator.vibrate(60); } catch(e){} }
+  else showToast('Ce produit n’est pas dans la liste.', 2500);
+}
+// ── 🔍 5 random labels of this store ──
+async function pnCheckStart(){
+  if(!OU) { try { await ouLoad(); } catch(e){} }
+  const here = _ouHere(), seen = {}, pool = [];
+  ((OU && OU.zones) || []).forEach(r => { if(r[0] !== here || !(Number(r[4]) > 0) || _ouZoneInfo(here, r[1]).box) return; const k = _bcKeyClient(r[2]); if(!k || seen[k] || !psPriceFor(r[2])) return; seen[k] = 1; pool.push(r); });
+  if(pool.length < 1){ showToast('Liste du magasin pas encore chargée (connexion ?).', 4000); return; }
+  for(let i = pool.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  _pnChk = { list: pool.slice(0, 5).map(r => ({ barcode: r[2], name: r[3] || _ouName(r[2]), zone: r[1], price: psPriceFor(r[2]) })), i: 0, bad: 0 };
+  pnRender();
+}
+function pnChkHTML(){
+  const E = _dlvEsc, c = _pnChk, x = c.list[c.i];
+  if(!x) return '<div style="text-align:center;padding:14px"><div style="font-size:40px">' + (c.bad ? '⚠' : '✅') + '</div><b>' + (c.bad ? c.bad + ' étiquette(s) fausse(s) : ajoutée(s) à la liste à réimprimer.' : 'Les 5 étiquettes sont justes. Bravo !') + '</b><div style="margin-top:12px"><button class="btn-sm btn-green" onclick="_pnChk=null;pnRender()">OK</button></div></div>';
+  return '<div style="text-align:center;padding:6px 0"><div class="dlv-dim">Vérification ' + (c.i + 1) + ' / ' + c.list.length + ' — allez au rayon <b>' + E(x.zone) + '</b></div>' +
+    '<div style="font-size:18px;font-weight:800;margin:10px 0 4px">' + E(x.name) + '</div><div>L’étiquette doit dire :</div><div style="font-size:32px;font-weight:900;margin:4px 0 14px">' + formatCFA(x.price) + '</div>' +
+    '<div style="display:flex;gap:10px"><button class="btn-sm btn-outline" style="flex:1;padding:12px;font-size:16px;color:#b91c1c" onclick="pnChkAns(false)">✗ Faux / absente</button><button class="btn-sm btn-green" style="flex:1;padding:12px;font-size:16px" onclick="pnChkAns(true)">✓ Bon</button></div></div>';
+}
+function pnChkAns(ok){
+  const c = _pnChk, x = c && c.list[c.i]; if(!x) return;
+  if(!ok){ c.bad++; const r = _pnLS('bc_pn_reprint', []); r.push({ barcode: x.barcode, name: x.name, price: x.price, t: Date.now() }); localStorage.setItem('bc_pn_reprint', JSON.stringify(r.slice(-60))); }
+  _pnSend([{ barcode: x.barcode, name: x.name, price: x.price, kind: ok ? 'vérif bon' : 'vérif faux' }]);
+  c.i++;
+  if(c.i >= c.list.length) localStorage.setItem('bc_pn_chk', JSON.stringify(Date.now()));
+  pnRender(); pnBadge();
+}
+// ══════════════════════════════════════════════════════════════════
 //  🔥 PROMOS (v6-nov-a, 6 Nov 2026) — tab « Promos » of the inventory
 //  Sheet (Code GS setPromo / getPriceList → promos). A promo is a % off or
 //  a promo price, on one product or a whole Catalogue list (Thaïlande),
@@ -12269,6 +12429,8 @@ function buildReceiptHTML(txn, dlv, copy){
   { const _sr = receiptView(txn).saleRemise;
     if(_sr) h += `<div class="r-row"><span>Remise</span><span>-${_sr.toLocaleString('fr-FR')} CFA</span></div>`; }
   h += `<div class="r-total-row"><span>TOTAL</span><span>${total.toLocaleString('fr-FR')} CFA</span></div>`;
+  { const _sv = (txn.itemsList || []).reduce((a, i) => a + Math.max(0, (i.discount && i.discount.amountOff) || 0), 0) + Math.max(0, (txn.discount && txn.discount.amountOff) || 0);
+    if(_sv > 0) h += `<div class="r-row" style="font-weight:800;border:1px dashed #000;padding:3px 4px;margin-top:3px"><span>Vous économisez</span><span>${_sv.toLocaleString('fr-FR')} CFA</span></div>`; }
   if(dlv && dlv.fee > 0){
     h += `<div class="r-row"><span>Frais de livraison</span><span>+${dlv.fee.toLocaleString('fr-FR')} CFA</span></div>`;
     h += `<div class="r-row"><span><b>TOTAL PAYÉ</b></span><span><b>${(total + dlv.fee).toLocaleString('fr-FR')} CFA</b></span></div>`;
@@ -14687,6 +14849,15 @@ closeSale = function(){
 </div>
 
 <!-- ══ HOLD / RESERVATION MODAL ══ -->
+<div class="modal-bg" id="pn-news"><div class="modal" style="width:min(560px,96vw);text-align:left;max-height:92vh;overflow:auto"></div></div>
+<div class="modal-bg" id="pn-modal">
+  <div class="modal" style="width:min(600px,96vw);text-align:left;max-height:92vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🏷 Étiquettes de prix</div><button class="btn-sm btn-outline" onclick="pnClose()">Fermer</button></div>
+    <input class="dlv-field" id="pn-in" style="font-size:16px;margin:10px 0 8px" placeholder="Étiquette posée ? Scannez le produit" autocomplete="off"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();pnScan(this.value)}"/>
+    <div id="pn-body"></div>
+  </div>
+</div>
 <div class="modal-bg" id="ou-modal">
   <div class="modal" style="width:min(560px,96vw);text-align:left;max-height:92vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🔎 Où est-il ?</div><button class="btn-sm btn-outline" onclick="ouClose()">Fermer</button></div>
