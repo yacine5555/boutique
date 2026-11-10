@@ -2520,7 +2520,10 @@ function refillAdded(){
   return C.items.map(it => ({ barcode: it.barcode, name: it.name, n: it.count - ((C.base || {})[bkey(it.barcode)] || 0) })).filter(x => x.n > 0);
 }
 function refillOps(){
-  const add = refillAdded(); if(!C.src) return [];
+  const add = refillAdded();
+  // Ouaga 2000 « Déjà retiré ailleurs (transfert) »: the source was already taken off, only add here
+  if(!C.src && C.loc === 'Store 2') return add.map(x => ({ barcode: x.barcode, name: x.name, mode:'delta', reason:'Transfert', location: C.loc, zone: C.zone, qty: x.n, note: 'arrivage par transfert · étagère ' + C.spot }));
+  if(!C.src) return [];
   const ops = [];
   add.forEach(x => {
     const rows = rowsAt(C.src).filter(r => bkey(r[2]) === bkey(x.barcode) && r[4] > 0).sort((a, b) => b[4] - a[4]);
