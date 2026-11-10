@@ -212,6 +212,12 @@ const dayKey = d => { const x = new Date(d); return x.getFullYear() + '-' + Stri
 
 // same link + key as Comptage / Stock1981 on this computer
 let URL_ = ls('inv_count_sync_url') || '', KEY = ls('inv_count_write_key') || '';
+// Opened from the till (Scanner 🎓 Formation): #t= {p: sheet link, k: key, n: employee} — no code to type (10 Nov 2026)
+let TILL = null;
+try {
+  const m = /[#&]t=([^&]+)/.exec(location.hash);
+  if(m){ const c = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); if(c && c.p && c.k && c.n){ URL_ = c.p; KEY = c.k; TILL = { name: String(c.n) }; localStorage.setItem('inv_count_sync_url', c.p); localStorage.setItem('inv_count_write_key', c.k); } history.replaceState(null, '', location.pathname); }
+} catch(e){}
 let USERS = lsj('fm_users', []);
 let DATA = lsj('fm_cache', null);   // {content, questions, products, progress, passMark, examSize}
 let QUEUE = lsj('fm_queue', []);    // results waiting to be sent
@@ -255,7 +261,7 @@ async function flushQueue(){
   try {
     while(QUEUE.length){
       const it = QUEUE[0];
-      const d = await post({ action:'formationResult', by: it.by, userHash: it.hash, session: it.session });
+      const d = await post({ action:'formationResult', by: it.by, userHash: it.hash, viaTill: !!it.till, session: it.session });
       if(d && d.success){
         QUEUE.shift(); ls('fm_queue', JSON.stringify(QUEUE));
         if(d.progress && DATA){ DATA.progress = d.progress; ls('fm_cache', JSON.stringify(DATA)); }
@@ -602,7 +608,7 @@ function queueResult(s){
   if(!user) return;
   s.id = 'F-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   s.at = new Date().toISOString();
-  QUEUE.push({ by:user.name, hash:user.hash, session:s });
+  QUEUE.push({ by:user.name, hash:user.hash, till: !!user.till, session:s });
   ls('fm_queue', JSON.stringify(QUEUE));
   flushQueue();
 }
@@ -743,7 +749,7 @@ async function hashCode(name, code){
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 function activeUsers(){ return USERS.filter(u => u.active !== false); }
-function lock(){ user = null; pin = ''; ls('fm_auth', null); $('#lock').hidden = false; drawLock(''); updateWho(); }
+function lock(){ if(TILL){ user = null; GAME = null; $('#lock').hidden = false; $('#lockbox').innerHTML = '<div class="logo">Beauty Empire · <b>Formation</b></div><p>Séance terminée. Rouvrez 🎓 Formation depuis la caisse.</p>'; updateWho(); return; } user = null; pin = ''; ls('fm_auth', null); $('#lock').hidden = false; drawLock(''); updateWho(); }
 function drawLock(msg){
   const box = $('#lockbox');
   if(!URL_ || !KEY){
@@ -805,10 +811,11 @@ function toast(t){ const el = document.createElement('div'); el.className = 'toa
   history.replaceState(VIEW, '');
   const a = lsj('fm_auth', null);
   const u = a && activeUsers().find(x => x.name === a.name);
-  if(u && Date.now() - a.at < IDLE_MS){ user = { name:u.name, role:u.role, hash:u.hash }; lastActive = a.at; }
+  if(TILL){ user = { name: TILL.name, role: 'Formation', hash: '', till: true }; lastActive = Date.now(); $('#lock').hidden = true; }
+  else if(u && Date.now() - a.at < IDLE_MS){ user = { name:u.name, role:u.role, hash:u.hash }; lastActive = a.at; }
   else lock();
   render();
-  if(URL_ && KEY){ refreshUsers().then(() => { if(!user) drawLock(''); }); await loadData(); render(); flushQueue(); }
+  if(URL_ && KEY){ refreshUsers().then(() => { if(!user && !TILL) drawLock(''); }); await loadData(); render(); flushQueue(); }
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>

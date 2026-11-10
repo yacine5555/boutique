@@ -1430,6 +1430,7 @@ input,select{font-family:inherit}
               onclick="openPinModal()">Admin ›</span>
           </div>
           <div class="pos-tiles">
+            <button class="pos-tile" style="--c:#be185d" onclick="openFormation()"><span class="i">🎓</span><span class="l">Formation</span></button>
             <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
             <button class="pos-tile" style="--c:#0e7490" onclick="openRequestsModal()"><span class="i">📋</span><span class="l">Demandes clients</span><span class="b" id="req-tile-badge"></span></button>
@@ -1591,7 +1592,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -11349,6 +11350,14 @@ async function ouLoad(force){
 setInterval(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 5 * 60000);
 setTimeout(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 8000);
 function _ouStatus(t){ const el = document.getElementById('ou-status'); if(el) el.textContent = t; }
+// 🎓 Formation (10 Nov 2026): opens the training game for the employee signed
+// in at the till — no separate code (formation.html reads #t=).
+function openFormation(){
+  if(!currentEmployee){ showToast('Connectez-vous d’abord à la caisse.'); return; }
+  if(!productSyncUrl || !writeKey){ showToast('Synchro des produits non configurée.'); return; }
+  const t = btoa(unescape(encodeURIComponent(JSON.stringify({ p: productSyncUrl, k: writeKey, n: currentEmployee }))));
+  window.open('formation.html#t=' + encodeURIComponent(t), '_blank');
+}
 function ouOpen(){
   document.getElementById('ou-modal').classList.add('open');
   _ouCur = null; document.getElementById('ou-in').value = ''; document.getElementById('ou-body').innerHTML = '<div class="dlv-dim" style="padding:10px 2px">Scannez le produit, ou tapez au moins 3 lettres du nom.</div>';
