@@ -1593,7 +1593,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-b</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-c</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -8904,7 +8904,7 @@ function _plFmt(v){ return v == null ? '—' : formatCFA(v); }
 function psUseRef(v){ const pe = document.getElementById('ps-price'); if(pe && !pe.disabled){ pe.value = v; pe.focus(); } }
 
 // ── Admin list ──
-let _plQuery = '', _plFilter = '';
+let _plQuery = '', _plFilter = '', _plLoc = '', _plDormDays = 90, _plSSum = null, _plSSumBusy = false;
 function setPlFilter(f){ _plFilter = f; renderPriceAdmin(); }
 // Search ignores accents/case in names and leading zeros in barcodes
 // (Product Master may store 43000032268 while the scanner reads 043000032268).
@@ -8957,6 +8957,8 @@ function renderPriceAdmin(){
     '<button class="dlv-tab' + (_plFilter === 'best' ? ' on' : '') + '" onclick="setPlFilter(\'best\')" title="Les 60 plus vendus sur 30 jours (données du Top 25)">🏆 Meilleures ventes</button>' +
     (_plAll.some(p => 'cost' in p) ? '<button class="dlv-tab' + (_plFilter === 'nocost' ? ' on' : '') + '" onclick="setPlFilter(\'nocost\')">💲 Sans prix d\'achat (' + _plAll.filter(p => p.cost == null).length + ')</button>' : '') + '</div>' +
     (_plFilter === 'best' && !(_top25 && _top25.items && _top25.items.length) ? '<div class="dlv-dim">Chargez d\'abord le Top 25 (onglet Ventes → Actualiser).</div>' : '');
+  h += _plStoreBar();
+  if(_plFilter === 'instore' || _plFilter === 'dorm' || _plFilter === 'noinfo'){ const keep0 = document.activeElement && document.activeElement.id === 'pl-search'; el.innerHTML = h + _plStoreList(); if(keep0){ const s0 = document.getElementById('pl-search'); if(s0){ s0.focus(); try { s0.setSelectionRange(s0.value.length, s0.value.length); } catch(e){} } } return; }
   h += '<input class="dlv-field" id="pl-search" type="search" placeholder="Rechercher un produit ou un code…" value="' + _psEsc(_plQuery) + '" oninput="_plQuery=this.value;renderPriceAdmin(true)" onkeydown="plSearchKey(event)" style="margin:6px 0"/>';
   h += '<div class="ex-row" style="font-size:11px;color:var(--ink3)"><div style="flex:1">Produit</div><div style="width:64px;text-align:right">Principal</div><div style="width:64px;text-align:right">Balkuy</div><div style="width:64px;text-align:right">Ouaga 2000</div><div style="width:58px;text-align:right">Achat $</div></div>';
   h += '<div class="pl-scroll">' + rows.slice(0, 60).map(p => {
@@ -8970,6 +8972,90 @@ function renderPriceAdmin(){
   const keep = document.activeElement && document.activeElement.id === 'pl-search';
   el.innerHTML = h;
   if(keep){ const s = document.getElementById('pl-search'); if(s){ s.focus(); try { s.setSelectionRange(s.value.length, s.value.length); } catch(e){} } }
+}
+// ══════════════════════════════════════════════════════════════════
+//  🏪 PRODUCTS CONFIRMED IN THE STORE (10 Nov 2026), in Admin → Prix & stock.
+//  The master list holds many products that are not in the shops. Here:
+//  only what Stock1981 says is in the chosen store (stock > 0, shelves and
+//  boxes), with 😴 no sale for 60/90/120 days (Code GS getSalesSummary) and
+//  ❓ no name or no price for that store. Data = « Où est-il ? » (OU).
+// ══════════════════════════════════════════════════════════════════
+function _plStoreLoc(){ return _plLoc || _ouHere(); }
+function _plStoreItems(){
+  if(!OU) return null;
+  const loc = _plStoreLoc(), by = {};
+  (OU.zones || []).forEach(r => {
+    if(r[0] !== loc || !(Number(r[4]) > 0)) return;
+    const k = _bcKeyClient(r[2]); if(!k) return;
+    const o = by[k] || (by[k] = { k, barcode: r[2], name: '', qty: 0, where: [] });
+    o.qty += Number(r[4]); o.where.push(r[1]);
+    if(!o.name && r[3]) o.name = r[3];
+  });
+  return Object.values(by).map(o => {
+    const p = _plMap[o.k];
+    o.inMaster = !!p;
+    o.name = (p && p.name) || o.name || '';
+    const sp = p ? (loc === 'Store 1' ? p.s1 : p.s2) : null;
+    o.price = sp != null ? sp : (p && p.m != null ? p.m : null);
+    o.noName = !o.name || /code inconnu/i.test(o.name);
+    o.noPrice = !(o.price > 0);
+    return o;
+  });
+}
+async function _plLoadSSum(){
+  if(_plSSumBusy || !productSyncUrl || !writeKey) return;
+  _plSSumBusy = true;
+  try { const d = await _ouGet('getSalesSummary'); if(d && d.success && d.stores) _plSSum = { stores: d.stores, first: d.first || {}, at: Date.now() }; else _plSSum = { err: 1 }; }
+  catch(e){ _plSSum = { err: 2 }; }
+  _plSSumBusy = false; renderPriceAdmin();
+}
+function _plDay(n){ const d = new Date(Date.now() - n * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _plStoreBar(){
+  const items = _plStoreItems();
+  const loc = _plStoreLoc();
+  const tab = (f, label) => '<button class="dlv-tab' + (_plFilter === f ? ' on' : '') + '" onclick="setPlFilter(\'' + f + '\')">' + label + '</button>';
+  let h = '<div style="margin:10px 0 4px;padding:10px;border:1px solid var(--border2);border-radius:12px;background:var(--surface2,#faf7fb)">' +
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>🏪 Confirmés en magasin</b>' +
+    ['Store 1', 'Store 2'].map(l => '<button class="dlv-tab' + (loc === l ? ' on' : '') + '" onclick="_plLoc=\'' + l + '\';renderPriceAdmin()">' + TF_LABEL[l] + '</button>').join('') + '</div>';
+  if(!items){ ouLoad(true); return h + '<div class="dlv-dim">Chargement des emplacements…</div></div>'; }
+  const nNo = items.filter(o => o.noName || o.noPrice).length;
+  h += '<div class="tp-sort">' + tab('instore', 'En magasin (' + items.length + ')') + tab('dorm', '😴 Sans vente') + tab('noinfo', '❓ Sans nom ou sans prix (' + nNo + ')') + '</div></div>';
+  return h;
+}
+function _plStoreList(){
+  const items = _plStoreItems(); if(!items) return '';
+  const loc = _plStoreLoc(), q = _plQuery.trim();
+  let rows = items.filter(o => !q || _plMatch({ name: o.name, barcode: o.barcode }, q)), head = '', sub = '';
+  if(_plFilter === 'noinfo'){
+    rows = rows.filter(o => o.noName || o.noPrice).sort((a, b) => b.qty - a.qty);
+    sub = 'Dans le magasin, mais sans nom ou sans prix pour ' + TF_LABEL[loc] + '. Touchez une ligne pour corriger.';
+  } else if(_plFilter === 'dorm'){
+    head = '<div class="tp-sort">' + [60, 90, 120].map(d => '<button class="dlv-tab' + (_plDormDays === d ? ' on' : '') + '" onclick="_plDormDays=' + d + ';renderPriceAdmin()">' + d + ' jours</button>').join('') + '</div>';
+    if(!_plSSum){ _plLoadSSum(); return head + '<div class="dlv-dim" style="padding:8px">Chargement des ventes…</div>'; }
+    if(_plSSum.err) return head + '<div class="dlv-dim" style="padding:8px">' + (_plSSum.err === 1 ? 'Collez « LATEST - Code GS » et faites Nouvelle version pour voir les ventes par produit.' : 'Pas de connexion.') + ' <a href="#" onclick="_plSSum=null;renderPriceAdmin();return false">Réessayer</a></div>';
+    const lim = _plDay(_plDormDays), st = (_plSSum.stores || {})[loc] || {};
+    rows = rows.map(o => { o.last = (st[o.k] || [''])[0]; o.value = (o.price || 0) * o.qty; return o; })
+      .filter(o => !o.last || o.last < lim).sort((a, b) => b.value - a.value || b.qty - a.qty);
+    sub = 'Dans le magasin, pas vendu depuis ' + _plDormDays + ' jours (ventes connues depuis le ' + _psEsc((_plSSum.first || {})[loc] || '?') + '). Trié par valeur.';
+  } else {
+    rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    sub = 'Seulement les produits comptés ou rangés dans ' + TF_LABEL[loc] + ' (stock > 0), pas toute la liste.';
+  }
+  let h = head + '<div class="dlv-dim" style="margin:4px 0 6px">' + sub + '</div>';
+  h += '<input class="dlv-field" id="pl-search" type="search" placeholder="Rechercher dans ce magasin…" value="' + _psEsc(_plQuery) + '" oninput="_plQuery=this.value;renderPriceAdmin(true)"/>';
+  const tot = rows.reduce((a, o) => a + o.qty, 0);
+  h += '<div class="dlv-dim" style="margin:4px 0">' + rows.length + ' produit(s) · ' + tot + ' article(s)' + (_plFilter === 'dorm' ? ' · ' + formatCFA(rows.reduce((a, o) => a + (o.value || 0), 0)) : '') + '</div>';
+  h += '<div class="pl-scroll">' + rows.slice(0, 120).map(o =>
+    '<div class="ex-row" style="cursor:pointer" onclick="_plOpenStore(\'' + _psEsc(o.barcode) + '\')"><div style="flex:1;min-width:0"><b' + (o.noName ? ' style="color:#b45309"' : '') + '>' + _psEsc(o.noName ? '❓ ' + (o.name || 'Sans nom') : o.name) + '</b>' +
+    '<div class="dlv-dim">' + _psEsc(o.barcode) + ' · ' + _psEsc(o.where.join(', ')) + (_plFilter === 'dorm' ? ' · ' + (o.last ? 'dernière vente ' + _psEsc(o.last) : 'jamais vendu') : '') + (o.inMaster ? '' : ' · pas dans la liste') + '</div></div>' +
+    '<div style="width:52px;text-align:right"><b>' + o.qty + '</b></div><div style="width:76px;text-align:right;font-size:12px' + (o.noPrice ? ';color:#b45309;font-weight:700' : '') + '">' + (o.noPrice ? 'sans prix' : formatCFA(o.price)) + '</div></div>').join('') + '</div>';
+  if(rows.length > 120) h += '<div class="dlv-dim" style="padding:6px">… ' + (rows.length - 120) + ' autre(s) : affinez la recherche.</div>';
+  if(!rows.length) h += '<div class="dlv-dim" style="padding:8px">Rien ici 👍</div>';
+  return h;
+}
+function _plOpenStore(bc){
+  if(_plMap[_bcKeyClient(bc)]) return openPlEdit(bc);
+  showToast('Ce code n’est pas dans la liste des produits : ajoutez-le (nom + prix) avec « Créer un code-barres » ou dans le Sheet.', 5000);
 }
 let _plEditBc = null;
 function openPlEdit(bc){
