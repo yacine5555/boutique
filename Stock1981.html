@@ -397,6 +397,7 @@ select.t{appearance:auto}
 .recvbtn small{display:block;color:var(--muted);font-size:13px}
 .recvbtn .ic{font-size:26px}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:0}}}
+.vrow{display:flex;align-items:center;gap:10px;text-align:left}.vrow .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.vrow .nm small{display:block;color:var(--muted);font-size:12px}.vrow .q{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}.vrow .q b{font-size:17px}.vrow .q small{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -703,6 +704,7 @@ function render(){
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'sorties') t.innerHTML = 'Sorties<small>' + esc(locName(SOV.loc)) + '</small>';
+  else if(v.screen === 'valeur') t.innerHTML = 'Valeur & dormants<small>Ce qu’il y a en stock, ce qui ne se vend pas</small>';
   else if(v.screen === 'restock') t.innerHTML = 'À réassortir<small>Presque vides depuis le comptage</small>';
   else if(v.screen === 'boxput') t.innerHTML = 'Ranger en scannant<small>' + (BP && BP.toZone ? 'vers ' + esc(BP.toZone) : esc(locName(v.loc))) + '</small>';
   else if(v.screen === 'arrival') t.innerHTML = 'Arrivage<small>' + esc((arrival(v.aid) || {}).name || '') + '</small>';
@@ -717,6 +719,7 @@ function render(){
   if(v.screen === 'reorgmark'){ m.innerHTML = banner() + reorgMarkHTML(); bindReorgMark(); return; }
   if(v.screen === 'boxput'){ m.innerHTML = banner() + boxPutHTML(); bindBoxPut(); return; }
   if(v.screen === 'sorties'){ m.innerHTML = banner() + sortiesHTML(); bindSorties(); return; }
+  if(v.screen === 'valeur'){ m.innerHTML = banner() + valHTML(); bindVal(); return; }
   if(v.screen === 'restock'){ m.innerHTML = banner() + restockHTML(); document.querySelectorAll('[data-rsloc]').forEach(b => b.onclick = () => { VIEW.rsloc = b.dataset.rsloc; history.replaceState(VIEW, ''); render(); }); document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc)); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
@@ -750,6 +753,7 @@ function homeHTML(){
     + tool('pscan', '📷', 'Scanner', 'où est ce produit ?')
     + tool('restock', '🧺', 'Réassort', rsN ? rsN + ' produit(s)' : 'presque vides', rsN || '')
     + tool('refill', '🔁', 'Remplir', 'scannez l’étagère')
+    + tool('valeur', '💰', 'Valeur', 'stock & dormants')
     + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
@@ -882,6 +886,7 @@ function bindMain(){
   const q = $('#q');
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; q.onkeydown = e => { if(e.key === 'Enter'){ const sh = parseShelf(q.value); if(sh){ e.preventDefault(); q.value = ''; VIEW.q = ''; shelfScanned(sh); } else if(/^\d{6,}$/.test(q.value.trim())){ e.preventDefault(); productWhere(q.value.trim()); } } }; renderResults(); }
   const ps = document.querySelector('[data-act="pscan"]'); if(ps) ps.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh) shelfScanned(sh); else productWhere(code); });
+  const vl = document.querySelector('[data-act="valeur"]'); if(vl) vl.onclick = () => { go({ screen:'valeur' }); loadSSum(); };
   const rs = document.querySelector('[data-act="restock"]'); if(rs) rs.onclick = () => { go({ screen:'restock' }); ['Store 1', 'Store 2'].forEach(l => loadSorties(l)); };
   const sp = document.querySelector('[data-act="sphoto"]'); if(sp) sp.onclick = () => zonePhotoTake(VIEW.loc, '__store');
   const hx = document.querySelector('[data-act="hlclear"]'); if(hx) hx.onclick = () => { delete VIEW.hl; history.replaceState(VIEW, ''); render(); };
@@ -2740,6 +2745,100 @@ function restockHTML(){
     h += `<div class="sect" style="margin-top:12px">${esc(z)} · ${esc((zoneList(loc).find(q => q.c === z) || {}).k || '')}</div><div class="list">` + by[z].map(o => `<button class="row" data-bc="${esc(o.bc)}" data-loc2="${esc(loc)}" data-zone2="${esc(z)}">${thumb(o.bc, o.name)}<div class="nm"><strong>${esc(o.name)}</strong><small>reste ~${fmt(o.left)} sur ${fmt(o.counted)} comptés${o.shelf ? ' · étagère ' + esc(o.shelf) : ''}${o.also && o.also.length ? ' · aussi en ' + o.also.map(esc).join(', ') : ''}</small><small style="font-weight:700;color:${o.w ? 'var(--ok)' : 'var(--warn)'}">${o.w ? '📦 ' + fmt(o.w) + ' à l’entrepôt' : '⚠ rien à l’entrepôt'}</small></div><div class="qty num" style="color:var(--warn)">${fmt(o.left)}</div></button>`).join('') + '</div>';
   });
   return h;
+}
+// ══════════════════════════════════════════════════════════════════
+//  💰 VALEUR & DORMANTS (10 Nov 2026). Stock = zone quantities (counts,
+//  sales already taken off). Value at the store price (DATA.prices);
+//  cost estimated = price ÷ 2 (the ×2 rule) until real costs exist.
+//  Sales come from Code GS getSalesSummary (« Lignes de vente » + day tabs):
+//  per store and barcode [last sale day, qty 30 d, 60 d, 90 d, all, first].
+//  Dormant = in stock, no sale for N days (or never). Slow = more than
+//  6 months of stock at the pace of the last 90 days.
+// ══════════════════════════════════════════════════════════════════
+let SSUM = (function(){ try { return JSON.parse(localStorage.getItem('s1981_ssum') || 'null'); } catch(e){ return null; } })(), SSUM_BUSY = false, SSUM_ERR = '';
+async function loadSSum(force){
+  if(SSUM_BUSY || !URL_ || !KEY) return;
+  if(!force && SSUM && Date.now() - (SSUM.at || 0) < 10 * 60 * 1000) return;
+  SSUM_BUSY = true; SSUM_ERR = '';
+  try {
+    const d = await api({ action:'getSalesSummary', days: 150 });
+    if(!d || !d.success || !d.stores) throw new Error(d && d.error ? d.error : 'old');
+    SSUM = { stores: d.stores, first: d.first || {}, today: d.today, at: Date.now() };
+    ls('s1981_ssum', JSON.stringify(SSUM));
+  } catch(e){ SSUM_ERR = e.message === 'old' || /Unknown|invalid/i.test(e.message) ? 'Collez « LATEST - Code GS » et redéployez pour voir les ventes par produit.' : 'Pas de connexion : derniers chiffres gardés sur ce téléphone.'; }
+  SSUM_BUSY = false;
+  if(VIEW.screen === 'valeur') render();
+}
+const VAL_LOCS = [['all', 'Tout'], ['Store 1', 'Balkuy'], ['Store 2', 'Ouaga 2000'], ['Warehouse', 'Entrepôt']];
+function _valDay(n){ const d = new Date(Date.now() - n * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _valSales(loc, k){
+  const st = SSUM && SSUM.stores ? SSUM.stores : {};
+  const pick = l => (st[l] || {})[k];
+  const list = loc === 'Store 1' || loc === 'Store 2' ? [pick(loc)] : [pick('Store 1'), pick('Store 2')];
+  const r = ['', 0, 0, 0, 0];
+  list.forEach(e => { if(!e) return; if(e[0] > r[0]) r[0] = e[0]; for(let i = 1; i <= 4; i++) r[i] += e[i] || 0; });
+  return r;
+}
+function valData(loc){
+  const by = {};
+  (DATA ? DATA.zones : []).forEach(r => {
+    const [l, zone, bc, name, qty] = r;
+    if(!(qty > 0) || (loc !== 'all' && l !== loc)) return;
+    const k = bkey(bc), key = (loc === 'all' ? 'all' : l) + '|' + k;
+    const o = by[key] || (by[key] = { k, bc, name: name || productName(bc), qty: 0, where: [], price: priceOf(bc) });
+    o.qty += qty; o.where.push(locName(l) + ' · ' + (isBox(l, zone) ? '📦 ' + boxName(l, zone) : zone) + ' (' + qty + ')');
+  });
+  return Object.values(by).map(o => { o.value = o.price ? o.qty * o.price : 0; o.s = _valSales(loc, o.k); return o; });
+}
+function valTotals(rows){
+  const t = { units: 0, value: 0, noPrice: 0, products: rows.length };
+  rows.forEach(o => { t.units += o.qty; t.value += o.value; if(!o.price) t.noPrice += o.qty; });
+  return t;
+}
+function _valAgo(day){ if(!day) return 'jamais vendu'; const n = Math.round((Date.parse(_valDay(0)) - Date.parse(day)) / 864e5); return n <= 0 ? 'vendu aujourd’hui' : 'dernière vente il y a ' + n + ' j'; }
+function valHTML(){
+  const loc = VIEW.vloc || 'all', days = VIEW.vdays || 60, tab = VIEW.vtab || 'dorm';
+  let h = '';
+  // 1. value per place (always all places)
+  const places = [['Store 1', 'Balkuy · rayons', r => r[0] === 'Store 1' && !isBox(r[0], r[1])], ['Store 2', 'Ouaga 2000 · rayons', r => r[0] === 'Store 2' && !isBox(r[0], r[1])],
+    ['box', '📦 Boîtes (2 magasins)', r => r[0] !== 'Warehouse' && isBox(r[0], r[1])], ['Warehouse', 'Entrepôt', r => r[0] === 'Warehouse']];
+  let gV = 0, gU = 0;
+  h += '<div class="sect">Valeur du stock (au prix de vente)</div><div class="where">' + places.map(([id, lab, f]) => {
+    let v = 0, u = 0, np = 0;
+    (DATA ? DATA.zones : []).forEach(r => { if(!(r[4] > 0) || !f(r)) return; const p = priceOf(r[2]); u += r[4]; if(p) v += r[4] * p; else np += r[4]; });
+    gV += v; gU += u;
+    return `<div><span>${esc(lab)}<br><small>${fmt(u)} article(s)${np ? ' · ' + fmt(np) + ' sans prix' : ''}</small></span><b class="num">${fmt(v)} F</b></div>`;
+  }).join('') + `<div class="here"><span>Total · coût estimé ≈ ${fmt(Math.round(gV / 2))} F</span><b class="num">${fmt(gV)} F</b></div></div>`;
+  h += '<p class="sub" style="font-size:12px">Coût estimé = prix ÷ 2 (règle ×2) en attendant les vrais prix d’achat.</p>';
+  // 2. lists
+  h += `<div class="chips" style="margin-top:12px">${VAL_LOCS.map(([id, l]) => `<button data-vloc="${id}" aria-pressed="${id === loc}">${l}</button>`).join('')}</div>`;
+  h += `<div class="chips"><button data-vtab="dorm" aria-pressed="${tab === 'dorm'}">😴 Dormants</button><button data-vtab="slow" aria-pressed="${tab === 'slow'}">🐢 Trop de stock</button></div>`;
+  if(!SSUM){ if(!SSUM_BUSY) loadSSum(); return h + `<p class="empty">${SSUM_ERR ? esc(SSUM_ERR) : 'Chargement des ventes…'}</p>`; }
+  const rows = valData(loc);
+  let list, intro;
+  if(tab === 'dorm'){
+    h += `<div class="chips">${[30, 60, 90].map(d => `<button data-vdays="${d}" aria-pressed="${d === days}">${d} jours</button>`).join('')}</div>`;
+    const lim = _valDay(days);
+    list = rows.filter(o => !o.s[0] || o.s[0] < lim).sort((a, b) => b.value - a.value || b.qty - a.qty);
+    intro = `En stock, pas vendu depuis ${days} jours (ou jamais). À mettre en promo, à déplacer, ou à ne pas racheter.`;
+  } else {
+    list = rows.filter(o => o.s[3] > 0).map(o => { o.weeks = o.qty / (o.s[3] / 13); return o; }).filter(o => o.weeks > 26).sort((a, b) => b.value - a.value);
+    intro = 'Se vend, mais trop lentement : plus de 6 mois de stock au rythme des 90 derniers jours. À ne pas racheter en février.';
+  }
+  const t = valTotals(list);
+  h += `<p class="sub" style="margin:4px 0 8px">${intro}</p><div class="where"><div class="here"><span>${fmt(list.length)} produit(s) · ${fmt(t.units)} article(s)</span><b class="num">${fmt(t.value)} F</b></div></div>`;
+  if(!list.length) return h + '<p class="empty">Rien ici 👍</p>';
+  h += '<div class="list">' + list.slice(0, 80).map(o => `<button class="row vrow" data-vbc="${esc(o.bc)}">${thumb(o.bc, o.name)}<span class="nm"><b>${esc(o.name || o.bc)}</b><small>${esc(o.where.slice(0, 3).join(' · '))}${o.where.length > 3 ? ' …' : ''}</small><small>${tab === 'dorm' ? esc(_valAgo(o.s[0])) : fmt(Math.round(o.weeks)) + ' semaines de stock · ' + fmt(o.s[3]) + ' vendus en 90 j'}</small></span><span class="q num"><b>${fmt(o.qty)}</b><small>${o.price ? fmt(o.value) + ' F' : 'sans prix'}</small></span></button>`).join('') + '</div>';
+  if(list.length > 80) h += `<p class="sub">… et ${list.length - 80} autre(s), plus petits.</p>`;
+  h += `<p class="sub" style="font-size:12px">Ventes connues depuis le ${esc((SSUM.first || {})['Store 2'] || '?')} à Ouaga 2000 et le ${esc((SSUM.first || {})['Store 1'] || '?')} à Balkuy : « jamais vendu » veut dire pas depuis ces dates. <button class="cbtn alt" data-act="vreload">↻ Actualiser</button></p>`;
+  return h;
+}
+function bindVal(){
+  document.querySelectorAll('[data-vloc]').forEach(b => b.onclick = () => { VIEW.vloc = b.dataset.vloc; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-vtab]').forEach(b => b.onclick = () => { VIEW.vtab = b.dataset.vtab; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-vdays]').forEach(b => b.onclick = () => { VIEW.vdays = Number(b.dataset.vdays); history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-vbc]').forEach(b => b.onclick = () => productWhere(b.dataset.vbc));
+  const r = document.querySelector('[data-act="vreload"]'); if(r) r.onclick = () => { loadSSum(true); toast('Actualisation…'); };
 }
 // ── 📷 store photo (home tiles), saved like a zone photo under the zone « __store » ──
 function tilePhoto(L){ const im = zoneImg(L.id, '__store'); return im ? driveImg(im.id) : (L.photo || ''); }
