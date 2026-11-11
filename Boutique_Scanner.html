@@ -1597,7 +1597,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-e</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-f</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -6956,6 +6956,9 @@ function _adminTabBadges(){
   if(b1){ let n = 0; try { Object.keys(customerDB).forEach(k => (customerDB[k].notes || []).forEach(x => { if(x && !x.done) n++; })); } catch(e){} b1.textContent = n ? String(n) : ''; }
   const b2 = document.getElementById('admin-tab-b-reglages');
   if(b2){ let bad = false; try { const h = syncHealth(); bad = h.stuck || h.noLinks; } catch(e){} b2.textContent = bad ? '!' : ''; }
+  // 11 Nov 2026: products in this store with no price (often just named in Stock1981) → 💲N on « Prix & stock »
+  const b3 = document.getElementById('admin-tab-b-prix');
+  if(b3){ let n = 0; try { const it = _plAll ? _plStoreItems() : null; n = it ? it.filter(o => o.noPrice || o.noName).length : 0; } catch(e){} b3.textContent = n ? '💲' + n : ''; b3.title = n ? n + ' produit(s) du magasin sans nom ou sans prix : Liste des prix → 🏪 Confirmés en magasin → ❓' : ''; }
 }
 
 // ══════════════════════════════════════════
@@ -8901,7 +8904,7 @@ async function loadPriceList(silent){
     const d = await r.json();
     if(d && Array.isArray(d.lots)){ _lots = d.lots; try { localStorage.setItem('bc_lots', JSON.stringify(_lots)); } catch(e){} try { renderLotAdmin(); } catch(e){} }
     if(d && Array.isArray(d.promos)){ _promos = d.promos; try { localStorage.setItem('bc_promos', JSON.stringify(_promos)); } catch(e){} try { renderPromoAdmin(); } catch(e){} }
-    if(d && Array.isArray(d.products)){ _plAll = d.products; _plTs = Date.now(); _plIndex(); renderPriceAdmin(); return true; }
+    if(d && Array.isArray(d.products)){ _plAll = d.products; _plTs = Date.now(); _plIndex(); renderPriceAdmin(); try { _adminTabBadges(); } catch(e){} return true; }
     if(!silent) showToast('❌ Liste des prix : réponse inattendue (redéployez Code_updated.gs).', 5000);
   } catch(e){ if(!silent) showToast('❌ Liste des prix : connexion impossible.', 4000); }
   return false;
@@ -11585,7 +11588,7 @@ async function ouAsk(bc, typedName){
   } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas envoyé (connexion ?)'), 5000); }
 }
 // ══════════════════════════════════════════════════════════════════
-//  📍 RECEVOIR & RANGER (v7-nov-e, 11 Nov 2026) — the work is done on a
+//  📍 RECEVOIR & RANGER (v7-nov-f, 11 Nov 2026) — the work is done on a
 //  phone (ranger.html): scan this QR = signed in under the till's
 //  employee. On the phone: receive a transfer blind (scan what comes out of
 //  the box), then scan the shelf label where the items go. This window also
@@ -11636,7 +11639,7 @@ function rgRender(){
 setTimeout(() => { try { rgBadge(); } catch(e){} }, 9000);
 setInterval(() => { try { rgBadge(); } catch(e){} }, 5 * 60000);
 // ══════════════════════════════════════════════════════════════════
-//  📢 JOUR DES PRIX (v7-nov-e, 10 Nov 2026) — price changes are grouped on
+//  📢 JOUR DES PRIX (v7-nov-f, 10 Nov 2026) — price changes are grouped on
 //  Monday. Code GS getPriceNews gives this store's price changes (21 days),
 //  the promos, the shelf labels already swapped and who saw the news.
 //  • After the start-of-shift amounts: « 📢 Prix changés » (old → new, new

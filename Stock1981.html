@@ -940,7 +940,7 @@ function countHTML(){
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${isNewProd(it) ? `<input data-price="${i}" inputmode="numeric" placeholder="Prix en F (vide si vous ne savez pas)" value="${it.price || ''}" style="margin-top:4px">` : ''}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -948,7 +948,8 @@ function bindCount(){
   const inp = $('#scan');
   if(!inp) return;
   C.flash = false;
-  const focus = () => { if(!document.querySelector('[data-name]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
+  const focus = () => { if(!document.querySelector('[data-name]:focus,[data-price]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
+  document.querySelectorAll('[data-price]').forEach(x => { x.oninput = () => { const v = parseInt(String(x.value).replace(/\D/g, ''), 10); C.items[+x.dataset.price].price = v > 0 ? v : 0; saveDraft(); }; x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); x.blur(); inp.focus({ preventScroll: true }); } }; });
   inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addScan(inp.value); inp.value = ''; } };
   $('#camb').onclick = () => openCamera();
   document.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { C.items[+b.dataset.inc].count++; saveDraft(); render(); });
@@ -963,7 +964,10 @@ function bindCount(){
   $('#csend').onclick = finishCount;
   setTimeout(focus, 30);
 }
-function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); }
+function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); const p = document.querySelector('[data-price="' + i + '"]'); if(p) p.focus(); }
+// A product the master list does not know yet, with no price: its name and price typed here go
+// to the master list (Code GS stock1981Count → s1981MasterAdd_), so the tills can sell it.
+function isNewProd(it){ const k = bkey(aliasOf(it.barcode)); return !(DATA && DATA.names && DATA.names[k]) && !(priceOf(it.barcode) > 0); }
 let beepCtx;
 function beep(ok){
   try {
@@ -1051,7 +1055,7 @@ function finishCount(){
       if(!user){ closeSheet(); lock(); return; }
       refillOps().forEach((op, i) => { op.opId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + i; applyLocal(op); QUEUE.push({ op, by: user.name, hash: user.hash }); });
       const body = { opId: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), location: C.loc, zone: C.zone, spot: C.spot,
-        at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
+        at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count, price: it.price || 0 })) };
       applyCountLocal(Object.assign({ by: user.name }, body));
       QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
       ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
@@ -1076,7 +1080,7 @@ function finishCount(){
   $('#cok').onclick = () => {
     if(!user){ closeSheet(); lock(); return; }
     const body = { opId: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), location: C.loc, zone: C.zone, spot: C.spot,
-      at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count })) };
+      at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count, price: it.price || 0 })) };
     applyCountLocal(Object.assign({ by: user.name }, body));
     QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
     ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
