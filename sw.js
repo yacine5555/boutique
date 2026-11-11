@@ -15,7 +15,7 @@
 //
 // Bump CACHE_NAME whenever the shell's own file list changes, so old
 // clients pick up the new set on next activate instead of being stuck.
-const CACHE_NAME = 'boutique1981-shell-v22';
+const CACHE_NAME = 'boutique1981-shell-v23';
 const PHOTO_CACHE = 'boutique1981-photos-v1';
 const SHELL_URLS = [
   './Boutique_Scanner.html',
@@ -24,6 +24,7 @@ const SHELL_URLS = [
   './Customer_Display.html',
   './formation.html',
   './secours.html',
+  './ranger.html',
   './secours.webmanifest',
   './stock1981.webmanifest',
   './icon-192.png',

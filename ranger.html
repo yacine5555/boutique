@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#15803d">
+<title>Recevoir & ranger — Beauty Empire</title>
+<!-- GÉNÉRÉ par tools/build_ranger.py depuis tools/ranger.src.html : ne pas modifier ranger.html à la main. -->
+<style>
+:root{--ink:#1c1917;--muted:#78716c;--line:#e7e5e4;--sunk:#f5f5f4;--ok:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff;color:var(--ink);font-family:-apple-system,system-ui,Segoe UI,Roboto,Arial,sans-serif;font-size:17px}
+header{position:sticky;top:0;z-index:5;background:var(--ok);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;display:flex;align-items:center;gap:10px}
+header b{font-size:18px;flex:1}
+header button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:10px;padding:8px 12px;font-size:15px}
+main{padding:14px;padding-bottom:120px;max-width:640px;margin:0 auto}
+.big{display:block;width:100%;border:0;border-radius:16px;padding:18px;font-size:19px;font-weight:800;margin:10px 0;background:var(--ok);color:#fff;text-align:center}
+.big.alt{background:var(--sunk);color:var(--ink)}
+.big.warn{background:#fef3c7;color:#92400e}
+.big small{display:block;font-weight:600;font-size:14px;opacity:.85;margin-top:3px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.row .nm{flex:1;min-width:0}
+.row .nm small{display:block;color:var(--muted);font-size:13px}
+.row b.q{font-size:20px}
+.ph{width:56px;height:56px;border-radius:10px;background:var(--sunk);flex:none;object-fit:contain}
+.card{background:var(--sunk);border-radius:18px;padding:12px;margin:10px 0}
+.card .top{display:flex;gap:12px;align-items:center}
+.card .top img{width:96px;height:96px;object-fit:contain;background:#fff;border-radius:12px}
+.card h3{margin:0;font-size:18px}
+.goto{font-size:20px;font-weight:900;color:var(--ok);margin:8px 0 4px}
+.goto.none{color:var(--warn);font-size:17px}
+.pz{position:relative;margin-top:8px;border-radius:12px;overflow:hidden;background:#000}
+.pz img{display:block;width:100%}
+.pz i{position:absolute;border:2px solid rgba(255,255,255,.5);border-radius:6px}
+.pz i.hl{border:4px solid #ffd400;background:rgba(255,212,0,.35);animation:bl 1s infinite alternate}
+@keyframes bl{to{background:rgba(255,212,0,.1)}}
+.dim{color:var(--muted);font-size:14px}
+.pill{display:inline-block;background:#dcfce7;color:var(--ok);border-radius:99px;padding:3px 10px;font-weight:800;font-size:14px}
+.cnt{display:flex;align-items:center;gap:8px}
+.cnt button{width:44px;height:44px;border-radius:12px;border:0;background:#fff;font-size:22px;font-weight:800}
+.cnt span{min-width:40px;text-align:center;font-size:24px;font-weight:900}
+.toast{position:fixed;left:12px;right:12px;bottom:calc(90px + env(safe-area-inset-bottom,0px));background:#1c1917;color:#fff;border-radius:14px;padding:14px;font-weight:700;z-index:90;text-align:center}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;z-index:6}
+.bar .big{margin:0;padding:15px}
+.cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
+.cam video{flex:1;width:100%;object-fit:cover}
+.cam .frame{position:absolute;left:10%;right:10%;top:28%;height:22%;border:3px solid #4ade80;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.cam .camtop{position:absolute;left:0;right:0;top:0;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 12px;color:#fff;background:linear-gradient(rgba(0,0,0,.75),transparent);font-weight:700}
+.cam .camtop .goto{color:#4ade80;margin:4px 0 0}
+.cam .camui{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;background:linear-gradient(transparent,rgba(0,0,0,.8));color:#fff}
+.cam .camui span{flex:1;font-weight:700}
+.cam .camui button{border:0;border-radius:12px;padding:14px 16px;font-size:16px;font-weight:800}
+.flash{position:absolute;inset:0;pointer-events:none;background:rgba(74,222,128,.35);opacity:0;transition:opacity .2s}
+.flash.on{opacity:1}
+.flash.bad{background:rgba(239,68,68,.45)}
+input.t{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);border-radius:12px}
+</style>
+</head>
+<body>
+<header><b id="ttl">📍 Recevoir & ranger</b><button id="hb" hidden>‹ Retour</button></header>
+<main id="app"></main>
+<div class="bar" id="bar" hidden></div>
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  📍 RECEVOIR & RANGER (11 Nov 2026) — phone page for the staff, opened
+//  from the till's QR (📍 À ranger tile): #t= {p: Code GS, s: POS RECEIVER,
+//  k: key, n: employee, l: store}. Kept on the phone (store phone stays
+//  signed in until another QR is scanned).
+//  📥 Recevoir: pick the transfer that arrived, scan each item out of the
+//   box (blind, nothing expected is shown). After a few items, put them up
+//   and scan the shelf label: the items scanned since the last label go on
+//   that shelf. « Pas de place » = stays in « Non placé ». « Terminé » =
+//   transfer received with what was scanned (POS RECEIVER saveTransfer:
+//   stock into « Non placé ») + the shelf moves (Code GS placeItems).
+//  📍 À ranger: what is in « Non placé » here; scan the product, then the
+//   shelf label.
+//  Everything waits in an outbox (localStorage) until it is sent.
+// ══════════════════════════════════════════════════════════════════
+function ls(k, v){ try { if(v === undefined) return localStorage.getItem(k); if(v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
+function lsj(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } }
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const UNPLACED = 'Non placé';
+const ZONES = {"Store 1":[{"c":"1A","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1B","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"4,4,4,4,4 T4"},{"c":"1C","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1D","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"3,3,3,3 T3"},{"c":"1E","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1F","g":"Étagère 1 (mur, entrée → table de solde)","k":"","s":"3,5,5,3 T3"},{"c":"1G","g":"Étagère 1 (mur, entrée → table de solde)","k":"tour à arche","s":"1,1,1,1"},{"c":"1H","g":"Étagère 1 (mur, entrée → table de solde)","k":"nouveau meuble 1H (bout de l’étagère 1)","s":"3,3,3,2 T2"},{"c":"2A","g":"Ligne 2 (face à l’étagère 1)","k":"5 étagères + colonne de côté (6) + 1 tiroir","s":"1,1,1,1,1 C6 T1"},{"c":"2B","g":"Ligne 2 (face à l’étagère 1)","k":"5 étagères + colonne de côté (6) + 1 tiroir","s":"1,1,1,1,1 C6 T1"},{"c":"2C","g":"Ligne 2 (face à l’étagère 1)","k":"petit meuble (ancienne table de solde) — côté gauche G, côté droit D","s":"1,1,1 G5 D5"},{"c":"2D","g":"Ligne 2 (face à l’étagère 1)","k":"table de solde (ancien meuble 1H)","s":"1,1,1,1 T2","x":1},{"c":"3A","g":"Côté A","k":"","s":"3,3,3,3,3 T3"},{"c":"M1","g":"Côté A","k":"vitrine fermée","s":"1,1,1,1,1,1,1"},{"c":"M2","g":"Côté A","k":"vitrine fermée","s":"1,1,1,1,1,1"},{"c":"V1","g":"Côté A","k":"penderie — meilleures ventes","s":"1,1,1 T3"},{"c":"V2","g":"Côté A","k":"penderie — meilleures ventes","s":"1,1,1 T3"},{"c":"F1","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F2","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F3a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F3b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F4a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F4b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F5","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F6","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F7a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F7b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F8a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F8b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F9","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F10","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"F11a","g":"Côté B — gondoles","k":"Face avant (côté porte) — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F11b","g":"Côté B — gondoles","k":"Face avant (côté porte) — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F12a","g":"Côté B — gondoles","k":"Face arrière — petite partie (pilier)","s":"1,1,1,1,1"},{"c":"F12b","g":"Côté B — gondoles","k":"Face arrière — grande partie (pilier)","s":"1,1,1,1,1"},{"c":"F13","g":"Côté B — gondoles","k":"Face avant (côté porte)","s":"1,1,1,1,1"},{"c":"F14","g":"Côté B — gondoles","k":"Face arrière","s":"1,1,1,1,1"},{"c":"1O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"2O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"3O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"4O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"5O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"6O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"7O","g":"Côté B — bouts de gondole (face aux S)","k":"","s":"1,1,1,1,1,1,1"},{"c":"1S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"2S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"3S","g":"Mur du fond","k":"","s":"1,1,1,1,1"},{"c":"Rice","g":"Fenêtre / sol","k":"sacs de riz","s":""},{"c":"PT","g":"Fenêtre / sol","k":"table de présentation","s":""},{"c":"GLV","g":"Fenêtre / sol","k":"glacières et ventilateurs","s":""}],"Store 2":[{"c":"A1","g":"Cosmétiques — niches roses (A1–A4)","k":"niche rose — compléments alimentaires, Vital Proteins (dessus)","s":"1,1,1,1,1 T1"},{"c":"A2","g":"Cosmétiques — niches roses (A1–A4)","k":"niche rose — lotions, CeraVe, savons Dove","s":"1,1,1,1,1 T1"},{"c":"A3","g":"Cosmétiques — niches roses (A1–A4)","k":"niche rose — huiles, lotions, soins visage","s":"1,1,1,1,1 T1"},{"c":"A4","g":"Cosmétiques — niches roses (A1–A4)","k":"niche rose — huiles et soins cheveux, colorations, brosses à dents","s":"1,1,1,1 T1"},{"c":"A5","g":"Cosmétiques — niches blanches (A5–A8)","k":"niche blanche — déodorants, Jergens, Cetaphil","s":"1,1,1,1,1 T1"},{"c":"A6","g":"Cosmétiques — niches blanches (A5–A8)","k":"niche blanche — lotions Kirkland, Olay, Jergens, déodorants","s":"1,1,1,1,1 T1"},{"c":"A7","g":"Cosmétiques — niches blanches (A5–A8)","k":"niche blanche — Olay, Dove, Dr Teal's, Vaseline","s":"1,1,1,1,1 T1"},{"c":"A8","g":"Cosmétiques — niches blanches (A5–A8)","k":"niche blanche — gels douche Dove, savons liquides ; sèche-cheveux en haut","s":"1,1,1,1,1 T1"},{"c":"C1","g":"Cosmétiques — meubles roses","k":"meuble rose — Olay, SVR, sérums, rétinol, masques visage","s":"1,1,1,1"},{"c":"C1-2","g":"Cosmétiques — meubles roses","k":"meuble rose — Bath & Body Works, Mixa, beurres corporels","s":"1,1,1,1"},{"c":"D1","g":"Cosmétiques — vitrines","k":"vitrine étroite — parfums","s":"1,1,1,1,1,1,1"},{"c":"D2","g":"Cosmétiques — vitrines","k":"vitrine double — sacs à main (sépare les 2 côtés) — case 1 = porte gauche, 2 = porte droite","s":"2,2,2,2,2,2"},{"c":"P1","g":"Cosmétiques — vitrines","k":"petite vitrine 1 porte — parfums, coffrets","s":"1,1,1,1,1,1"},{"c":"B1","g":"Alimentation — gondoles métal","k":"gondole métal — snacks, riz ; friteuses dessus","s":"1,1,1,1,1,1,1"},{"c":"B2","g":"Alimentation — gondoles métal","k":"gondole métal — snacks (presque vide)","s":"1,1,1,1,1,1,1"},{"c":"B3","g":"Alimentation — gondoles métal","k":"gondole métal — vide pour l'instant","s":"1,1,1,1,1,1,1"},{"c":"B4","g":"Alimentation — gondoles métal","k":"gondole bout — vide pour l'instant","s":"1,1,1,1,1,1,1"},{"c":"B5","g":"Alimentation — gondoles métal","k":"gondole métal bout — épices, bouillons, huiles","s":"1,1,1,1,1,1,1"},{"c":"B6","g":"Alimentation — gondoles métal","k":"gondole métal — épices, Nescafé, sauces, Mazola","s":"1,1,1,1,1,1,1"},{"c":"B7","g":"Alimentation — gondoles métal","k":"gondole métal — Swiss Miss, Nescafé, Folgers, ginger","s":"1,1,1,1,1,1,1"},{"c":"B8","g":"Alimentation — gondoles métal","k":"gondole métal — Swiss Miss, Splenda, Welch's","s":"1,1,1,1,1,1,1"},{"c":"B9","g":"Alimentation — gondoles métal","k":"gondole métal bout — Ziploc, Jif, Tang, Capri-Sun","s":"1,1,1,1,1,1,1"},{"c":"B10","g":"Alimentation — gondoles métal","k":"gondole métal — ménage : Clorox, Pine-Sol, Fabuloso, Tide","s":"1,1,1,1,1,1"},{"c":"B11","g":"Alimentation — gondoles métal","k":"gondole métal — vide ; papier toilette Charmin dessus","s":"1,1,1,1,1,1,1"},{"c":"H1","g":"Alimentation — niches hautes","k":"niche haute — friteuses (cartons)","s":""},{"c":"H2","g":"Alimentation — niches hautes","k":"niche haute — sacs à dos","s":""},{"c":"H3","g":"Alimentation — niches hautes","k":"niche haute — sacs à dos, plateaux alu","s":""},{"c":"m1","g":"Points fixes","k":"lingerie sur cintres","s":""},{"c":"Fridge","g":"Points fixes","k":"frigo à boissons","s":""},{"c":"Cashier","g":"Points fixes","k":"caisse — articles devant","s":""},{"c":"Glaciere","g":"Points fixes","k":"grand présentoir de glacières","s":""},{"c":"Rice","g":"Points fixes","k":"charges lourdes : riz, cuiseurs, seaux de lessive","s":""}],"Warehouse":[{"c":"Entrepôt","g":"Entrepôt","k":"zone unique pour l’instant","s":""}]};
+const LOCS = [
+  { id:'Store 1', name:'Balkuy', slug:'store1', photo:'images/zones/store1/1B.jpg' },
+  { id:'Store 2', name:'Ouaga 2000', slug:'store2', photo:'images/zones/store2/B7.jpg' },
+  { id:'Warehouse', name:'Entrepôt', slug:'warehouse', photo:'' }
+];
+const bkey = b => String(b || '').trim().replace(/^0+/, '');
+function parseShape(str){
+  const o = { rows:[], T:0, C:0, G:0, D:0 };
+  String(str || '').trim().split(/\s+/).forEach(t => {
+    const m = t.match(/^([TCGD])(\d+)$/i);
+    if(m){ o[m[1].toUpperCase()] = +m[2]; return; }
+    t.split(',').forEach(n => { const v = parseInt(n, 10); if(v > 0 && v <= 12) o.rows.push(v); });
+  });
+  return o;
+}
+
+function zoneSpots(z){ return z && z.s ? shapeSpots(z.c, z.s) : (z ? [{ code: z.c + '-W', label: 'Toute la zone' + (z.k ? ' · ' + z.k : '') }] : []); }
+function shapeSpots(zone, shape){
+  const sh = parseShape(shape), out = [];
+  for(let s = sh.rows.length; s >= 1; s--){ const n = sh.rows[s-1]; for(let c = 1; c <= n; c++) out.push({ code: n > 1 ? `${zone}-${s}-${c}` : `${zone}-${s}`, label: 'Étagère ' + s + (n > 1 ? ' · case ' + c : '') }); }
+  for(let d = 1; d <= sh.T; d++) out.push({ code:`${zone}-T${d}`, label:'Tiroir ' + d });
+  for(let c = 1; c <= sh.C; c++) out.push({ code:`${zone}-C${c}`, label:'Côté · case ' + c });
+  for(let c = 1; c <= sh.G; c++) out.push({ code:`${zone}-G${c}`, label:'Côté gauche · case ' + c });
+  for(let c = 1; c <= sh.D; c++) out.push({ code:`${zone}-D${c}`, label:'Côté droit · case ' + c });
+  if(!out.length) out.push({ code: zone, label: 'Toute la zone' });
+  return out;
+}
+function photoFor(loc, zone){
+  const im = zoneImg(loc, zone); if(im) return driveImg(im.id);
+  const L = LOCS.find(l => l.id === loc); return L && L.slug !== 'warehouse' ? `images/zones/${L.slug}/${encodeURIComponent(zone)}.jpg?v=1104` : '';
+}
+// Zone photos taken in the app (4 Nov 2026): Drive file, shared « anyone with the link ».
+let ZIMG = lsj('s1981_zimg', {});
+function zoneImg(loc, zone){ return ZIMG[loc] && ZIMG[loc][zone] || null; }
+function driveImg(id){ return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w1400'; }
+
+const TRACES_BUILTIN = {"Store 1":{"1A":{"pw":563,"ph":1000,"spots":{"1A-4":[33,9,35,21],"1A-3":[33,39,35,17],"1A-2":[33,57,35,16],"1A-1":[33,74,35,16]}},"1B":{"pw":1000,"ph":563,"spots":{"1B-5-1":[14,18,18.5,12],"1B-5-2":[33,18,18.5,12],"1B-5-3":[52,18,18,12],"1B-5-4":[70.5,18,15.5,12],"1B-4-1":[14,30,18.5,13],"1B-4-2":[33,30,18.5,13],"1B-4-3":[52,30,18,13],"1B-4-4":[70.5,30,15.5,13],"1B-3-1":[14,43,18.5,14],"1B-3-2":[33,43,18.5,14],"1B-3-3":[52,43,18,14],"1B-3-4":[70.5,43,15.5,14],"1B-2-1":[14,57,18.5,13],"1B-2-2":[33,57,18.5,13],"1B-2-3":[52,57,18,13],"1B-2-4":[70.5,57,15.5,13],"1B-1-1":[14,70,18.5,14],"1B-1-2":[33,70,18.5,14],"1B-1-3":[52,70,18,14],"1B-1-4":[70.5,70,15.5,14],"1B-T1":[14,85,18.5,12],"1B-T2":[33,85,18.5,12],"1B-T3":[52,85,18,12],"1B-T4":[70.5,85,15.5,12]}},"1C":{"pw":563,"ph":1000,"spots":{"1C-4":[34,16,35,17],"1C-3":[34,40,35,14],"1C-2":[34,55,35,13],"1C-1":[34,69,35,12]}},"1D":{"pw":1000,"ph":986,"spots":{"1D-4-1":[1,10,36,21],"1D-4-2":[38,10,34,21],"1D-4-3":[73,10,26,21],"1D-3-1":[1,31,36,18],"1D-3-2":[38,31,34,18],"1D-3-3":[73,31,26,18],"1D-2-1":[1,49,36,17],"1D-2-2":[38,49,34,17],"1D-2-3":[73,49,26,17],"1D-1-1":[1,66,36,19],"1D-1-2":[38,66,34,19],"1D-1-3":[73,66,26,19],"1D-T1":[1,85,36,14],"1D-T2":[38,85,34,14],"1D-T3":[73,85,26,14]}},"1E":{"pw":563,"ph":1000,"spots":{"1E-4":[21,9,46,21],"1E-3":[21,40,46,16],"1E-2":[21,57,46,16],"1E-1":[21,74,46,17]}},"1F":{"pw":1000,"ph":637,"spots":{"1F-4-1":[3,10,30,21],"1F-4-2":[33,10,34,21],"1F-4-3":[67,10,31,21],"1F-3-1":[3,31,21,19],"1F-3-2":[24,31,20,19],"1F-3-3":[44,31,19,19],"1F-3-4":[63,31,19,19],"1F-3-5":[82,31,16,19],"1F-2-1":[3,50,21,19],"1F-2-2":[24,50,20,19],"1F-2-3":[44,50,19,19],"1F-2-4":[63,50,19,19],"1F-2-5":[82,50,16,19],"1F-1-1":[3,69,33,19],"1F-1-2":[36,69,33,19],"1F-1-3":[69,69,29,19],"1F-T1":[5,88,31,12],"1F-T2":[36,88,32,12],"1F-T3":[68,88,29,12]}},"1G":{"pw":563,"ph":1000,"spots":{"1G-4":[25,7,35,20],"1G-3":[25,35,35,17],"1G-2":[25,53,35,16],"1G-1":[25,70,35,16]}},"1H":{"pw":563,"ph":1000,"spots":{"1H-4-1":[11,30,49,15],"1H-4-2":[60,30,33,13],"1H-3-1":[11,45,35,13],"1H-3-2":[47,45,24,12],"1H-3-3":[71,44,22,12],"1H-2-1":[11,58,34,13],"1H-2-2":[46,57,24,12],"1H-2-3":[70,56,23,11],"1H-1-1":[11,71,34,13],"1H-1-2":[45,69,25,12],"1H-1-3":[70,67,23,11],"1H-T1":[11,84,47,12],"1H-T2":[58,81,34,11]}},"1O":{"pw":563,"ph":1000,"spots":{"1O-7":[57,17,40,10],"1O-6":[57,27,40,9],"1O-5":[57,36,40,10],"1O-4":[57,46,40,10],"1O-3":[57,56,40,10],"1O-2":[57,66,40,11],"1O-1":[57,77,40,15]}},"2A":{"pw":563,"ph":1000,"spots":{"2A-5":[56,15,40,13],"2A-4":[56,28,40,12],"2A-3":[56,40,40,12],"2A-2":[56,51,40,12],"2A-1":[57,62,38,12],"2A-T1":[57,74,38,13],"2A-C6":[25,8,30,13],"2A-C5":[25,21,30,14],"2A-C4":[25,35,30,15],"2A-C3":[25,50,30,13],"2A-C2":[25,63,30,12],"2A-C1":[25,75,30,15]}},"2B":{"pw":563,"ph":1000,"spots":{"2B-5":[3,17,42,14],"2B-4":[3,29,42,13],"2B-3":[3,40,42,13],"2B-2":[3,50,42,13],"2B-1":[3,60,42,14],"2B-T1":[3,72,42,16],"2B-C6":[46,5,34,15],"2B-C5":[46,20,34,17],"2B-C4":[46,37,34,16],"2B-C3":[46,53,34,15],"2B-C2":[46,68,34,14],"2B-C1":[46,82,34,14]}},"2C":{"pw":1000,"ph":585,"spots":{"2C-3":[33,5,44,32],"2C-2":[33,37,44,30],"2C-1":[33,67,44,28],"2C-G5":[3,3,29,17],"2C-G4":[3,20,29,18],"2C-G3":[3,38,29,19],"2C-G2":[3,57,29,20],"2C-G1":[3,77,29,20],"2C-D5":[77,3,17,15],"2C-D4":[77,18,17,18],"2C-D3":[77,36,17,18],"2C-D2":[77,54,17,18],"2C-D1":[77,72,17,20]}},"2D":{"pw":612,"ph":999,"spots":{"2D-4":[0,12,100,19],"2D-3":[0,31,100,20],"2D-2":[0,51,100,17],"2D-1":[0,68,100,20],"2D-T1":[0,88,50,12],"2D-T2":[50,88,50,12]}},"3A":{"pw":872,"ph":1000,"spots":{"3A-5-1":[1,12,32,13],"3A-5-2":[34,12,32,13],"3A-5-3":[67,12,31,13],"3A-4-1":[1,25,32,14],"3A-4-2":[34,25,32,14],"3A-4-3":[67,25,31,14],"3A-3-1":[1,39,32,15],"3A-3-2":[34,39,32,15],"3A-3-3":[67,39,31,15],"3A-2-1":[1,54,32,15],"3A-2-2":[34,54,32,15],"3A-2-3":[67,54,31,15],"3A-1-1":[1,69,32,15],"3A-1-2":[34,69,32,15],"3A-1-3":[67,69,31,15],"3A-T1":[1,85,32,15],"3A-T2":[34,85,32,15],"3A-T3":[67,85,31,15]}},"M2":{"pw":563,"ph":1000,"spots":{"M2-6":[16,12,64,13],"M2-5":[16,25,64,12],"M2-4":[16,37,64,12],"M2-3":[16,49,64,11],"M2-2":[16,60,64,11],"M2-1":[16,71,64,11]}},"V1":{"pw":563,"ph":1000,"spots":{"V1-3":[3,33,85,27],"V1-2":[4,60,82,7],"V1-1":[4,66,82,8],"V1-T1":[4,74,20,12],"V1-T2":[24,75,30,15],"V1-T3":[55,78,32,15]}},"V2":{"pw":563,"ph":1000,"spots":{"V2-3":[4,42,90,26],"V2-2":[5,67,88,6],"V2-1":[5,72,88,9],"V2-T1":[5,74,22,10],"V2-T2":[27,76,28,12],"V2-T3":[57,80,34,14]}},"F1":{"pw":562,"ph":1000,"spots":{"F1-5":[4,18,88,13],"F1-4":[4,31,88,13],"F1-3":[4,44,88,14],"F1-2":[4,58,88,12],"F1-1":[4,70,88,18]}},"F2":{"pw":563,"ph":1000,"spots":{"F2-5":[12,3,86,14],"F2-4":[12,17,86,16],"F2-3":[12,33,86,19],"F2-2":[14,52,84,16],"F2-1":[14,67,84,26]}},"F3a":{"pw":562,"ph":1000,"spots":{"F3a-5":[2,10,70,18],"F3a-4":[5,27,85,13],"F3a-3":[5,40,85,16],"F3a-2":[5,55,80,14],"F3a-1":[5,68,75,25]}},"F4a":{"pw":562,"ph":1000,"spots":{"F4a-5":[30,12,40,12],"F4a-4":[30,24,40,12],"F4a-3":[30,36,40,14],"F4a-2":[30,50,40,13],"F4a-1":[30,63,40,20]}},"F4b":{"pw":562,"ph":1000,"spots":{"F4b-5":[25,3,60,15],"F4b-4":[18,18,65,15],"F4b-3":[15,33,60,15],"F4b-2":[15,47,50,19],"F4b-1":[18,65,50,25]}},"F5":{"pw":562,"ph":1000,"spots":{"F5-5":[5,3,40,17],"F5-4":[5,20,80,18],"F5-3":[5,38,80,12],"F5-2":[5,50,80,13],"F5-1":[5,62,75,30]}},"F6":{"pw":562,"ph":1000,"spots":{"F6-5":[10,12,75,12],"F6-4":[10,24,75,12],"F6-3":[10,36,75,16],"F6-2":[10,52,75,16],"F6-1":[10,68,75,25]}},"F7a":{"pw":562,"ph":1000,"spots":{"F7a-5":[0,3,45,12],"F7a-4":[0,15,45,18],"F7a-3":[0,33,45,17],"F7a-2":[0,50,45,14],"F7a-1":[0,64,45,30]}},"F7b":{"pw":563,"ph":1000,"spots":{"F7b-5":[5,10,85,14],"F7b-4":[5,24,85,14],"F7b-3":[5,38,85,12],"F7b-2":[5,50,80,16],"F7b-1":[5,66,70,30]}},"F8a":{"pw":562,"ph":1000,"spots":{"F8a-5":[5,8,75,13],"F8a-4":[5,21,75,16],"F8a-3":[5,37,75,21],"F8a-2":[10,58,70,14],"F8a-1":[10,72,70,22]}},"F8b":{"pw":562,"ph":1000,"spots":{"F8b-5":[5,12,90,12],"F8b-4":[5,25,90,10],"F8b-3":[5,35,90,15],"F8b-2":[5,50,90,12],"F8b-1":[5,62,90,33]}},"F9":{"pw":562,"ph":1000,"spots":{"F9-5":[22,18,55,14],"F9-4":[22,32,55,10],"F9-3":[22,42,55,13],"F9-2":[22,55,50,13],"F9-1":[22,68,45,25]}},"F10":{"pw":562,"ph":1000,"spots":{"F10-5":[70,25,28,12],"F10-4":[70,38,28,12],"F10-3":[70,50,28,12],"F10-2":[70,62,28,14],"F10-1":[70,76,28,16]}},"F11a":{"pw":562,"ph":1000,"spots":{"F11a-5":[25,8,60,12],"F11a-4":[25,20,60,14],"F11a-3":[25,35,60,14],"F11a-2":[25,49,60,15],"F11a-1":[25,64,60,24]}},"F11b":{"pw":562,"ph":1000,"spots":{"F11b-5":[0,18,60,12],"F11b-4":[0,30,60,12],"F11b-3":[0,42,60,13],"F11b-2":[0,55,60,13],"F11b-1":[0,68,60,25]}},"F13":{"pw":563,"ph":1000,"spots":{"F13-5":[2,10,78,13],"F13-4":[2,24,78,13],"F13-3":[2,37,78,13],"F13-2":[2,50,75,14],"F13-1":[2,64,70,30]}},"Rice":{"pw":562,"ph":1000,"spots":{"Rice-W":[5,32,95,62]}},"PT":{"pw":562,"ph":1000,"spots":{"PT-W":[0,26,100,52]}},"GLV":{"pw":562,"ph":1000,"spots":{"GLV-W":[5,22,93,60]}},"M1":{"pw":443,"ph":1000,"spots":{"M1-7":[3,3,94,13],"M1-6":[3,16,94,13],"M1-5":[3,29,94,12],"M1-4":[3,41,94,12],"M1-3":[3,53,94,11],"M1-2":[3,64,94,12],"M1-1":[3,76,94,20]}},"F3b":{"pw":636,"ph":999,"spots":{"F3b-5":[0,0,96,13],"F3b-4":[0,13,96,19],"F3b-3":[0,32,96,25],"F3b-2":[0,57,96,18],"F3b-1":[0,75,96,22]}},"2O":{"pw":563,"ph":1000,"spots":{"2O-7":[10,5,73,10.5],"2O-6":[12,17,69,12.5],"2O-5":[13,31,67,12],"2O-4":[13,44,66,12],"2O-3":[14,57.5,64,10.5],"2O-2":[15,69.5,63,10.5],"2O-1":[15,81.5,62,10]}},"3O":{"pw":455,"ph":1000,"spots":{"3O-7":[2,2.0,96,13.7],"3O-6":[2,15.7,96,13.7],"3O-5":[2,29.4,96,13.7],"3O-4":[2,43.1,96,13.7],"3O-3":[2,56.9,96,13.7],"3O-2":[2,70.6,96,13.7],"3O-1":[2,84.3,96,13.7]}},"4O":{"pw":404,"ph":1000,"spots":{"4O-7":[2,2.0,96,13.7],"4O-6":[2,15.7,96,13.7],"4O-5":[2,29.4,96,13.7],"4O-4":[2,43.1,96,13.7],"4O-3":[2,56.9,96,13.7],"4O-2":[2,70.6,96,13.7],"4O-1":[2,84.3,96,13.7]}},"5O":{"pw":563,"ph":1000,"spots":{"5O-7":[18.0,4.0,70.0,11.0],"5O-6":[18.0,16.5,68.0,13.5],"5O-5":[18.0,31.5,66.0,12.5],"5O-4":[18.0,45.0,65.0,12.0],"5O-3":[18.0,58.5,63.0,11.0],"5O-2":[18.0,70.5,62.0,10.5],"5O-1":[17.0,81.5,62.0,11.0]}},"6O":{"pw":562,"ph":1000,"spots":{"6O-7":[10.0,8.0,70.0,10.5],"6O-6":[11.0,20.5,68.0,12.0],"6O-5":[12.0,34.0,66.0,11.5],"6O-4":[13.0,47.0,64.0,11.0],"6O-3":[14.0,59.0,61.0,10.5],"6O-2":[15.0,70.5,59.0,9.5],"6O-1":[15.0,81.0,59.0,10.0]}},"1S":{"pw":1000,"ph":636,"spots":{"1S-5":[1,0,98,10],"1S-4":[1,11,98,18],"1S-3":[1,29,98,22],"1S-2":[1,52,98,22],"1S-1":[1,74,98,24]}},"2S":{"pw":1000,"ph":563,"spots":{"2S-5":[2.0,0.5,79.0,15.5],"2S-4":[2.0,17.0,79.0,15.0],"2S-3":[2.0,33.0,78.0,22.0],"2S-2":[2.0,55.5,78.0,18.0],"2S-1":[2.0,74.0,78.0,19.0]}},"3S":{"pw":702,"ph":1000,"spots":{"3S-5":[0,0,100,13],"3S-4":[0,13,100,19],"3S-3":[0,32,100,21],"3S-2":[0,53,100,18],"3S-1":[0,71,100,25]}}},"Store 2":{"A4":{"pw":562,"ph":1000,"spots":{"A4-4":[20,22,64,12],"A4-3":[20,36,64,11],"A4-2":[20,48,64,11],"A4-1":[20,60,64,12],"A4-T1":[20,74,64,16]}},"A3":{"pw":562,"ph":1000,"spots":{"A3-5":[10,6,58,12],"A3-4":[10,23,58,10],"A3-3":[10,35,58,11],"A3-2":[10,47,58,11],"A3-1":[10,59,58,11],"A3-T1":[10,72,58,16]}},"A2":{"pw":562,"ph":1000,"spots":{"A2-5":[10,4,78,14],"A2-4":[10,26,78,12],"A2-3":[10,44,78,11],"A2-2":[10,56,78,12],"A2-1":[10,69,78,13],"A2-T1":[10,83,78,14]}},"A1":{"pw":562,"ph":1000,"spots":{"A1-5":[18,11,64,9],"A1-4":[18,27,64,10],"A1-3":[18,40,64,10],"A1-2":[18,53,64,10],"A1-1":[18,66,64,10],"A1-T1":[18,78,64,17]}},"A8":{"pw":562,"ph":1000,"spots":{"A8-5":[26,4,42,14],"A8-4":[26,24,42,10],"A8-3":[26,37,42,9],"A8-2":[26,48,42,10],"A8-1":[26,60,42,10],"A8-T1":[26,72,42,16]}},"A7":{"pw":562,"ph":1000,"spots":{"A7-5":[20,3,48,16],"A7-4":[20,27,48,11],"A7-3":[20,41,48,11],"A7-2":[20,55,48,11],"A7-1":[20,68,48,12],"A7-T1":[20,82,48,16]}},"A6":{"pw":562,"ph":1000,"spots":{"A6-5":[22,3,50,16],"A6-4":[22,27,50,11],"A6-3":[22,41,50,11],"A6-2":[22,55,50,12],"A6-1":[22,69,50,11],"A6-T1":[22,81,50,17]}},"A5":{"pw":574,"ph":1000,"spots":{"A5-5":[27,4,48,14],"A5-4":[27,25,48,10],"A5-3":[27,39,48,10],"A5-2":[27,51,48,11],"A5-1":[27,65,48,11],"A5-T1":[27,79,48,17]}},"C1":{"pw":562,"ph":1000,"spots":{"C1-4":[3,2,92,24],"C1-3":[10,28,80,16],"C1-2":[16,48,72,11],"C1-1":[20,59,62,12]}},"C1-2":{"pw":562,"ph":1000,"spots":{"C1-2-4":[16,19,70,14],"C1-2-3":[18,36,66,11],"C1-2-2":[20,48,62,12],"C1-2-1":[20,61,60,10]}},"D1":{"pw":563,"ph":1000,"spots":{"D1-7":[33,22.0,27,10.6],"D1-6":[33,32.6,27,10.6],"D1-5":[33,43.2,27,10.6],"D1-4":[33,53.8,27,10.6],"D1-3":[33,64.4,27,10.6],"D1-2":[33,75.0,27,10.6],"D1-1":[33,85.6,27,10.6]}},"P1":{"pw":562,"ph":1000,"spots":{"P1-6":[41,14.0,17,12.6],"P1-5":[41,26.6,17,12.6],"P1-4":[41,39.2,17,12.6],"P1-3":[41,51.8,17,12.6],"P1-2":[41,64.4,17,12.6],"P1-1":[41,77.0,17,12.6]}},"D2":{"pw":562,"ph":1000,"spots":{"D2-6-1":[13,12.0,32,12.7],"D2-6-2":[55,12.0,33,12.7],"D2-5-1":[13,24.7,32,12.7],"D2-5-2":[55,24.7,33,12.7],"D2-4-1":[13,37.4,32,12.7],"D2-4-2":[55,37.4,33,12.7],"D2-3-1":[13,50.1,32,12.7],"D2-3-2":[55,50.1,33,12.7],"D2-2-1":[13,62.8,32,12.7],"D2-2-2":[55,62.8,33,12.7],"D2-1-1":[13,75.5,32,12.7],"D2-1-2":[55,75.5,33,12.7]}},"B4":{"pw":562,"ph":1000,"spots":{"B4-7":[12,5,68,13],"B4-6":[12,18,68,13],"B4-5":[13,31,67,12],"B4-4":[13,43,67,11],"B4-3":[14,54,66,13],"B4-2":[15,67,64,12],"B4-1":[15,79,64,16]}},"B3":{"pw":562,"ph":1000,"spots":{"B3-7":[22,8,62,13],"B3-6":[22,21,62,13],"B3-5":[23,34,61,11],"B3-4":[23,45,61,11],"B3-3":[24,56,60,11],"B3-2":[24,67,60,11],"B3-1":[24,78,60,15]}},"B2":{"pw":562,"ph":1000,"spots":{"B2-7":[14,3,60,11],"B2-6":[14,14,60,13],"B2-5":[15,27,59,12],"B2-4":[16,39,58,11],"B2-3":[16,50,58,11],"B2-2":[17,61,57,10],"B2-1":[17,71,57,13]}},"B1":{"pw":562,"ph":1000,"spots":{"B1-7":[18,5,58,14],"B1-6":[18,20,58,11],"B1-5":[18,32,58,11],"B1-4":[18,43,58,10],"B1-3":[19,53,57,11],"B1-2":[19,64,57,10],"B1-1":[19,75,57,16]}},"B11":{"pw":562,"ph":1000,"spots":{"B11-7":[12,8,60,12],"B11-6":[15,21,57,12],"B11-5":[16,33,56,11],"B11-4":[16,44,56,11],"B11-3":[17,55,56,11],"B11-2":[17,66,55,10],"B11-1":[17,76,55,13]}},"B10":{"pw":562,"ph":1000,"spots":{"B10-6":[18,7,62,15],"B10-5":[20,22,58,13],"B10-4":[20,35,58,14],"B10-3":[20,50,58,15],"B10-2":[20,65,58,11],"B10-1":[20,76,58,15]}},"B9":{"pw":562,"ph":1000,"spots":{"B9-7":[17,11,62,12],"B9-6":[17,23,62,11],"B9-5":[17,34,62,11],"B9-4":[17,45,62,11],"B9-3":[17,56,62,11],"B9-2":[17,67,62,10],"B9-1":[17,77,62,14]}},"B8":{"pw":562,"ph":1000,"spots":{"B8-7":[18,11,60,11],"B8-6":[18,23,60,10],"B8-5":[18,34,60,10],"B8-4":[18,45,60,12],"B8-3":[18,57,60,9],"B8-2":[18,66,60,10],"B8-1":[18,76,60,14]}},"B7":{"pw":562,"ph":1000,"spots":{"B7-7":[18,11,62,11],"B7-6":[18,23,62,11],"B7-5":[18,34,62,11],"B7-4":[18,46,62,11],"B7-3":[18,57,62,10],"B7-2":[18,67,62,11],"B7-1":[18,78,62,14]}},"B6":{"pw":562,"ph":1000,"spots":{"B6-7":[17,6,62,11],"B6-6":[17,18,62,11],"B6-5":[17,30,62,11],"B6-4":[17,41,62,11],"B6-3":[17,52,62,12],"B6-2":[17,64,62,11],"B6-1":[17,75,62,15]}},"B5":{"pw":562,"ph":1000,"spots":{"B5-7":[18,8,62,11],"B5-6":[18,20,62,12],"B5-5":[18,33,62,12],"B5-4":[18,45,62,11],"B5-3":[18,56,62,11],"B5-2":[18,67,62,11],"B5-1":[18,78,62,14]}},"m1":{"pw":562,"ph":1000,"spots":{"m1-W":[12,36,78,30]}},"Fridge":{"pw":562,"ph":1000,"spots":{"Fridge-W":[15,9,70,80]}},"H1":{"pw":1000,"ph":562,"spots":{"H1-W":[5,28,70,30]}},"H2":{"pw":1000,"ph":562,"spots":{"H2-W":[12,20,80,32]}},"H3":{"pw":1000,"ph":562,"spots":{"H3-W":[8,30,90,30]}}}};
+const TRACE_NEW_AT = '2026-10-29';
+const TRACE_NEW_ZONES = ["1A", "1B", "1C", "1D", "1E", "1F", "1G", "1H", "1O", "2A", "2B", "2C", "2D", "3A", "M2", "V1", "V2"];
+let SHEET_TRACES = lsj('s1981_traces', {});
+async function loadTraces(){
+  if(!URL_ || !KEY) return;
+  try { const d = await api({ action:'getZonePhotos' }); if(d && d.success && d.traces){ SHEET_TRACES = d.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); if(d.images){ ZIMG = d.images; ls('s1981_zimg', JSON.stringify(ZIMG)); } if(VIEW.screen === 'zone') render(); } } catch(e){}
+}
+// Ouaga 2000 (4 Nov 2026): store split in two (cosmetics / food), new photo for each zone below —
+// boxes saved on the old photos are ignored, the new first-draft boxes are in TRACES_BUILTIN.
+const TRACE_NEWPHOTO_S2_AT = '2026-11-04T17:00';
+const TRACE_NEWPHOTO_S2 = {"A1":1,"A2":1,"A3":1,"A4":1,"A5":1,"A6":1,"A7":1,"A8":1,"B1":1,"B10":1,"B11":1,"B2":1,"B3":1,"B4":1,"B5":1,"B6":1,"B7":1,"B8":1,"B9":1,"C1":1,"C1-2":1,"D1":1,"D2":1,"Fridge":1,"H1":1,"H2":1,"H3":1,"P1":1,"m1":1};
+const TRACE_STRAIGHT_AT = {"1D": "2026-10-31T23:45:00Z", "1F": "2026-10-31T23:45:00Z", "1S": "2026-10-31T23:45:00Z", "2C": "2026-10-31T23:45:00Z", "2D": "2026-10-31T23:45:00Z", "3A": "2026-10-31T23:45:00Z", "3O": "2026-10-31T23:45:00Z", "3S": "2026-10-31T23:45:00Z", "4O": "2026-10-31T23:45:00Z", "F3b": "2026-10-31T23:45:00Z", "M1": "2026-10-31T23:45:00Z"};
+function traceFor(loc, zone){
+  const s = SHEET_TRACES[loc] && SHEET_TRACES[loc][zone];
+  const im = zoneImg(loc, zone);
+  if(im){ return s && s.spots && Object.keys(s.spots).length && String(s.at || '') >= String(im.at || '') ? Object.assign({ src:'sheet' }, s) : null; }
+  const isNew = loc === 'Store 1' && TRACE_NEW_ZONES.includes(zone);
+  // zones whose photo was replaced by a straightened one (31 Oct 2026): boxes drawn on the old photo are ignored
+  const straightAt = loc === 'Store 1' ? TRACE_STRAIGHT_AT[zone] : (loc === 'Store 2' && TRACE_NEWPHOTO_S2[zone]) ? TRACE_NEWPHOTO_S2_AT : '';
+  if(s && s.spots && Object.keys(s.spots).length && (!isNew || String(s.at || '') >= TRACE_NEW_AT) && (!straightAt || String(s.at || '') >= straightAt)) return Object.assign({ src:'sheet' }, s);
+  const b = TRACES_BUILTIN[loc] && TRACES_BUILTIN[loc][zone];
+  return b ? Object.assign({ src:'builtin' }, b) : null;
+}
+
+const AZ_MAP = { '&':'1', 'é':'2', '"':'3', "'":'4', '(':'5', '§':'6', 'è':'7', '!':'8', 'ç':'9', 'à':'0', ')':'-', 'q':'a', 'a':'q', 'w':'z', 'z':'w', 'Q':'A', 'A':'Q', 'W':'Z', 'Z':'W' };
+
+// ── session ──
+let T = lsj('rg_tok', null);
+(function(){
+  const m = /#t=([^&]+)/.exec(location.hash);
+  if(m){ try { T = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); ls('rg_tok', JSON.stringify(T)); } catch(e){} history.replaceState(null, '', location.pathname); }
+})();
+const HERE = T && T.l === 'Store 2' ? 'Store 2' : 'Store 1';
+const HERE_NAME = HERE === 'Store 2' ? 'Ouaga 2000' : 'Balkuy';
+let D = lsj('rg_data', null);            // { zones, spots, names, images, aliases, at }
+let TR = lsj('rg_tr', []);               // transfers in transit to here
+let R = lsj('rg_recv', null);            // receiving in progress
+let OUT = lsj('rg_out', []);             // outbox
+let PL = lsj('rg_placed', {});           // locally placed from « Non placé » not yet in D: bkey → qty
+let V = { s: 'home' }, CUR = null, busy = false;
+function save(){ ls('rg_recv', R ? JSON.stringify(R) : null); ls('rg_out', JSON.stringify(OUT)); ls('rg_placed', JSON.stringify(PL)); }
+function toast(t, ms){ const o = $('.toast'); if(o) o.remove(); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), ms || 2600); }
+function beep(ok){ try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = ok ? 1200 : 300; g.gain.value = .15; o.connect(g); g.connect(a.destination); o.start(); setTimeout(() => { o.stop(); a.close(); }, ok ? 90 : 300); } catch(e){} try { navigator.vibrate && navigator.vibrate(ok ? 40 : [80, 50, 80]); } catch(e){} }
+
+// ── server ──
+async function gsGet(action){ const r = await fetch(T.p + (T.p.includes('?') ? '&' : '?') + 'action=' + action + '&key=' + encodeURIComponent(T.k), { cache:'no-store' }); return r.json(); }
+async function postTo(url, body){ const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: T.k }, body)) }); return r.json(); }
+async function load(){
+  try {
+    const [d, ph] = await Promise.all([gsGet('getStock1981'), gsGet('getZonePhotos').catch(() => null)]);
+    if(d && d.success){ D = { zones: d.zones || [], spots: d.spots || [], names: d.names || {}, images: d.images || {}, aliases: d.aliases || {}, at: Date.now() }; PL = {}; ls('rg_data', JSON.stringify(D)); save(); }
+    if(ph && ph.success && ph.traces){ SHEET_TRACES = ph.traces; ls('s1981_traces', JSON.stringify(SHEET_TRACES)); if(ph.images){ ZIMG = ph.images; ls('s1981_zimg', JSON.stringify(ZIMG)); } }
+  } catch(e){}
+  try {
+    const r = await fetch(T.s + (T.s.includes('?') ? '&' : '?') + 'action=getTransfers&key=' + encodeURIComponent(T.k), { cache:'no-store' });
+    const j = await r.json();
+    if(j && Array.isArray(j.transfers)){ TR = j.transfers.filter(t => t.status === 'transit' && t.to === HERE); ls('rg_tr', JSON.stringify(TR)); }
+  } catch(e){}
+  render();
+}
+async function flush(){
+  if(busy || !OUT.length || !navigator.onLine) return;
+  busy = true;
+  try {
+    while(OUT.length){
+      const job = OUT[0];
+      const d = await postTo(job.to === 'pos' ? T.s : T.p, job.body);
+      if(!d || !(d.ok === true || d.success === true || /Rien à ranger/.test(d.error || ''))) throw new Error((d && d.error) || 'refusé');
+      OUT.shift(); save();
+    }
+  } catch(e){ setTimeout(flush, 20000); }
+  busy = false; render();
+}
+window.addEventListener('online', flush);
+
+// ── products & places ──
+function aliasOf(raw){ const s = String(raw || '').trim(); const a = D && D.aliases ? D.aliases[bkey(s)] : null; return a || s; }
+function nameOf(bc){ const k = bkey(aliasOf(bc)); if(D && D.names && D.names[k]) return D.names[k]; const z = D && (D.zones || []).find(r => bkey(r[2]) === k && r[3]); return z ? z[3] : ''; }
+function imgOf(bc){ const k = bkey(aliasOf(bc)); return D && D.images ? (D.images[k] || '') : ''; }
+function zoneDef(loc, zone){ return (ZONES[loc] || []).find(z => z.c === zone) || null; }
+function spotLabel(loc, zone, spot){ const s = zoneSpots(zoneDef(loc, zone)).find(x => x.code === spot); return s ? s.label : ''; }
+function placeText(p){ if(!p) return ''; const l = p.spot ? spotLabel(HERE, p.zone, p.spot) : ''; return 'Zone ' + p.zone + (l && l !== 'Toute la zone' ? ' · ' + l : ''); }
+// usual place of a product in this store: the shelf holding the most, else the zone
+function suggest(bc){
+  const k = bkey(aliasOf(bc)); if(!D) return null;
+  const sp = D.spots.filter(r => r[0] === HERE && bkey(r[3]) === k && Number(r[5]) > 0 && r[1] !== UNPLACED).sort((a, b) => b[5] - a[5])[0];
+  if(sp) return { zone: sp[1], spot: sp[2] };
+  const z = D.zones.filter(r => r[0] === HERE && bkey(r[2]) === k && Number(r[4]) > 0 && r[1] !== UNPLACED && zoneDef(HERE, r[1])).sort((a, b) => b[4] - a[4])[0];
+  return z ? { zone: z[1], spot: '' } : null;
+}
+// a shelf label S2-B7-3 → { zone:'B7', spot:'B7-3' } (only this store)
+function shelfOf(raw){
+  const tries = [String(raw || '').trim()]; tries.push(tries[0].split('').map(ch => AZ_MAP[ch] || ch).join(''));
+  for(const t of tries){
+    const m = /^S([12])-(.+)$/i.exec(t); if(!m) continue;
+    const loc = 'Store ' + m[1], rest = m[2].toLowerCase();
+    if(loc !== HERE) return { other: true };
+    for(const z of (ZONES[loc] || [])){ const sp = zoneSpots(z).find(x => x.code.toLowerCase() === rest); if(sp) return { zone: z.c, spot: sp.code }; }
+    const z = (ZONES[loc] || []).find(q => q.c.toLowerCase() === rest);
+    if(z) return { zone: z.c, spot: zoneSpots(z).length === 1 ? zoneSpots(z)[0].code : '' };
+    return { unknown: t };
+  }
+  return null;
+}
+function photoHTML(p){
+  if(!p) return '';
+  const src = photoFor(HERE, p.zone); if(!src) return '';
+  const t = traceFor(HERE, p.zone);
+  const boxes = t ? Object.keys(t.spots).map(c => { const [x, y, w, h] = t.spots[c]; return '<i class="' + (c === p.spot ? 'hl' : '') + '" style="left:' + x + '%;top:' + y + '%;width:' + w + '%;height:' + h + '%"></i>'; }).join('') : '';
+  return '<div class="pz"><img src="' + esc(src) + '" alt="" onerror="this.parentNode.remove()">' + (p.spot && t && t.spots[p.spot] ? boxes : '') + '</div>';
+}
+function prodCard(bc, qtyHTML){
+  const sg = suggest(bc), im = imgOf(bc);
+  return '<div class="card"><div class="top">' + (im ? '<img src="' + esc(im) + '" alt="">' : '') + '<div style="flex:1"><h3>' + esc(nameOf(bc) || bc) + '</h3>' + (qtyHTML || '') + '</div></div>' +
+    (sg ? '<div class="goto">➡ ' + esc(placeText(sg)) + '</div>' + photoHTML(sg) : '<div class="goto none">Pas encore de place ici : laissez-le de côté (« Pas de place »), 1981 décidera.</div>') + '</div>';
+}
+
+// ── camera (BarcodeDetector, else ZXing) — stays open; onCode(code) for each scan ──
+let camStream = null, camTimer = null, zxReader = null, camCB = null;
+async function openCamera(onCode, top){
+  closeCamera(); camCB = onCode;
+  const box = document.createElement('div'); box.className = 'cam'; box.id = 'cam';
+  box.innerHTML = '<video playsinline muted></video><div class="frame"></div><div class="flash" id="flash"></div><div class="camtop" id="camtop">' + (top || '') + '</div><div class="camui"><span id="camtxt">Visez le code-barres</span><button id="camx" style="background:#fff">Fermer</button></div>';
+  document.body.appendChild(box);
+  $('#camx').onclick = () => { closeCamera(); render(); };
+  const video = box.querySelector('video');
+  let last = '', lastAt = 0;
+  const hit = code => { const now = Date.now(); if(code === last && now - lastAt < 1500) return; last = code; lastAt = now; if(camCB) camCB(code); };
+  try {
+    if('BarcodeDetector' in window){
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = camStream; await video.play();
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+      camTimer = setInterval(async () => { try { const r = await det.detect(video); if(r[0]) hit(r[0].rawValue); } catch(e){} }, 220);
+    } else {
+      if(!window.ZXing) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+      zxReader = new ZXing.BrowserMultiFormatReader();
+      await zxReader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, r => { if(r) hit(r.getText()); });
+    }
+  } catch(e){ const t = $('#camtxt'); if(t) t.textContent = 'Appareil photo indisponible : autorisez la caméra pour ce site.'; }
+}
+function closeCamera(){
+  clearInterval(camTimer); camTimer = null; camCB = null;
+  try { if(zxReader) zxReader.reset(); } catch(e){} zxReader = null;
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const b = $('#cam'); if(b) b.remove();
+}
+function camSay(txt, top, bad){
+  const t = $('#camtxt'); if(t) t.textContent = txt;
+  if(top != null){ const c = $('#camtop'); if(c) c.innerHTML = top; }
+  const f = $('#flash'); if(f){ f.className = 'flash on' + (bad ? ' bad' : ''); setTimeout(() => { f.className = 'flash'; }, 250); }
+}
+
+// ══ 📥 RECEIVING ══
+function groups(){
+  const g = {};
+  TR.forEach(t => { const k = t.grp || t.uid; (g[k] = g[k] || { grp: k, gid: t.gid || t.id, from: t.fulfiller || t.from, lines: [], ts: t.sentTs || t.ts }).lines.push(t); });
+  return Object.values(g).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+}
+function recvStart(grp){
+  const g = groups().find(x => x.grp === grp); if(!g) return;
+  R = { grp: g.grp, gid: g.gid, from: g.from, lines: g.lines, got: {}, nm: {}, pend: {}, placed: [], last: '' };
+  save(); V = { s: 'recv' }; render(); recvCam();
+}
+function _rk(bc){ return bkey(aliasOf(bc)); }
+function recvTop(){
+  if(!R || !R.last) return '<div>Sortez un article du carton et scannez-le.</div>';
+  const k = R.last, sg = suggest(k), n = R.pend[k] || 0;
+  return '<div>' + esc(R.nm[k] || nameOf(k) || k) + ' — <b>' + n + '</b> à poser</div>' + (sg ? '<div class="goto">➡ ' + esc(placeText(sg)) + '</div>' : '<div class="goto" style="color:#fbbf24">Pas de place connue</div>') +
+    '<div style="font-size:13px;opacity:.85;margin-top:4px">Posez-les, puis scannez l’étiquette de l’étagère.</div>';
+}
+function recvCam(){ openCamera(recvCode, recvTop()); }
+function recvCode(raw){
+  const code = String(raw || '').trim();
+  const sh = shelfOf(code);
+  if(sh){ recvShelf(sh); return; }
+  if(!/^\d{6,14}$/.test(code)){ beep(false); camSay('Code non reconnu : ' + code, null, true); return; }
+  const k = _rk(code);
+  R.got[k] = (R.got[k] || 0) + 1; R.pend[k] = (R.pend[k] || 0) + 1; R.nm[k] = R.nm[k] || nameOf(code) || ((R.lines.find(l => bkey(l.barcode) === k) || {}).name) || code; R.last = k;
+  save(); beep(true);
+  camSay('+1 ' + R.nm[k] + ' (total ' + R.got[k] + ')', recvTop());
+}
+function recvShelf(sh){
+  if(sh.other){ beep(false); camSay('Étiquette d’un autre magasin !', null, true); return; }
+  if(sh.unknown){ beep(false); camSay('Étagère inconnue : ' + sh.unknown, null, true); return; }
+  const ks = Object.keys(R.pend).filter(k => R.pend[k] > 0);
+  if(!ks.length){ beep(false); camSay('Scannez d’abord les articles à poser.', null, true); return; }
+  const off = ks.filter(k => { const sg = suggest(k); return sg && sg.zone !== sh.zone; });
+  if(off.length && !confirm((off.length === 1 ? R.nm[off[0]] : off.length + ' produits') + ' : ce n’est pas l’étagère prévue (' + placeText(suggest(off[0])) + ').\nPoser ici quand même (' + placeText(sh) + ') ?')) { camSay('D’accord : allez à l’étagère prévue.'); return; }
+  let n = 0;
+  ks.forEach(k => { R.placed.push({ barcode: k, name: R.nm[k] || k, qty: R.pend[k], toZone: sh.zone, spot: sh.spot }); n += R.pend[k]; R.pend[k] = 0; });
+  save(); beep(true);
+  camSay('✓ ' + n + ' article(s) posé(s) : ' + placeText(sh), '<div>Continuez : article suivant.</div>');
+}
+function recvNoPlace(){ Object.keys(R.pend).forEach(k => R.pend[k] = 0); save(); toast('Laissé dans « Non placé ».'); render(); }
+function recvFinish(){
+  const tot = Object.values(R.got).reduce((a, n) => a + n, 0);
+  const pend = Object.values(R.pend).reduce((a, n) => a + n, 0);
+  if(!tot){ if(!confirm('Aucun article scanné. Marquer ce transfert comme reçu VIDE ?')) return; }
+  else if(!confirm('Terminer : ' + tot + ' article(s) reçu(s)' + (pend ? ', dont ' + pend + ' pas encore posé(s) (resteront dans « Non placé »)' : '') + ' ?')) return;
+  closeCamera();
+  const now = new Date(), who = T.n || '?', seen = {};
+  const pad = n => String(n).padStart(2, '0');
+  const date = pad(now.getDate()) + '/' + pad(now.getMonth() + 1) + '/' + now.getFullYear(), time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const push = rec => { rec.upd = Date.now() + OUT.length; OUT.push({ to: 'pos', body: { action: 'saveTransfer', uid: rec.uid, upd: rec.upd, id: rec.id, status: rec.status, from: rec.from, to: rec.to,
+    barcode: rec.barcode || '', name: rec.name, qty: rec.qty, qtyReceived: rec.qtyReceived == null ? '' : rec.qtyReceived, by: rec.by || '', receivedBy: rec.receivedBy || '', date: rec.date || '', json: JSON.stringify(rec) } }); };
+  R.lines.forEach(l => { const k = bkey(l.barcode); const got = seen[k] ? 0 : (R.got[k] || 0); seen[k] = 1;
+    push(Object.assign({}, l, { status: 'received', qtyReceived: got, receivedBy: who, receivedTs: now.toISOString(), gapReason: '', viaPhone: true })); });
+  Object.keys(R.got).filter(k => !seen[k] && R.got[k] > 0).forEach((k, i) => push({ uid: R.grp + '-p' + Date.now().toString(36) + i, grp: R.grp, gid: R.gid, id: R.gid, ts: now.toISOString(), date, time,
+    from: R.from, to: HERE, fulfiller: R.from, barcode: k, name: R.nm[k] || k, qty: 0, reqQty: 0, status: 'received', qtyReceived: R.got[k], receivedBy: who, receivedTs: now.toISOString(), by: who, extra: true, zoneIn: UNPLACED, viaPhone: true }));
+  if(R.placed.length) OUT.push({ to: 'gs', body: { action: 'placeItems', location: HERE, by: who, items: R.placed.map((p, i) => Object.assign({ opId: 'rg' + Date.now().toString(36) + i }, p)) } });
+  TR = TR.filter(t => (t.grp || t.uid) !== R.grp); ls('rg_tr', JSON.stringify(TR));
+  const placedN = R.placed.reduce((a, p) => a + p.qty, 0);
+  R = null; save(); V = { s: 'home' };
+  toast('📥 Reçu : ' + tot + ' article(s)' + (placedN ? ', ' + placedN + ' rangé(s)' : '') + '. Merci !', 4000);
+  render(); flush();
+}
+
+// ══ 📍 « NON PLACÉ » ══
+function unplaced(){
+  if(!D) return [];
+  return D.zones.filter(r => r[0] === HERE && r[1] === UNPLACED && Number(r[4]) > 0).map(r => ({ barcode: r[2], name: r[3] || nameOf(r[2]) || r[2], qty: Number(r[4]) - (PL[bkey(r[2])] || 0) })).filter(x => x.qty > 0).sort((a, b) => b.qty - a.qty);
+}
+function upOpen(bc){ const it = unplaced().find(x => bkey(x.barcode) === bkey(aliasOf(bc))); if(!it){ beep(false); toast('Ce produit n’est pas dans « Non placé ».'); return false; } CUR = { barcode: it.barcode, name: it.name, max: it.qty, n: it.qty }; V = { s: 'up1' }; render(); return true; }
+function upScanProduct(){ openCamera(code => { const sh = shelfOf(code); if(sh){ beep(false); camSay('Scannez d’abord le PRODUIT.', null, true); return; } closeCamera(); beep(true); upOpen(code); }, '<div>Scannez le produit à ranger</div>'); }
+function upScanShelf(){
+  openCamera(code => {
+    const sh = shelfOf(code);
+    if(!sh){ beep(false); camSay('Ce n’est pas une étiquette d’étagère.', null, true); return; }
+    if(sh.other || sh.unknown){ beep(false); camSay(sh.other ? 'Étiquette d’un autre magasin !' : 'Étagère inconnue.', null, true); return; }
+    const sg = suggest(CUR.barcode);
+    if(sg && sg.zone !== sh.zone && !confirm('Ce n’est pas l’étagère prévue (' + placeText(sg) + ').\nPoser ici quand même (' + placeText(sh) + ') ?')) return;
+    closeCamera(); beep(true);
+    OUT.push({ to: 'gs', body: { action: 'placeItems', location: HERE, by: T.n || '?', items: [{ opId: 'rg' + Date.now().toString(36), barcode: CUR.barcode, name: CUR.name, qty: CUR.n, toZone: sh.zone, spot: sh.spot }] } });
+    PL[bkey(CUR.barcode)] = (PL[bkey(CUR.barcode)] || 0) + CUR.n; save();
+    toast('✓ ' + CUR.n + ' × ' + CUR.name + ' → ' + placeText(sh), 3000);
+    CUR = null; V = { s: 'up' }; render(); flush();
+  }, '<div>' + esc(CUR.name) + ' × ' + CUR.n + '</div><div style="font-size:13px;opacity:.85;margin-top:4px">Posez-les, puis scannez l’étiquette de l’étagère.</div>');
+}
+
+// ══ RENDER ══
+function render(){
+  const app = $('#app'), bar = $('#bar'), hb = $('#hb');
+  bar.hidden = true; bar.innerHTML = '';
+  if(!T || !T.p || !T.s || !T.k){ app.innerHTML = '<div class="card"><h3>Ouvrez cette page depuis la caisse</h3><p>Sur la caisse : tuile <b>📍 À ranger</b>, puis scannez le QR code avec l’appareil photo du téléphone.</p></div>'; hb.hidden = true; return; }
+  hb.hidden = V.s === 'home';
+  hb.onclick = () => { closeCamera(); if(V.s === 'up1'){ V = { s: 'up' }; } else V = { s: 'home' }; render(); };
+  const pendOut = OUT.length ? '<div class="dim" style="text-align:center;margin-top:10px">⏳ ' + OUT.length + ' envoi(s) en attente' + (navigator.onLine ? '…' : ' (hors ligne)') + '</div>' : '';
+  if(V.s === 'home'){
+    $('#ttl').textContent = '📍 ' + HERE_NAME;
+    const G = groups(), U = unplaced(), un = U.reduce((a, x) => a + x.qty, 0);
+    app.innerHTML = '<div style="font-size:20px;font-weight:800;margin:4px 0 2px">Bonjour ' + esc(T.n || '') + '</div><div class="dim">' + (D ? 'Données du ' + new Date(D.at).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'Chargement…') + '</div>' +
+      (R ? '<button class="big warn" id="bres">▶ Reprendre la réception ' + esc(R.gid) + '</button>' : '') +
+      '<button class="big" id="brecv">📥 Recevoir un transfert<small>' + (G.length ? G.length + ' arrivé(s) ou en route' : 'Aucun en route') + '</small></button>' +
+      '<button class="big alt" id="bup">📍 À ranger<small>' + un + ' article(s) dans « Non placé »</small></button>' +
+      '<button class="big alt" id="bload" style="font-size:15px;padding:12px">🔄 Mettre à jour</button>' + pendOut +
+      '<p class="dim" style="margin-top:18px">Pas vous ? Scannez le QR de la caisse avec votre nom.</p>';
+    $('#brecv').onclick = () => { if(R){ toast('Terminez d’abord la réception en cours.'); return; } V = { s: 'recvpick' }; render(); };
+    $('#bup').onclick = () => { V = { s: 'up' }; render(); };
+    $('#bload').onclick = () => { app.querySelector('#bload').textContent = 'Chargement…'; load(); flush(); };
+    if(R) $('#bres').onclick = () => { V = { s: 'recv' }; render(); };
+    return;
+  }
+  if(V.s === 'recvpick'){
+    $('#ttl').textContent = '📥 Quel transfert ?';
+    const G = groups();
+    app.innerHTML = G.length ? '<p class="dim">Touchez le transfert qui vient d’arriver.</p>' + G.map(g => '<button class="big alt" data-g="' + esc(g.grp) + '">' + esc(g.gid) + '<small>depuis ' + (g.from === 'Warehouse' ? 'l’entrepôt' : g.from === 'Store 1' ? 'Balkuy' : 'Ouaga 2000') + ' · ' + g.lines.length + ' produit(s)</small></button>').join('')
+      : '<div class="card">Aucun transfert en route vers ' + HERE_NAME + '.<br><span class="dim">Touchez 🔄 Mettre à jour sur l’accueil si un transfert vient d’être envoyé.</span></div>';
+    app.querySelectorAll('[data-g]').forEach(b => b.onclick = () => recvStart(b.dataset.g));
+    return;
+  }
+  if(V.s === 'recv' && R){
+    $('#ttl').textContent = '📥 ' + R.gid;
+    const pend = Object.keys(R.pend).filter(k => R.pend[k] > 0), tot = Object.values(R.got).reduce((a, n) => a + n, 0), plc = R.placed.reduce((a, p) => a + p.qty, 0);
+    app.innerHTML = '<div class="card"><b>' + tot + '</b> article(s) scanné(s) · <b>' + plc + '</b> posé(s)' + (pend.length ? ' · <b style="color:var(--warn)">' + pend.reduce((a, k) => a + R.pend[k], 0) + ' à poser</b>' : '') + '</div>' +
+      '<button class="big" id="bcam">📷 Scanner (articles et étiquettes)</button>' +
+      (pend.length ? '<div style="font-weight:800;margin-top:14px">À poser maintenant</div>' + pend.map(k => prodCard(k, '<span class="pill">× ' + R.pend[k] + '</span>')).join('') +
+        '<button class="big alt" id="bnop">Pas de place → laisser dans « Non placé »</button>' : '') +
+      (R.placed.length ? '<div style="font-weight:800;margin-top:14px">Déjà posé</div>' + R.placed.map(p => '<div class="row"><div class="nm">' + esc(p.name) + '<small>' + esc(placeText({ zone: p.toZone, spot: p.spot })) + '</small></div><b class="q">× ' + p.qty + '</b></div>').join('') : '') +
+      '<p class="dim">Scannez chaque article qui sort du carton. Quand vous avez posé un groupe sur l’étagère, scannez l’étiquette de l’étagère.</p>';
+    bar.hidden = false; bar.innerHTML = '<button class="big" id="bfin" style="background:#1c1917">📥 Terminé</button>';
+    $('#bcam').onclick = recvCam; $('#bfin').onclick = recvFinish;
+    const nb = $('#bnop'); if(nb) nb.onclick = recvNoPlace;
+    return;
+  }
+  if(V.s === 'up'){
+    $('#ttl').textContent = '📍 À ranger';
+    const U = unplaced();
+    app.innerHTML = '<button class="big" id="bscan">📷 Scanner un produit à ranger</button>' + (U.length ? U.map(x => { const sg = suggest(x.barcode), im = imgOf(x.barcode);
+      return '<div class="row" data-b="' + esc(x.barcode) + '">' + (im ? '<img class="ph" src="' + esc(im) + '" alt="">' : '<div class="ph"></div>') + '<div class="nm"><b>' + esc(x.name) + '</b><small>' + (sg ? '➡ ' + esc(placeText(sg)) : 'Place à décider par 1981') + '</small></div><b class="q">× ' + x.qty + '</b></div>'; }).join('')
+      : '<div class="card">Rien dans « Non placé ». 👍</div>') + pendOut;
+    $('#bscan').onclick = upScanProduct;
+    app.querySelectorAll('[data-b]').forEach(r => r.onclick = () => upOpen(r.dataset.b));
+    return;
+  }
+  if(V.s === 'up1' && CUR){
+    $('#ttl').textContent = '📍 Ranger';
+    app.innerHTML = prodCard(CUR.barcode, '<div class="cnt" style="margin-top:6px"><button id="cm">−</button><span id="cn">' + CUR.n + '</span><button id="cp">+</button></div><div class="dim">combien vous posez (max ' + CUR.max + ')</div>');
+    bar.hidden = false; bar.innerHTML = '<button class="big" id="bsh">📷 Posé : scanner l’étagère</button>';
+    $('#cm').onclick = () => { CUR.n = Math.max(1, CUR.n - 1); $('#cn').textContent = CUR.n; };
+    $('#cp').onclick = () => { CUR.n = Math.min(CUR.max, CUR.n + 1); $('#cn').textContent = CUR.n; };
+    $('#bsh').onclick = upScanShelf;
+    return;
+  }
+  V = { s: 'home' }; render();
+}
+render();
+if(T && T.p){ load(); flush(); setInterval(flush, 60000); }
+</script>
+</body>
+</html>

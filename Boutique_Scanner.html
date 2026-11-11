@@ -1434,6 +1434,7 @@ input,select{font-family:inherit}
           </div>
           <div class="pos-tiles">
             <button class="pos-tile" style="--c:#be185d" onclick="openFormation()"><span class="i">🎓</span><span class="l">Formation</span></button>
+            <button class="pos-tile" style="--c:#15803d" onclick="rgOpen()"><span class="i">📍</span><span class="l">À ranger</span><span class="b" id="rg-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#b91c1c" onclick="pnOpen()"><span class="i">🏷</span><span class="l">Étiquettes</span><span class="b" id="pn-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
@@ -1596,7 +1597,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-d</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-e</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9710,7 +9711,8 @@ function _txRecvHTML(){
   const all = o.lines.concat(o.extras);
   h += all.map((l, i) => '<div class="tx-line' + (l.got ? ' ok' : '') + '"><div class="nm"><b>' + _tfEsc(l.name || l.barcode) + '</b>' + (l.extra ? '<div class="dlv-dim" style="color:#b45309">pas dans la liste</div>' : '') + '</div>' +
     '<div class="tx-qty"><button onclick="txRecvQty(' + i + ',-1)">−</button><span class="big">' + l.got + '</span><button onclick="txRecvQty(' + i + ',1)">+</button></div></div>').join('');
-  h += '<button class="btn-primary" style="margin-top:10px" onclick="_tx.mode=\'check\';renderTx()">✔ Terminer et comparer</button></div>';
+  h += '<button class="btn-primary" style="margin-top:10px" onclick="txConfirmRecv()">📥 Terminé — confirmer la réception</button>' +
+    '<div class="dlv-dim" style="margin-top:6px">Les articles arrivent dans « Non placé » du magasin. Rangez-les avec 📍 À ranger (téléphone).</div></div>';
   return h;
 }
 function txRecvEnter(v){
@@ -9747,13 +9749,14 @@ function txGapReason(idx, v){ const o = _tx.open; const l = idx[0] === 'l' ? o.l
 function txConfirmRecv(){
   const o = _tx.open;
   const gaps = o.lines.filter(l => l.got !== l.rec.qty).concat(o.extras.filter(l => l.got > 0));
-  if(gaps.some(l => !l.reason)){ showToast('Choisissez une raison pour chaque écart.', 3500); return; }
+  const tot = o.lines.concat(o.extras).reduce((a, l) => a + (l.got || 0), 0);
+  if(!confirm('Confirmer la réception de ' + tot + ' article(s) scanné(s) ?')) return;
   const now = new Date(), who = currentEmployee || '';
   o.lines.forEach(l => _tfSave(Object.assign({}, l.rec, { status: 'received', qtyReceived: l.got, receivedBy: who, receivedTs: now.toISOString(), gapReason: l.got !== l.rec.qty ? l.reason : '' })));
   o.extras.filter(l => l.got > 0).forEach((l, i) => _tfSave({ uid: o.grp + '-r' + Date.now().toString(36) + i, grp: o.grp, gid: o.gid, id: o.gid, ts: now.toISOString(), date: fmtDate(now), time: fmtTime(now),
     from: o.fulfiller, to: o.to, fulfiller: o.fulfiller, barcode: l.barcode, name: l.name, qty: 0, reqQty: 0, status: 'received', qtyReceived: l.got,
     receivedBy: who, receivedTs: now.toISOString(), by: who, extra: true, gapReason: l.reason, zoneIn: 'Non placé' }));
-  showToast(gaps.length ? '📥 Reçu avec ' + gaps.length + ' écart(s) signalé(s).' : '📥 ' + o.gid + ' reçu, complet.', 4500);
+  showToast('📥 ' + o.gid + ' reçu. Merci ! Rangez les articles avec 📍 À ranger.', 4500);
   _tx.open = null; _tx.mode = null; _tx.tab = 'log'; renderTx(); updateTfBadge();
 }
 
@@ -9809,8 +9812,8 @@ let _tfRecvUid = null;
 function openTfReceive(uid){
   const t = allTransfers.find(x => x.uid === uid); if(!t) return;
   _tfRecvUid = uid;
-  document.getElementById('tf-recv-sub').textContent = t.name + ' — envoyé : ' + t.qty + ' (' + (TF_LABEL[t.from] || t.from) + ' → ' + (TF_LABEL[t.to] || t.to) + ')';
-  document.getElementById('tf-recv-qty').value = t.qty;
+  document.getElementById('tf-recv-sub').textContent = t.name + ' (' + (TF_LABEL[t.from] || t.from) + ' → ' + (TF_LABEL[t.to] || t.to) + ') — comptez ce qui est arrivé';
+  document.getElementById('tf-recv-qty').value = '';
   document.getElementById('tf-recv-err').textContent = '';
   document.getElementById('tf-recv-modal').classList.add('open');
 }
@@ -9823,7 +9826,7 @@ function confirmTfReceive(){
   t.status = 'received'; t.qtyReceived = q; t.receivedBy = currentEmployee || ''; t.receivedTs = new Date().toISOString();
   _tfSave(t);
   closeTfReceive(); renderTransferLists(); renderTransferAdmin();
-  showToast(q === t.qty ? '✅ Transfert reçu.' : '⚠ Reçu : ' + q + ' au lieu de ' + t.qty + ' — écart signalé à l\'admin.', 6000);
+  showToast('✅ Reçu : ' + q + '. Merci !', 4000);
 }
 function cancelTransfer(uid){
   const t = allTransfers.find(x => x.uid === uid); if(!t) return;
@@ -9838,16 +9841,18 @@ function renderTransferAdmin(){
   const el = document.getElementById('tf-admin-body');
   if(!el) return;
   const transit = allTransfers.filter(t => t.status === 'transit').sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
-  const diffs = allTransfers.filter(t => t.status === 'received' && t.qtyReceived != null && t.qtyReceived !== t.qty).slice(-15).reverse();
+  const diffs = allTransfers.filter(t => t.status === 'received' && t.qtyReceived != null && t.qtyReceived !== t.qty && !t.gapOk).slice(-40).reverse();
   const pend = allTransfers.filter(t => ((t.status === 'transit' || t.status === 'received') && !t.outApplied) || (t.status === 'received' && !t.inApplied && t.qtyReceived !== 0)).length;
   let h = '';
   if(pend) h += '<div class="tf-warn">⏳ ' + pend + ' mouvement(s) de stock pas encore appliqué(s) (connexion, ou script des ventes à redéployer). <button class="btn-sm btn-outline" onclick="retryTransferStock()">Relancer le stock</button></div>';
   h += transit.length ? '<div class="dlv-lbl">En transit (' + transit.length + ')</div>' + transit.map(t => _tfLine(t, '')).join('') : '<div class="dlv-dim">Aucun transfert en transit.</div>';
   if(diffs.length) h += '<div class="dlv-lbl" style="margin-top:10px">⚠ Écarts à la réception</div>' + diffs.map(t =>
-    '<div class="tf-card old"><div style="flex:1"><b>' + _tfEsc(t.name) + '</b> — envoyé ' + t.qty + ', reçu <b>' + t.qtyReceived + '</b> (écart ' + (t.qtyReceived - t.qty) + ')' +
-    '<div class="dlv-dim">' + _tfEsc(TF_LABEL[t.from] || t.from) + ' → ' + _tfEsc(TF_LABEL[t.to] || t.to) + (t.receivedBy ? ' · reçu par ' + _tfEsc(t.receivedBy) : '') + '</div></div></div>').join('');
+    '<div class="tf-card old"><div style="flex:1"><b>' + _tfEsc(t.name) + '</b> — envoyé ' + t.qty + ', reçu <b>' + t.qtyReceived + '</b> (écart ' + (t.qtyReceived > t.qty ? '+' : '') + (t.qtyReceived - t.qty) + ')' + (t.extra ? ' <span style="color:#b45309">· pas dans la liste</span>' : '') +
+    '<div class="dlv-dim">' + _tfEsc(t.gid || t.id || '') + ' · ' + _tfEsc(TF_LABEL[t.from] || t.from) + ' → ' + _tfEsc(TF_LABEL[t.to] || t.to) + (t.receivedBy ? ' · reçu par ' + _tfEsc(t.receivedBy) : '') + '</div></div>' +
+    '<button class="btn-sm btn-outline" onclick="tfGapOk(\'' + _tfEsc(t.uid) + '\')">✓ Vérifié</button></div>').join('');
   el.innerHTML = h;
 }
+function tfGapOk(uid){ const t = allTransfers.find(x => x.uid === uid); if(!t) return; t.gapOk = true; _tfSave(t); renderTransferAdmin(); }
 async function retryTransferStock(){
   if(!syncUrl || !writeKey) return;
   try {
@@ -11580,7 +11585,58 @@ async function ouAsk(bc, typedName){
   } catch(e){ showToast('❌ ' + (e.badResponse ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas envoyé (connexion ?)'), 5000); }
 }
 // ══════════════════════════════════════════════════════════════════
-//  📢 JOUR DES PRIX (v7-nov-d, 10 Nov 2026) — price changes are grouped on
+//  📍 RECEVOIR & RANGER (v7-nov-e, 11 Nov 2026) — the work is done on a
+//  phone (ranger.html): scan this QR = signed in under the till's
+//  employee. On the phone: receive a transfer blind (scan what comes out of
+//  the box), then scan the shelf label where the items go. This window also
+//  lists what is still in « Non placé » in this store, with its usual place.
+// ══════════════════════════════════════════════════════════════════
+function rgLink(){
+  const t = btoa(unescape(encodeURIComponent(JSON.stringify({ p: productSyncUrl, s: syncUrl, k: writeKey, n: currentEmployee, l: _ouHere() }))));
+  return new URL('ranger.html', location.href).href + '#t=' + encodeURIComponent(t);
+}
+function _rgSuggest(here, bc){
+  const k = _bcKeyClient(bc);
+  const sp = ((OU && OU.spots) || []).filter(r => r[0] === here && _bcKeyClient(r[3]) === k && Number(r[5]) > 0 && r[1] !== 'Non placé').sort((a, b) => b[5] - a[5])[0];
+  if(sp) return sp[1] + ' · ' + sp[2];
+  const z = ((OU && OU.zones) || []).filter(r => r[0] === here && _bcKeyClient(r[2]) === k && Number(r[4]) > 0 && r[1] !== 'Non placé').sort((a, b) => b[4] - a[4])[0];
+  return z ? z[1] : '';
+}
+function rgList(){
+  const here = _ouHere();
+  return ((OU && OU.zones) || []).filter(r => r[0] === here && r[1] === 'Non placé' && Number(r[4]) > 0);
+}
+function rgBadge(){ const b = document.getElementById('rg-tile-badge'); if(b){ const n = rgList().reduce((a, r) => a + Number(r[4]), 0); b.textContent = n ? n : ''; } }
+async function rgOpen(){
+  if(!currentEmployee){ showToast('Connectez-vous d’abord à la caisse.'); return; }
+  if(!productSyncUrl || !syncUrl || !writeKey){ showToast('Synchro non configurée.'); return; }
+  document.getElementById('rg-modal').classList.add('open');
+  rgRender();
+  try { await ouLoad(true); } catch(e){}
+  rgRender();
+  try {
+    if(!window.qrcode) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+    const q = qrcode(0, 'L'); q.addData(rgLink()); q.make();
+    const el = document.getElementById('rg-qr'); if(el) el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  } catch(e){ const el = document.getElementById('rg-qr'); if(el) el.innerHTML = '<div class="dlv-dim">QR indisponible (connexion ?)</div>'; }
+}
+function rgClose(){ document.getElementById('rg-modal').classList.remove('open'); rgBadge(); _bagFocus(); }
+function rgRender(){
+  const E = _dlvEsc, here = _ouHere(), L = rgList();
+  const n = L.reduce((a, r) => a + Number(r[4]), 0);
+  document.getElementById('rg-body').innerHTML =
+    '<div style="display:flex;gap:12px;align-items:center;margin:10px 0;background:#f0fdf4;border-radius:12px;padding:10px">' +
+      '<div id="rg-qr" style="width:150px;height:150px;flex:none;background:#fff">' + (document.getElementById('rg-qr') ? document.getElementById('rg-qr').innerHTML : '') + '</div>' +
+      '<div><b>Scannez avec le téléphone</b> (appareil photo).<br>Il s’ouvre au nom de <b>' + E(currentEmployee) + '</b>.<br><span class="dlv-dim">Sur le téléphone : 📥 Recevoir un transfert, puis 📍 poser les articles en scannant l’étiquette de l’étagère.</span></div></div>' +
+    '<div style="font-weight:800;margin:12px 0 4px">Dans « Non placé » ici : ' + n + ' article(s)</div>' +
+    (L.length ? L.sort((a, b) => b[4] - a[4]).map(r => { const sg = _rgSuggest(here, r[2]);
+      return '<div class="pn-row"><span>' + E(r[3] || _ouName(r[2]) || r[2]) + '<br><small class="dlv-dim">' + (sg ? '➡ ' + E(sg) : 'Place à décider par 1981') + '</small></span><b>× ' + r[4] + '</b></div>'; }).join('')
+      : '<div class="dlv-dim">Rien à ranger. 👍</div>');
+}
+setTimeout(() => { try { rgBadge(); } catch(e){} }, 9000);
+setInterval(() => { try { rgBadge(); } catch(e){} }, 5 * 60000);
+// ══════════════════════════════════════════════════════════════════
+//  📢 JOUR DES PRIX (v7-nov-e, 10 Nov 2026) — price changes are grouped on
 //  Monday. Code GS getPriceNews gives this store's price changes (21 days),
 //  the promos, the shelf labels already swapped and who saw the news.
 //  • After the start-of-shift amounts: « 📢 Prix changés » (old → new, new
@@ -14849,6 +14905,12 @@ closeSale = function(){
 </div>
 
 <!-- ══ HOLD / RESERVATION MODAL ══ -->
+<div class="modal-bg" id="rg-modal">
+  <div class="modal" style="width:min(560px,96vw);text-align:left;max-height:92vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">📍 Recevoir & ranger</div><button class="btn-sm btn-outline" onclick="rgClose()">Fermer</button></div>
+    <div id="rg-body"></div>
+  </div>
+</div>
 <div class="modal-bg" id="pn-news"><div class="modal" style="width:min(560px,96vw);text-align:left;max-height:92vh;overflow:auto"></div></div>
 <div class="modal-bg" id="pn-modal">
   <div class="modal" style="width:min(600px,96vw);text-align:left;max-height:92vh;overflow:auto">
