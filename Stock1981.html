@@ -989,6 +989,8 @@ function addScan(raw){
   if(VIEW.screen === 'reorgmark') return rePrint(raw);
   const code = aliasOf(raw);
   if(!code) return;
+  const lab = unitFromLabel(code);
+  if(lab){ beep(false); toast(lab.kind + ' ' + lab.unit + ' : c’est une étiquette de ' + lab.kind.toLowerCase() + '. Terminez d’abord ' + R.kind.toLowerCase() + ' ' + R.unit + ' (« Terminer »).'); return; }
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
   const sh = lblShared(code);
   if(sh){ lblAsk(sh, (c2, nm) => { addScanCode(c2, nm); }); return; }
@@ -1712,7 +1714,7 @@ function arrivalHTML(id){
   const noprice = plist.filter(p => p.noprice);
   let h = `<div class="zhead"><h2>${esc(a.name)}</h2><p>${esc(a.created || '')}${a.by ? ' · ' + esc(a.by) : ''}</p></div>
     <div class="stats"><div class="stat"><b class="num">${a.units.length}</b><span>vidé(e)s</span></div><div class="stat"><b class="num">${fmt(units)}</b><span>articles</span></div><div class="stat"><b class="num">${plist.length}</b><span>produits</span></div>${value ? `<div class="stat"><b class="num">${fmt(value)} F</b><span>valeur en vente</span></div>` : ''}</div>`;
-  h += `<button class="go" data-act="openunit">📦 Vider une glacière / un carton</button>`;
+  h += `<button class="go" data-act="scanunit">📷 Scanner l’étiquette du carton / de la glacière</button><button class="ghost" data-act="openunit" style="width:100%">Sans étiquette : taper le numéro</button>`;
   if(later.length) h += '<div class="sect">Dates à relever (' + later.length + ')</div><div class="list">' + later.map(l =>
     `<button class="row" data-later="${esc(l[0])}"><div class="nm"><strong>${esc(l[3] || l[2])}</strong><small>n° ${esc(l[1])} · ${fmt(l[4])} article(s)</small></div><span class="cbtn">Saisir</span></button>`).join('') + '</div>';
   if(solde.length) h += '<div class="sect">À mettre en solde (' + solde.length + ')</div><div class="list">' + solde.map(l =>
@@ -1741,6 +1743,7 @@ function bindRecv(){
   const rs = document.querySelector('[data-act="resume"]'); if(rs) rs.onclick = () => go({ screen:'unit' });
   const ar = document.querySelector('[data-act="arrreload"]'); if(ar) ar.onclick = loadArrivals;
   const ou = document.querySelector('[data-act="openunit"]'); if(ou) ou.onclick = () => openUnitSheet(VIEW.aid);
+  const su = document.querySelector('[data-act="scanunit"]'); if(su) su.onclick = () => openCamera(code => startUnitFromLabel(VIEW.aid, code));
   document.querySelectorAll('[data-later]').forEach(b => b.onclick = () => {
     const a = arrival(VIEW.aid); const l = a && a.lines.find(x => x[0] === b.dataset.later); if(!l) return;
     openDatePanel(l[3], l[2], null, r => {
@@ -1781,12 +1784,14 @@ function openUnitSheet(aid){
   const draw = () => {
     openSheet(`<h3>Vider une glacière ou un carton</h3><div class="sub">${esc(a.name)}</div>
       <div class="seg">${['Glacière', 'Carton'].map(k => `<button data-kind="${k}" aria-pressed="${kind === k}">${k}</button>`).join('')}</div>
-      <label class="f" for="un">Numéro écrit dessus</label><input class="t num" id="un" inputmode="numeric" autocomplete="off" placeholder="ex. 7">
+      <label class="f" for="un">Numéro écrit dessus</label><input class="t num" id="un" inputmode="numeric" autocomplete="off" placeholder="ex. 7 — ou scannez l’étiquette">
       <div class="err" id="uerr"></div><button class="go" id="ugo">Commencer</button><button class="ghost" id="ux">Annuler</button>`);
     document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { kind = b.dataset.kind; ls('s1981_recv_kind', kind); const v = $('#un').value; draw(); $('#un').value = v; });
     $('#ux').onclick = closeSheet;
     $('#un').focus();
     const start = () => {
+      const lab = unitFromLabel($('#un').value);
+      if(lab){ closeSheet(); startUnitFromLabel(aid, $('#un').value); return; }
       const unit = $('#un').value.trim();
       if(!unit){ $('#uerr').textContent = 'Écrivez le numéro de la ' + kind.toLowerCase() + '.'; return; }
       const done = a.units.find(u => u.kind === kind && String(u.unit) === unit);
@@ -1798,6 +1803,23 @@ function openUnitSheet(aid){
     $('#un').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); start(); } };
   };
   draw();
+}
+// 🏷 Box labels (12 Nov 2026): « CARTON 007 » = Code 128 CT007, « GLACIÈRE 007 » = GL007
+// (printed on the 50×47 roll, stuck on each box as it goes into the warehouse).
+// Scanning one starts that box: no number to type, no Glacière/Carton choice.
+function unitFromLabel(raw){
+  const m = /^(CT|GL)0*(\d{1,4})$/i.exec(String(raw || '').trim().replace(/[\s-]/g, ''));
+  return m ? { kind: m[1].toUpperCase() === 'GL' ? 'Glacière' : 'Carton', unit: String(Number(m[2])) } : null;
+}
+function startUnitFromLabel(aid, raw){
+  const a = arrival(aid); if(!a) return;
+  const u = unitFromLabel(raw);
+  if(!u){ beep(false); toast('Ce n’est pas une étiquette de carton ou de glacière.'); return; }
+  if(R && R.lines.length){ if(R.aid === aid && R.kind === u.kind && String(R.unit) === u.unit){ go({ screen:'unit' }); return; } openUnitSheet(aid); return; }
+  const done = a.units.find(x => x.kind === u.kind && String(x.unit) === u.unit);
+  if(done && !confirm(u.kind + ' ' + u.unit + ' a déjà été vidé(e) (' + (done.by || '') + ').\nLe/la vider encore (ce qui restait dedans) ?')) return;
+  R = { aid: a.id, aname: a.name, unit: u.unit, kind: u.kind, lines: [], startedAt: new Date().toISOString() };
+  saveRecv(); toast(u.kind + ' ' + u.unit + ' : scannez les articles'); go({ screen:'unit' });
 }
 function knownDate(k){
   const m = RDATES[R.aid] && RDATES[R.aid][k];
@@ -1818,6 +1840,8 @@ function recvScan(raw){
   if(!R) return;
   const code = aliasOf(raw);
   if(!code) return;
+  const lab = unitFromLabel(code);
+  if(lab){ beep(false); toast(lab.kind + ' ' + lab.unit + ' : c’est une étiquette de ' + lab.kind.toLowerCase() + '. Terminez d’abord ' + R.kind.toLowerCase() + ' ' + R.unit + ' (« Terminer »).'); return; }
   if(!/^\d{4,20}$/.test(code)){ beep(false); toast('Code illisible : vérifiez la langue du clavier (chiffres seulement), puis rescannez.'); return; }
   if(!$('#sheet').hidden){ beep(false); toast('Répondez d’abord à la date du produit précédent.'); return; }
   const k = bkey(code);
