@@ -1148,6 +1148,12 @@ input,select{font-family:inherit}
 .sh-ok{color:#15803d;font-weight:700;} .sh-bad{color:#dc2626;font-weight:700;} .sh-warn{color:#b45309;font-weight:700;}
 #login-pin,#pin-input,#discount-pin,#emp-pin,#new-pin,#new-pin2,#new-price-pin{-webkit-text-security:disc}
 
+
+.fr-done{max-height:118px;overflow-y:auto;border:1px solid var(--border2);border-radius:10px}
+.fr-done div{display:flex;gap:8px;align-items:center;padding:3px 8px;font-size:13px;line-height:20px;border-bottom:1px solid var(--border2)}
+.fr-done div:last-child{border-bottom:none}
+.fr-done i{flex:1;min-width:0;text-align:left;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr-done b{white-space:nowrap}
 /* 🏷 Fiche rapide : big photo choice */
 .fr-ph{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:8px 0}
 .fr-ph button{position:relative;padding:0;border:3px solid var(--border2);border-radius:14px;background:#fff;height:210px;overflow:hidden;cursor:pointer}
@@ -1606,7 +1612,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-k</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-l</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9235,7 +9241,7 @@ function frKey(e, field){
   e.preventDefault();
   const v = String(e.target.value || '').replace(/\s/g, '');
   // a barcode scanned into the wrong field: put the field back and treat it as a scan
-  if(/^\d{8,20}$/.test(v) && field !== 'name'){ e.target.value = ''; if(_fr && _frDirty()){ showToast('⚠ Validez ce produit d’abord.', 3000); return; } return frScan(v); }
+  if(/^\d{8,20}$/.test(v) && field !== 'name' && !(field === 'exp' && v.length === 8)){ e.target.value = ''; if(_fr && _frDirty()){ showToast('⚠ Validez ce produit d’abord.', 3000); return; } return frScan(v); }
   if(field === 'name') return document.getElementById('fr-usd').focus();
   frSave();
 }
@@ -9259,6 +9265,7 @@ function _frRender(){
     '<label style="font-size:14px;padding-bottom:10px"><input type="checkbox" ' + (_frTaxOn ? 'checked' : '') + ' onchange="frTax(this.checked)"/> + taxe US 8,25 %</label></div>' +
     '<div class="dlv-dim" id="fr-info" style="margin:6px 0"></div>' +
     '<div class="dlv-lbl">Prix de vente (CFA) — les 2 magasins</div><input class="dlv-field" id="fr-cfa" type="number" inputmode="numeric" style="font-size:22px;text-align:center;margin:0" oninput="this.dataset.auto=\'0\'" onkeydown="frKey(event,\'cfa\')"/>' +
+    '<div class="dlv-lbl" style="margin-top:8px">Date de péremption (s’il y en a une)</div><div style="display:flex;gap:8px;align-items:center"><input class="dlv-field" id="fr-exp" inputmode="numeric" autocomplete="off" placeholder="MM/AAAA ou JJ/MM/AAAA" style="margin:0;flex:1" oninput="frExpShow()" onkeydown="frKey(event,\'exp\')"/><span id="fr-exp-ok" class="dlv-dim" style="min-width:110px"></span></div>' +
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding:8px;border-radius:10px;background:var(--bg2,#f1f5f9)"><b>🏷 Étiquettes prix :</b>' +
     '<button type="button" class="btn-sm btn-outline" style="width:auto;padding:4px 12px" onclick="frQty(-1)">−</button><b id="fr-lq" style="min-width:22px;text-align:center;font-size:18px">' + _frLblQty + '</b><button type="button" class="btn-sm btn-outline" style="width:auto;padding:4px 12px" onclick="frQty(1)">+</button>' +
     '<label style="margin-left:auto;font-size:14px"><input type="checkbox" ' + (_frPrintNow ? 'checked' : '') + ' onchange="frPrintMode(this.checked)"/> 🖨 imprimer tout de suite</label></div>' +
@@ -9268,13 +9275,29 @@ function _frRender(){
   if(f.cur){ const c = document.getElementById('fr-cfa'); c.value = f.cur; c.dataset.auto = '0'; }
   frCalc(); _frDoneRender();
 }
+// expiry typed as MM/AAAA, MMAA, MMAAAA or JJ/MM/AAAA → "JJ/MM/AAAA" (month only = the 1st, so warnings come early)
+function _frExpParse(v){
+  const d = String(v || '').replace(/\D/g, ''); if(!d) return '';
+  let dd = 1, mm, yy;
+  if(d.length === 4){ mm = +d.slice(0, 2); yy = 2000 + +d.slice(2); }
+  else if(d.length === 6){ mm = +d.slice(0, 2); yy = +d.slice(2); }
+  else if(d.length === 8){ dd = +d.slice(0, 2); mm = +d.slice(2, 4); yy = +d.slice(4); }
+  else return null;
+  if(!(mm >= 1 && mm <= 12) || !(yy >= 2024 && yy <= 2045) || !(dd >= 1 && dd <= 31)) return null;
+  return String(dd).padStart(2, '0') + '/' + String(mm).padStart(2, '0') + '/' + yy;
+}
+function frExpShow(){
+  const v = (document.getElementById('fr-exp') || {}).value, o = document.getElementById('fr-exp-ok'); if(!o) return;
+  const r = _frExpParse(v);
+  o.innerHTML = !v ? '' : r ? '<b style="color:#15803d">✓ ' + r + '</b>' : '<b style="color:#b91c1c">date ?</b>';
+}
 function frPrintQueue(){ if(!_lblQ.length){ showToast('La file d’étiquettes est vide.', 2500); return; } printLabelQueue(); }
 function _frDoneRender(){
   const qb = document.getElementById('fr-qbtn'); if(qb) qb.textContent = '🖨 File (' + _lblQ.reduce((a, x) => a + (x.qty || 1), 0) + ')';
   const el = document.getElementById('fr-done'); if(!el) return;
   if(!_frDone.length){ el.innerHTML = ''; return; }
-  el.innerHTML = '<div class="dlv-dim" style="margin-bottom:4px">Faits dans cette séance : ' + _frDone.filter(x => x.st === 'ok').length + ' / ' + _frDone.length + '</div>' + _frDone.slice(0, 40).map(x =>
-    '<div class="ex-row"><div style="flex:1;min-width:0"><b>' + _frEsc(x.name) + '</b><div class="dlv-dim">' + _frEsc(x.bc) + (x.cost != null ? ' · coût ' + x.cost + ' $' : '') + (x.err ? ' · <span style="color:#b91c1c">' + _frEsc(x.err) + '</span>' : '') + '</div></div><div style="width:90px;text-align:right">' + formatCFA(x.price) + '</div><div style="width:28px;text-align:center">' + (x.st === 'ok' ? '✅' : x.st === 'busy' ? '⏳' : '❌') + '</div></div>').join('');
+  el.innerHTML = '<div class="dlv-dim" style="margin-bottom:2px">Faits dans cette séance : ' + _frDone.filter(x => x.st === 'ok').length + ' / ' + _frDone.length + '</div><div class="fr-done">' + _frDone.map(x =>
+    '<div title="' + _frEsc(x.bc + (x.cost != null ? ' · coût ' + x.cost + ' $' : '') + (x.exp ? ' · périme ' + x.exp : '') + (x.err ? ' · ' + x.err : '')) + '"><span>' + (x.st === 'ok' ? (x.err ? '⚠' : '✅') : x.st === 'busy' ? '⏳' : '❌') + '</span><i>' + _frEsc(x.name) + '</i><b>' + formatCFA(x.price) + '</b></div>').join('') + '</div>';
 }
 async function frSave(){
   const f = _fr; if(!f || f.saved) return;
@@ -9284,8 +9307,11 @@ async function frSave(){
   if(!f.known && name.length < 3){ showToast('⚠ Choisissez ou tapez le nom', 3000); document.getElementById('fr-name').focus(); return; }
   if(!(price > 0)){ showToast('⚠ Tapez le prix US (ou le prix de vente)', 3000); document.getElementById('fr-usd').focus(); return; }
   if(priceNeedsDigitWarning(price) && !confirm(formatCFA(price) + ' : plus de 6 chiffres. Confirmer ?')) return;
+  const expRaw = (document.getElementById('fr-exp') || {}).value || '';
+  const exp = _frExpParse(expRaw);
+  if(expRaw && !exp){ showToast('⚠ Date de péremption illisible : MM/AAAA ou JJ/MM/AAAA (ou videz la case)', 4000); document.getElementById('fr-exp').focus(); return; }
   const ph = (!f.known && f.photo != null) ? f.photos[f.photo] : null;
-  const rec = { bc: f.bc, name, price, cost, st: 'busy' };
+  const rec = { bc: f.bc, name, price, cost, exp, st: 'busy' };
   const nLbl = _frLblQty;
   let printed = false;
   if(nLbl > 0 && _frPrintNow){ try { lblPrint([{ barcode: f.bc, name: name, price: price, qty: nLbl }]); printed = true; } catch(e){ showToast('⚠ Impression impossible : étiquette mise dans la file.', 4000); } }
@@ -9311,6 +9337,12 @@ async function frSave(){
     }
     const pm = (typeof _plMap !== 'undefined' && _plMap) ? _plMap[f.k] : null;
     if(pm){ pm.s1 = price; pm.s2 = price; if(pm.m == null) pm.m = price; if(cost != null) pm.cost = cost; }
+    if(exp){
+      try {
+        const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: writeKey, action: 'logExpiryBatch', barcode: f.bc, name, qty: 0, location: 'Warehouse', zone: '', expiryDate: exp, shipment: 'Fiche rapide ' + new Date().toISOString().slice(0, 10) }) });
+        const d = await r.json(); if(!d || !d.success) rec.err = (rec.err ? rec.err + ' · ' : '') + 'péremption non enregistrée';
+      } catch(e){ rec.err = (rec.err ? rec.err + ' · ' : '') + 'péremption non enregistrée'; }
+    }
     if(nLbl > 0 && !printed){ try { labelQueueAdd(f.bc, name, price, nLbl, true); } catch(e){} }
     rec.st = 'ok';
   } catch(e){ rec.st = 'err'; rec.err = String(e && e.message || e); showToast('❌ ' + name + ' : ' + rec.err, 6000); }
@@ -14610,7 +14642,7 @@ closeSale = function(){
     </div>
     <input class="dlv-field" id="fr-scan" inputmode="numeric" autocomplete="off" placeholder="📷 Scannez le produit…" style="font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();frScan(this.value);this.value='';}"/>
     <div id="fr-card" style="overflow:auto;flex:1"></div>
-    <div id="fr-done" style="margin-top:8px;max-height:24vh;overflow:auto"></div>
+    <div id="fr-done" style="margin-top:8px"></div>
   </div>
 </div>
 
