@@ -1597,7 +1597,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-g</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-h</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9027,7 +9027,7 @@ function _plStoreItems(){
     const p = _plMap[o.k];
     o.inMaster = !!p;
     o.name = (p && p.name) || o.name || '';
-    const sp = p ? (loc === 'Store 1' ? p.s1 : p.s2) : null;
+    const sp = p ? (loc === 'Store 1' ? p.s1 : loc === 'Store 2' ? p.s2 : (p.s1 != null ? p.s1 : p.s2)) : null;
     o.price = sp != null ? sp : (p && p.m != null ? p.m : null);
     o.noName = !o.name || /code inconnu/i.test(o.name);
     o.noPrice = !(o.price > 0);
@@ -9048,7 +9048,7 @@ function _plStoreBar(){
   const tab = (f, label) => '<button class="dlv-tab' + (_plFilter === f ? ' on' : '') + '" onclick="setPlFilter(\'' + f + '\')">' + label + '</button>';
   let h = '<div style="margin:10px 0 4px;padding:10px;border:1px solid var(--border2);border-radius:12px;background:var(--surface2,#faf7fb)">' +
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>🏪 Confirmés en magasin</b>' +
-    ['Store 1', 'Store 2'].map(l => '<button class="dlv-tab' + (loc === l ? ' on' : '') + '" onclick="_plLoc=\'' + l + '\';renderPriceAdmin()">' + TF_LABEL[l] + '</button>').join('') + '</div>';
+    ['Store 1', 'Store 2', 'Warehouse'].map(l => '<button class="dlv-tab' + (loc === l ? ' on' : '') + '" onclick="_plLoc=\'' + l + '\';renderPriceAdmin()">' + (TF_LABEL[l] || l) + '</button>').join('') + '</div>';
   if(!items){ ouLoad(true); return h + '<div class="dlv-dim">Chargement des emplacements…</div></div>'; }
   const nNo = items.filter(o => o.noName || o.noPrice).length;
   h += '<div class="tp-sort">' + tab('instore', 'En magasin (' + items.length + ')') + tab('dorm', '😴 Sans vente') + tab('noinfo', '❓ Sans nom ou sans prix (' + nNo + ')') + '</div></div>';
@@ -9080,15 +9080,69 @@ function _plStoreList(){
   h += '<div class="pl-scroll">' + rows.slice(0, 120).map(o =>
     '<div class="ex-row" style="cursor:pointer" onclick="_plOpenStore(\'' + _psEsc(o.barcode) + '\')"><div style="flex:1;min-width:0"><b' + (o.noName ? ' style="color:#b45309"' : '') + '>' + _psEsc(o.noName ? '❓ ' + (o.name || 'Sans nom') : o.name) + '</b>' +
     '<div class="dlv-dim">' + _psEsc(o.barcode) + ' · ' + _psEsc(o.where.join(', ')) + (_plFilter === 'dorm' ? ' · ' + (o.last ? 'dernière vente ' + _psEsc(o.last) : 'jamais vendu') : '') + (o.inMaster ? '' : ' · pas dans la liste') + '</div></div>' +
-    '<div style="width:52px;text-align:right"><b>' + o.qty + '</b></div><div style="width:76px;text-align:right;font-size:12px' + (o.noPrice ? ';color:#b45309;font-weight:700' : '') + '">' + (o.noPrice ? 'sans prix' : formatCFA(o.price)) + '</div></div>').join('') + '</div>';
+    '<div style="width:52px;text-align:right"><b>' + o.qty + '</b></div><div style="width:76px;text-align:right;font-size:12px' + (o.noPrice ? ';color:#b45309;font-weight:700' : '') + '">' + (o.noPrice ? 'sans prix' + _cgChip(o) : formatCFA(o.price)) + '</div></div>').join('') + '</div>';
   if(rows.length > 120) h += '<div class="dlv-dim" style="padding:6px">… ' + (rows.length - 120) + ' autre(s) : affinez la recherche.</div>';
   if(!rows.length) h += '<div class="dlv-dim" style="padding:8px">Rien ici 👍</div>';
   return h;
 }
+function _cgChip(o){ const g = costGuess(o.barcode, o.name)[0]; return g ? '<div style="color:#15803d;font-weight:700" title="' + _psEsc(g.n) + '">💡 ~' + formatCFA(_cgFormula(g.c)) + '</div>' : ''; }
 function _plOpenStore(bc){
   if(_plMap[_bcKeyClient(bc)]) return openPlEdit(bc);
   showToast('Ce code n’est pas dans la liste des produits : ajoutez-le (nom + prix) avec « Créer un code-barres » ou dans le Sheet.', 5000);
 }
+// ══════════════════════════════════════════════════════════════════
+//  💡 PRIX FORMULE SUGGÉRÉ (17 Nov 2026). couts_achats.json (same site) =
+//  unit costs in USD read from the purchase receipts (Sam's June–July 2026,
+//  Walmart, TJ Maxx…). For a product with no price we look for its receipt
+//  line: same barcode first, else the closest name. The admin sees
+//  « 💡 ~13 000 F » and taps « Utiliser » : price = cost × 1200 (rounded to
+//  500) and the cost is saved too (Product Master col. I). Nothing is
+//  written without the admin's « Enregistrer ».
+// ══════════════════════════════════════════════════════════════════
+let _cgList = null, _cgBusy = false;
+const CG_STOP = new Set('the and for with oz fl pk ct lb lbs count pack size of de la le les et du des en par member members mark original new'.split(' '));
+// French words staff may type → the English words on the receipts
+const CG_FR = { lavande:'lavender', ananas:'pineapple', jus:'juice', douche:'wash', gel:'wash', creme:'cream', huile:'oil', riz:'rice', savon:'soap', lait:'milk', poulet:'chicken', boeuf:'beef', the:'tea', vert:'green', citron:'lemon', pomme:'apple', lessive:'detergent', vinaigre:'vinegar', moutarde:'mustard', origan:'oregano', biscuits:'cookie', biscuit:'cookie', dentifrice:'toothpaste', brosse:'toothbrush', deodorant:'antiperspirant', serviettes:'pads', sel:'salt', confiture:'jam', sucre:'sweetener', cafe:'coffee', chocolat:'chocolate', pois:'peas', gants:'gloves', gobelet:'tumbler', nettoyant:'cleaner', javel:'bleach', avoine:'oats', farine:'flour', bouche:'mouthwash' };
+const CG_GENERIC = new Set('body wash cream oil juice soap milk lotion seasoning powder rice tea bag cleaner pads deodorant antiperspirant toothpaste mix drink spread chicken beef green lemon apple salt jam coffee chocolate bain'.split(' '));
+function _cgToks(t){ return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').split(' ').map(w => CG_FR[w] || w).filter(w => w.length > 2 && !CG_STOP.has(w) && !/^\d+[a-z]{0,3}$/.test(w)); }
+async function _cgLoad(){
+  if(_cgList || _cgBusy) return; _cgBusy = true;
+  try { const r = await fetch('couts_achats.json?v=' + Math.floor(Date.now() / 36e5), { cache: 'no-store' }); const d = await r.json(); _cgList = (d.items || []).map(x => Object.assign(x, { t: _cgToks(x.n), k: x.b ? _bcKeyClient(x.b) : '' })); }
+  catch(e){ _cgList = []; }
+  _cgBusy = false; try { renderPriceAdmin(); } catch(e){}
+}
+function _cgFormula(c){ return Math.round(c * PL_USD_CFA * 2 / 500) * 500; }
+// best receipt lines for a product: [{n, c, u, s, score, exact}]
+function costGuess(barcode, name){
+  if(!_cgList){ _cgLoad(); return []; }
+  const k = _bcKeyClient(barcode);
+  const ex = _cgList.filter(x => x.k && x.k === k);
+  if(ex.length) return ex.slice(0, 1).map(x => Object.assign({ score: 1, exact: true }, x));
+  const t = _cgToks(name); if(!t.length) return [];
+  return _cgList.map(x => {
+    const hit = t.filter(w => x.t.some(v => v === w || (w.length > 4 && (v.startsWith(w) || w.startsWith(v)))));
+    if(!hit.some(w => !CG_GENERIC.has(w))) return null;     // at least one brand-like word must match
+    const score = hit.length / Math.max(t.length, 2) * 0.8 + hit.length / Math.max(x.t.length, 3) * 0.2;
+    return score >= 0.35 ? Object.assign({ score, exact: false }, x) : null;
+  }).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
+}
+function _cgBox(p){
+  const el = document.getElementById('pl-e-guess'); if(!el) return;
+  const g = costGuess(p.barcode, p.name);
+  if(!g.length){ el.innerHTML = _cgList ? '' : '<span class="dlv-dim">Recherche dans les reçus…</span>'; return; }
+  el.innerHTML = '<div style="font-weight:700;margin-bottom:4px">💡 Trouvé dans les reçus' + (g[0].exact ? ' (même code-barres)' : ' (nom proche — vérifiez)') + '</div>' + g.map((x, i) =>
+    '<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><div style="flex:1;min-width:0;font-size:13px">' + _psEsc(x.n) + '<div class="dlv-dim">' + _psEsc(x.s) + ' · ' + x.c.toLocaleString('fr-FR') + ' $' + (x.u > 1 ? ' l’unité (pack de ' + x.u + ')' : '') + ' → <b>' + formatCFA(_cgFormula(x.c)) + '</b></div></div>' +
+    '<button class="btn-sm btn-primary" style="width:auto;padding:8px 12px" onclick="cgUse(' + i + ')">Utiliser</button></div>').join('');
+  el._g = g;
+}
+function cgUse(i){
+  const el = document.getElementById('pl-e-guess'); const x = el && el._g && el._g[i]; if(!x) return;
+  document.getElementById('pl-e-price').value = _cgFormula(x.c);
+  document.getElementById('pl-e-cost').value = x.c;
+  _plCostFromGuess = true; plCostInfo();
+  document.getElementById('pl-e-price').focus();
+}
+let _plCostFromGuess = false;
 let _plEditBc = null;
 function openPlEdit(bc){
   const p = _plMap[_bcKeyClient(bc)]; if(!p) return;
@@ -9097,6 +9151,8 @@ function openPlEdit(bc){
   document.getElementById('pl-e-sub').innerHTML = _psEsc(p.barcode) + ' · Principal : <b>' + _plFmt(p.m) + '</b> · Balkuy : <b>' + _plFmt(p.s1) + '</b> · Ouaga 2000 : <b>' + _plFmt(p.s2) + '</b>';
   document.getElementById('pl-e-price').value = '';
   document.getElementById('pl-e-cost').value = p.cost != null ? p.cost : '';
+  _plCostFromGuess = false;
+  const _gb = document.getElementById('pl-e-guess'); if(_gb){ _gb.innerHTML = ''; if(p.cost == null) _cgBox(p); }
   plCostInfo();
   document.getElementById('pl-e-s1').checked = true; document.getElementById('pl-e-s2').checked = true;
   document.getElementById('pl-e-err').textContent = '';
@@ -9149,6 +9205,7 @@ async function savePlEdit(){
     if(prices['Store 1'] != null) p.s1 = prices['Store 1'];
     if(prices['Store 2'] != null) p.s2 = prices['Store 2'];
     if(p.m == null) p.m = v;
+    if(_plCostFromGuess && p.cost == null){ _plCostFromGuess = false; try { await savePlCost(); } catch(e){} }
     closePlEdit(); renderPriceAdmin(); loadPriceTasks(true);
     try { const _c = _lblOpt.store === 'Store 2' ? 'Store 2' : 'Store 1'; labelQueueAdd(p.barcode, p.name, prices[_c] != null ? prices[_c] : v, 1, true); } catch(e){}
     showToast('✅ ' + p.name + ' : ' + formatCFA(v) + ' (' + Object.keys(prices).map(l => TF_LABEL[l]).join(' + ') + '). Étiquette à changer signalée au magasin.', 7000);
@@ -14374,6 +14431,7 @@ closeSale = function(){
   <div class="modal dlv-modal">
     <div class="modal-title name-banner ok" id="pl-e-name" style="font-size:20px">—</div>
     <div class="modal-sub" id="pl-e-sub">—</div>
+    <div id="pl-e-guess" style="margin:8px 0;padding:0 2px"></div>
     <div class="dlv-lbl">Nouveau prix (CFA)</div>
     <input class="dlv-field" id="pl-e-price" type="number" min="0" inputmode="numeric" style="font-size:22px;text-align:center" onkeydown="if(event.key==='Enter')savePlEdit()"/>
     <div style="margin-top:8px;font-size:14px"><label><input type="checkbox" id="pl-e-s1" checked/> Balkuy</label> &nbsp; <label><input type="checkbox" id="pl-e-s2" checked/> Ouaga 2000</label></div>
