@@ -1147,6 +1147,15 @@ input,select{font-family:inherit}
 .sh-row .k{color:var(--ink3);min-width:190px;}
 .sh-ok{color:#15803d;font-weight:700;} .sh-bad{color:#dc2626;font-weight:700;} .sh-warn{color:#b45309;font-weight:700;}
 #login-pin,#pin-input,#discount-pin,#emp-pin,#new-pin,#new-pin2,#new-price-pin{-webkit-text-security:disc}
+
+/* 🏷 Fiche rapide : big photo choice */
+.fr-ph{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:8px 0}
+.fr-ph button{position:relative;padding:0;border:3px solid var(--border2);border-radius:14px;background:#fff;height:210px;overflow:hidden;cursor:pointer}
+.fr-ph img{width:100%;height:100%;object-fit:contain;display:block}
+.fr-ph b{display:none;position:absolute;left:0;right:0;bottom:0;background:#16a34a;color:#fff;font-size:15px;padding:6px}
+.fr-ph button.on{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.35)}
+.fr-ph button.on b{display:block}
+@media (min-width:700px){.fr-ph button{height:240px}}
 </style>
 </head>
 <body>
@@ -1597,7 +1606,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-i</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-j</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9241,7 +9250,7 @@ function _frRender(){
     if(f.err) h += '<div class="pin-err">' + _frEsc(f.err) + '</div>';
     if(f.sugg.length) h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">' + f.sugg.map((x, i) => '<button type="button" class="btn-sm btn-outline" style="width:auto;text-align:left" onclick="frUseName(' + i + ')">' + _frEsc(x.name) + '</button>').join('') + '</div>';
     else if(!f.searching && !f.err) h += '<div class="dlv-dim">Aucun nom trouvé en ligne : tapez-le.</div>';
-    if(f.photos.length) h += '<div class="nc-ph" id="fr-ph">' + f.photos.map((p, i) => '<button type="button" class="' + (f.photo === i ? 'on' : '') + '" onclick="frPhoto(' + i + ')"><img src="' + _frEsc(p.thumb || p.img) + '" alt="" loading="lazy" onerror="this.parentNode.style.display=\'none\'"></button>').join('') + '</div><div class="dlv-dim">Touchez la bonne photo (facultatif).</div>';
+    if(f.photos.length) h += '<div class="fr-ph" id="fr-ph">' + f.photos.map((p, i) => '<button type="button" class="' + (f.photo === i ? 'on' : '') + '" onclick="frPhoto(' + i + ')"><img src="' + _frEsc(p.img || p.thumb) + '" alt="" loading="lazy" onerror="if(this.src!==\'' + _frEsc(p.thumb || '') + '\'&&\'' + _frEsc(p.thumb || '') + '\')this.src=\'' + _frEsc(p.thumb || '') + '\';else this.parentNode.style.display=\'none\'"><b>✓ Choisie</b></button>').join('') + '</div><div class="dlv-dim">Touchez la bonne photo (facultatif) — touchez encore pour l’enlever.</div>';
   }
   h += '<div style="display:flex;gap:10px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><div class="dlv-lbl">Prix étiquette US ($)</div><input class="dlv-field" id="fr-usd" inputmode="decimal" autocomplete="off" placeholder="ex. 10.97" style="font-size:20px;margin:0" oninput="frCalc()" onkeydown="frKey(event,\'usd\')"/></div>' +
     '<label style="font-size:14px;padding-bottom:10px"><input type="checkbox" ' + (_frTaxOn ? 'checked' : '') + ' onchange="frTax(this.checked)"/> + taxe US 8,25 %</label></div>' +
@@ -14580,7 +14589,7 @@ closeSale = function(){
 <!-- ══ PRICE EDIT MODAL (admin) ══ -->
 <!-- ══ 🏷 FICHE RAPIDE (17 Nov 2026) ══ -->
 <div class="modal-bg" id="fr-modal">
-  <div class="modal" style="width:min(640px,96vw);max-height:94vh;display:flex;flex-direction:column">
+  <div class="modal" style="width:min(720px,96vw);max-height:96vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div class="modal-title" style="margin:0;flex:1">🏷 Fiche rapide <small style="font-weight:500;font-size:12px;opacity:.7">nom + prix · aucun stock</small></div>
       <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeFicheRapide()">Fermer</button>
