@@ -1606,7 +1606,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-j</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-k</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9164,6 +9164,9 @@ let _plCostFromGuess = false;
 // ══════════════════════════════════════════════════════════════════
 const FR_TAX = 0.0825;
 let _fr = null, _frDone = [], _frTaxOn = localStorage.getItem('fr_tax') !== '0';
+let _frPrintNow = localStorage.getItem('fr_print') === '1', _frLblQty = 1;
+function frPrintMode(on){ _frPrintNow = on; localStorage.setItem('fr_print', on ? '1' : '0'); }
+function frQty(d){ _frLblQty = Math.max(0, Math.min(50, _frLblQty + d)); const e = document.getElementById('fr-lq'); if(e) e.textContent = _frLblQty; }
 const _frList = () => 'Fiche rapide ' + new Date().toISOString().slice(0, 10);
 function openFicheRapide(){
   document.getElementById('fr-modal').classList.add('open');
@@ -9256,12 +9259,18 @@ function _frRender(){
     '<label style="font-size:14px;padding-bottom:10px"><input type="checkbox" ' + (_frTaxOn ? 'checked' : '') + ' onchange="frTax(this.checked)"/> + taxe US 8,25 %</label></div>' +
     '<div class="dlv-dim" id="fr-info" style="margin:6px 0"></div>' +
     '<div class="dlv-lbl">Prix de vente (CFA) — les 2 magasins</div><input class="dlv-field" id="fr-cfa" type="number" inputmode="numeric" style="font-size:22px;text-align:center;margin:0" oninput="this.dataset.auto=\'0\'" onkeydown="frKey(event,\'cfa\')"/>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding:8px;border-radius:10px;background:var(--bg2,#f1f5f9)"><b>🏷 Étiquettes prix :</b>' +
+    '<button type="button" class="btn-sm btn-outline" style="width:auto;padding:4px 12px" onclick="frQty(-1)">−</button><b id="fr-lq" style="min-width:22px;text-align:center;font-size:18px">' + _frLblQty + '</b><button type="button" class="btn-sm btn-outline" style="width:auto;padding:4px 12px" onclick="frQty(1)">+</button>' +
+    '<label style="margin-left:auto;font-size:14px"><input type="checkbox" ' + (_frPrintNow ? 'checked' : '') + ' onchange="frPrintMode(this.checked)"/> 🖨 imprimer tout de suite</label></div>' +
+    '<div class="dlv-dim">' + (_frPrintNow ? 'À la validation, les étiquettes sortent tout de suite.' : 'Les étiquettes vont dans la file « Étiquettes à imprimer » (bouton 🖨 en haut).') + ' 0 = pas d’étiquette.</div>' +
     '<div class="modal-btns" style="margin-top:10px"><button class="btn-cancel" onclick="frSkip()">Passer</button><button class="btn-primary" onclick="frSave()">✓ Valider (Entrée)</button></div></div>';
   el.innerHTML = h;
   if(f.cur){ const c = document.getElementById('fr-cfa'); c.value = f.cur; c.dataset.auto = '0'; }
   frCalc(); _frDoneRender();
 }
+function frPrintQueue(){ if(!_lblQ.length){ showToast('La file d’étiquettes est vide.', 2500); return; } printLabelQueue(); }
 function _frDoneRender(){
+  const qb = document.getElementById('fr-qbtn'); if(qb) qb.textContent = '🖨 File (' + _lblQ.reduce((a, x) => a + (x.qty || 1), 0) + ')';
   const el = document.getElementById('fr-done'); if(!el) return;
   if(!_frDone.length){ el.innerHTML = ''; return; }
   el.innerHTML = '<div class="dlv-dim" style="margin-bottom:4px">Faits dans cette séance : ' + _frDone.filter(x => x.st === 'ok').length + ' / ' + _frDone.length + '</div>' + _frDone.slice(0, 40).map(x =>
@@ -9277,6 +9286,10 @@ async function frSave(){
   if(priceNeedsDigitWarning(price) && !confirm(formatCFA(price) + ' : plus de 6 chiffres. Confirmer ?')) return;
   const ph = (!f.known && f.photo != null) ? f.photos[f.photo] : null;
   const rec = { bc: f.bc, name, price, cost, st: 'busy' };
+  const nLbl = _frLblQty;
+  let printed = false;
+  if(nLbl > 0 && _frPrintNow){ try { lblPrint([{ barcode: f.bc, name: name, price: price, qty: nLbl }]); printed = true; } catch(e){ showToast('⚠ Impression impossible : étiquette mise dans la file.', 4000); } }
+  _frLblQty = 1;
   f.saved = true; _frDone.unshift(rec); _fr = null; _frRender();
   document.getElementById('fr-scan').focus();
   try {
@@ -9298,7 +9311,7 @@ async function frSave(){
     }
     const pm = (typeof _plMap !== 'undefined' && _plMap) ? _plMap[f.k] : null;
     if(pm){ pm.s1 = price; pm.s2 = price; if(pm.m == null) pm.m = price; if(cost != null) pm.cost = cost; }
-    try { labelQueueAdd(f.bc, name, price, 1, true); } catch(e){}
+    if(nLbl > 0 && !printed){ try { labelQueueAdd(f.bc, name, price, nLbl, true); } catch(e){} }
     rec.st = 'ok';
   } catch(e){ rec.st = 'err'; rec.err = String(e && e.message || e); showToast('❌ ' + name + ' : ' + rec.err, 6000); }
   _frDoneRender();
@@ -14592,6 +14605,7 @@ closeSale = function(){
   <div class="modal" style="width:min(720px,96vw);max-height:96vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div class="modal-title" style="margin:0;flex:1">🏷 Fiche rapide <small style="font-weight:500;font-size:12px;opacity:.7">nom + prix · aucun stock</small></div>
+      <button class="btn-sm" style="width:auto;padding:8px 12px;background:#0f766e;color:#fff;border:none" id="fr-qbtn" onclick="frPrintQueue()">🖨 File (0)</button>
       <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeFicheRapide()">Fermer</button>
     </div>
     <input class="dlv-field" id="fr-scan" inputmode="numeric" autocomplete="off" placeholder="📷 Scannez le produit…" style="font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();frScan(this.value);this.value='';}"/>
