@@ -402,6 +402,8 @@ select.t{appearance:auto}
 .nsbox .nsp{display:flex;gap:6px;width:100%}.nsbox .nsp img{width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #e5e7eb;border-radius:8px}
 .citem .nsbox .nsb,.nsbox .nsb{flex:1 1 100%;width:auto;height:auto;min-width:0;text-align:left;font:700 17px var(--body)!important;padding:12px 14px;border-radius:10px;border:2px solid #059669!important;background:#ecfdf5!important;color:#064e3b!important;cursor:pointer;line-height:1.25}
 .citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;color:#1e3a8a!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
+.pwbtn{display:block;width:100%;margin-top:6px;text-align:left;font:700 16px var(--body);padding:11px 12px;border-radius:10px;border:2px dashed #d97706;background:#fffbeb;color:#78350f;cursor:pointer}
+.pwbtn.set{border-style:solid;border-color:#059669;background:#ecfdf5;color:#064e3b}
 </style>
 </head>
 <body>
@@ -944,7 +946,7 @@ function countHTML(){
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}${isNewProd(it) ? `<input data-price="${i}" inputmode="numeric" placeholder="Prix en F (vide si vous ne savez pas)" value="${it.price || ''}" style="margin-top:4px">` : ''}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}${isNewProd(it) ? `<button type="button" class="pwbtn${it.price ? ' set' : ''}" data-pricew="${i}">${it.price ? '💰 ' + fmt(it.price) + ' F' : '💰 Prix — toucher pour choisir'}</button>` : ''}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -953,6 +955,7 @@ function bindCount(){
   if(!inp) return;
   C.flash = false;
   const focus = () => { if(!document.querySelector('[data-name]:focus,[data-price]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
+  document.querySelectorAll('[data-pricew]').forEach(b => b.onclick = e => { e.stopPropagation(); priceWheel(+b.dataset.pricew); });
   document.querySelectorAll('[data-price]').forEach(x => { x.oninput = () => { const v = parseInt(String(x.value).replace(/\D/g, ''), 10); C.items[+x.dataset.price].price = v > 0 ? v : 0; saveDraft(); }; x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); x.blur(); inp.focus({ preventScroll: true }); } }; });
   inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addScan(inp.value); inp.value = ''; } };
   $('#camb').onclick = () => openCamera();
@@ -967,6 +970,35 @@ function bindCount(){
   };
   $('#csend').onclick = finishCount;
   setTimeout(focus, 30);
+}
+// 💰 Roue des prix (18 Nov 2026) — choisir le prix d'un nouveau produit au toucher,
+// comme la roue du total en Réorganisation : le lecteur Bluetooth reste branché.
+// Pas de 500 F, de 0 (« je ne sais pas ») à 150 000 F.
+function priceWheel(i){
+  const it = C && C.items[i]; if(!it) return;
+  const STEP = 500, N = 300, RW = 48;
+  let v = Math.max(0, Math.min(N * STEP, Math.round((Number(it.price) || 0) / STEP) * STEP));
+  openSheet(`<h3>💰 Prix · ${esc(it.name || it.barcode)}</h3><div class="sub num">${esc(it.barcode)}</div>
+    <div class="rtotbox" style="margin:10px 0">
+      <div class="rwheel" id="pwheel" aria-label="Faites défiler pour choisir le prix"><div class="rw-pad"></div>${Array.from({ length: N + 1 }, (_, k) => `<div class="rw-i" style="font-size:22px">${k ? fmt(k * STEP) : '—'}</div>`).join('')}<div class="rw-pad"></div></div>
+      <div class="rtotr" style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="font:800 30px var(--body);text-align:center" id="pwv"></div>
+        <div class="rjump">${[-5000, -1000, -500, 500, 1000, 5000].map(d => `<button type="button" data-pw="${d}">${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</button>`).join('')}</div>
+      </div>
+    </div>
+    <button class="go" id="pwok">Valider</button><button class="ghost" id="pwno">Annuler</button>`);
+  const wh = $('#pwheel'), lab = $('#pwv');
+  let t = null, silent = false;
+  const show = () => { lab.textContent = v ? fmt(v) + ' F' : 'Je ne sais pas'; };
+  const set = (nv, fromWheel) => {
+    v = Math.max(0, Math.min(N * STEP, Math.round((Number(nv) || 0) / STEP) * STEP)); show();
+    if(!fromWheel){ silent = true; wh.scrollTo({ top: (v / STEP) * RW, behavior: 'smooth' }); setTimeout(() => { silent = false; }, 450); }
+  };
+  wh.scrollTop = (v / STEP) * RW; show();
+  wh.onscroll = () => { if(silent) return; clearTimeout(t); t = setTimeout(() => set(Math.round(wh.scrollTop / RW) * STEP, true), 90); };
+  document.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => set(v + Number(b.dataset.pw)));
+  $('#pwno').onclick = closeSheet;
+  $('#pwok').onclick = () => { const cur = C && C.items[i]; if(cur && cur.barcode === it.barcode){ cur.price = v; saveDraft(); } closeSheet(); render(); };
 }
 function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); const p = document.querySelector('[data-price="' + i + '"]'); if(p) p.focus(); }
 // A product the master list does not know yet, with no price: its name and price typed here go
