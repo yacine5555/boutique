@@ -705,7 +705,30 @@ function go(v){
 window.addEventListener('popstate', e => { VIEW = e.state || { screen:'home' }; closeSheet(); render(); });
 $('#back').onclick = () => history.back();
 $('#who').onclick = () => openSettings();
-$('#jump').onclick = () => { if(!DATA){ toast('Stock pas encore chargé.'); return; } jumpSheet(); };
+$('#jump').onclick = () => { if(!DATA){ toast('Stock pas encore chargé.'); return; } jumpScan(); };
+// 🔍 (18 Nov soir) : ouvre directement une case prête à scanner — étiquette d'étagère
+// → on y va ; code produit → « Où est ce produit ? ». Même chose que l'écran d'accueil,
+// sans y retourner. « Choisir au toucher » garde la grille magasin → zone → étagère.
+function jumpScan(){
+  openSheet(`<h3>🔍 Scannez une étagère ou un produit</h3>
+    <div class="scanin" style="margin:8px 0"><input id="jq" inputmode="numeric" autocomplete="off" placeholder="Étiquette d’étagère ou code-barres"><button type="button" class="okb" id="jqok" aria-label="Valider">OK</button><button id="jcam" aria-label="Appareil photo" title="Appareil photo">📷</button></div>
+    <div class="sub">Étiquette d’étagère → l’étagère s’ouvre. Produit → où il se trouve.</div>
+    <button class="ghost" id="jgrid">Choisir au toucher (magasin → zone → étagère)</button><button class="ghost" id="jx">Fermer</button>`);
+  const q = $('#jq');
+  const go2 = raw => {
+    raw = String(raw || '').trim(); if(!raw) return;
+    const sh = parseShelf(raw);
+    if(sh){ closeSheet(); shelfScanned(sh); return; }
+    if(/^\d{4,}$/.test(raw)){ closeSheet(); productWhere(raw); return; }
+    closeSheet(); go({ screen:'home', q: raw });
+  };
+  q.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); const v = q.value; q.value = ''; go2(v); } };
+  $('#jqok').onclick = () => { const v = q.value; q.value = ''; go2(v); };
+  $('#jcam').onclick = () => { closeSheet(); openCamera(c2 => go2(c2)); };
+  $('#jgrid').onclick = () => jumpSheet();
+  $('#jx').onclick = closeSheet;
+  setTimeout(() => q.focus(), 30);
+}
 
 function render(){
   const v = VIEW;
