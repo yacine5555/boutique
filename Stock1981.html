@@ -404,6 +404,10 @@ select.t{appearance:auto}
 .citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;color:#1e3a8a!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
 .pwbtn{display:block;width:100%;margin-top:6px;text-align:left;font:700 16px var(--body);padding:11px 12px;border-radius:10px;border:2px dashed #d97706;background:#fffbeb;color:#78350f;cursor:pointer}
 .pwbtn.set{border-style:solid;border-color:#059669;background:#ecfdf5;color:#064e3b}
+.jtabs{display:flex;gap:6px;margin:8px 0}.jtabs button{flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);font:700 15px var(--body);cursor:pointer}.jtabs button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;max-height:52vh;overflow:auto;padding:2px}
+.jgrid button{min-height:56px;padding:6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:800 18px var(--body);cursor:pointer;line-height:1.1}.jgrid button small{display:block;font:500 11px var(--body);color:var(--mut,#6b7280);margin-top:2px}
+.jgrid button.cur{border-color:var(--brand);background:var(--brand-soft)}
 </style>
 </head>
 <body>
@@ -411,6 +415,7 @@ select.t{appearance:auto}
 <header class="bar">
   <button class="back" id="back" aria-label="Retour" hidden>‹</button>
   <h1 id="title">Stock<b>1981</b><small id="subtitle">Beauty Empire</small></h1>
+  <button class="back" id="jump" aria-label="Aller à une étagère" title="Aller à une étagère" style="margin-left:auto;font-size:18px">🔍</button>
   <button class="who" id="who" aria-label="Verrouiller"><i id="netdot"></i><span id="whoname">—</span></button>
 </header>
 
@@ -700,6 +705,7 @@ function go(v){
 window.addEventListener('popstate', e => { VIEW = e.state || { screen:'home' }; closeSheet(); render(); });
 $('#back').onclick = () => history.back();
 $('#who').onclick = () => openSettings();
+$('#jump').onclick = () => { if(!DATA){ toast('Stock pas encore chargé.'); return; } jumpSheet(); };
 
 function render(){
   const v = VIEW;
@@ -2839,6 +2845,35 @@ function parseShelf(raw){
     if(z){ const sps = zoneSpots(z); return { loc, zone: z.c, spot: sps.length === 1 ? sps[0].code : '' }; }
   }
   return null;
+}
+// 🔍 Aller à une étagère, depuis n'importe quel écran (18 Nov 2026) :
+// magasin → zone → étagère, tout au toucher (le lecteur reste branché).
+// Même chemin qu'un scan d'étiquette d'étagère (shelfScanned) : en plein
+// comptage, l'étagère en cours est d'abord envoyée, puis on passe à la suivante.
+function jumpSheet(loc, zone){
+  loc = loc || (C && C.loc) || VIEW.loc || 'Store 1';
+  const locs = LOCS.filter(L => zoneList(L.id).length);
+  const zs = zoneList(loc);
+  const curSpot = C && C.loc === loc ? C.spot : '';
+  let body;
+  if(!zone){
+    body = zs.length ? `<div class="jgrid">${zs.map(z => `<button type="button" data-jz="${esc(z.c)}" class="${(C && C.loc === loc && C.zone === z.c) || (VIEW.loc === loc && VIEW.zone === z.c) ? 'cur' : ''}">${z.b ? '📦 ' + esc(boxName(loc, z.c)) : esc(z.c)}${z.k && !z.b ? `<small>${esc(z.k)}</small>` : ''}</button>`).join('')}</div>` : '<p class="empty">Aucune zone ici.</p>';
+  } else {
+    const z = zs.find(q => q.c === zone), sps = zoneSpots(z);
+    body = `<div class="sub" style="margin-top:6px">Zone <b>${esc(zone)}</b> — touchez l’étagère</div><div class="jgrid">${sps.map(sp => `<button type="button" data-js="${esc(sp.code)}" class="${sp.code === curSpot ? 'cur' : ''}">${esc(sp.code.replace(zone + '-', ''))}<small>${esc(sp.label)}</small></button>`).join('')}</div>
+      <button class="ghost" id="jback">‹ Autres zones</button><button class="ghost" id="jzone">Ouvrir la zone ${esc(zone)}</button>`;
+  }
+  openSheet(`<h3>🔍 Aller à une étagère</h3><div class="jtabs">${locs.map(L => `<button type="button" data-jl="${esc(L.id)}" class="${L.id === loc ? 'on' : ''}">${esc(L.name)}</button>`).join('')}</div>${body}<button class="ghost" id="jx">Fermer</button>`);
+  $('#sheet').querySelectorAll('[data-jl]').forEach(b => b.onclick = () => jumpSheet(b.dataset.jl));
+  $('#sheet').querySelectorAll('[data-jz]').forEach(b => b.onclick = () => {
+    const z = zs.find(q => q.c === b.dataset.jz), sps = zoneSpots(z);
+    if(sps.length === 1){ closeSheet(); shelfScanned({ loc, zone: z.c, spot: sps[0].code }); return; }
+    jumpSheet(loc, z.c);
+  });
+  $('#sheet').querySelectorAll('[data-js]').forEach(b => b.onclick = () => { closeSheet(); shelfScanned({ loc, zone, spot: b.dataset.js }); });
+  const jb = $('#jback'); if(jb) jb.onclick = () => jumpSheet(loc);
+  const jz = $('#jzone'); if(jz) jz.onclick = () => { closeSheet(); go({ screen:'zone', loc, zone, tab:'shelves' }); };
+  $('#jx').onclick = closeSheet;
 }
 function shelfScanned(sh){
   beep(true);
