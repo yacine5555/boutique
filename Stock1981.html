@@ -980,7 +980,7 @@ function isNewProd(it){ const k = bkey(aliasOf(it.barcode)); return !(DATA && DA
 //   On peut tout scanner d'abord et choisir les noms à la fin.
 //   Réglage : celui du Scanner sur le même appareil (bc_sync_url /
 //   bc_write_key), sinon « 🔗 Activer la recherche de noms », une fois.
-let NS = lsj('s1981_ns', {}), NS_Q = [], NS_BUSY = false;
+let NS = lsj('s1981_ns2', {}), NS_Q = [], NS_BUSY = false;
 function nsCfg(){
   const u = ls('s1981_ns_url') || localStorage.getItem('bc_sync_url') || '';
   const k = ls('s1981_ns_key') || localStorage.getItem('bc_write_key') || '';
@@ -989,7 +989,7 @@ function nsCfg(){
 function nsSave(){
   const ks = Object.keys(NS);
   if(ks.length > 400) ks.sort((a, b) => (NS[a].t || 0) - (NS[b].t || 0)).slice(0, ks.length - 400).forEach(k => delete NS[k]);
-  ls('s1981_ns', JSON.stringify(NS));
+  ls('s1981_ns2', JSON.stringify(NS));
 }
 function nsWant(code){
   const k = bkey(code); if(!k || productName(code)) return;
@@ -1010,13 +1010,15 @@ async function nsPump(){
     const r = await fetch(cfg.u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: cfg.k, action: 'listScan', list: 'Stock1981 ' + day, barcode: e.code, known: false, name: '', by: (user && user.name) || 'Stock1981' }) });
     const j = await r.json();
-    if(j && j.success === false) throw new Error(j.error || 'erreur');
+    // 18 Nov soir : une réponse sans success:true (clé refusée, mauvais script…) n'est PAS « aucun nom »
+    if(!j || j.success !== true) throw new Error((j && j.error) || 'réponse vide');
     const nc = (j && j.nc) || {};
     const seen = {}, s = [];
     [nc.name].concat((nc.sugg || []).map(x => x && x.name)).forEach(n => { n = String(n || '').replace(/\s+/g, ' ').trim(); if(n && !seen[n.toLowerCase()]){ seen[n.toLowerCase()] = 1; s.push(n); } });
     NS[k] = { st: s.length ? 'ok' : 'none', s: s.slice(0, 5), p: (nc.photos || []).map(x => x && (x.thumb || x.img)).filter(Boolean).slice(0, 3), code: e.code, t: Date.now() };
   } catch(err){
-    NS[k] = Object.assign(e, { st: 'err', t: Date.now() });
+    const m = String((err && err.message) || err || '');
+    NS[k] = Object.assign(e, { st: 'err', t: Date.now(), msg: /unauthori|write key|invalid key/i.test(m) ? 'Clé refusée par le POS RECEIVER' : /unknown action|action inconnue/i.test(m) ? 'Ce n’est pas l’adresse du POS RECEIVER' : (m.slice(0, 80) || 'Recherche impossible') });
   }
   nsSave(); NS_BUSY = false; nsPaint(k); nsPump();
 }
@@ -1027,7 +1029,7 @@ function nsInner(k){
   if(!nsCfg()) return '<button type="button" class="nsb nsset" data-nsset="1">🔗 Activer la recherche de noms</button>';
   if(!e) return '';
   if(e.st === 'wait') return '<small class="nsw">🔎 recherche du nom…</small>';
-  if(e.st === 'err') return '<button type="button" class="nsb nsset" data-nsre="1">↻ Recherche impossible — réessayer</button>';
+  if(e.st === 'err') return `<small class="nsw" style="width:100%;color:var(--bad)">⚠ ${esc(e.msg || 'Recherche impossible')}</small><button type="button" class="nsb nsset" data-nsre="1">↻ Réessayer</button><button type="button" class="nsb nsset" data-nsset="1">🔗 Changer l’adresse / la clé</button>`;
   if(e.st === 'none') return '<small class="nsw">Aucun nom trouvé en ligne — tapez-le.</small>';
   return (e.p.length ? '<div class="nsp">' + e.p.map(u => `<img src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`).join('') + '</div>' : '') +
     e.s.map((n, j) => `<button type="button" class="nsb" data-nsk="${esc(k)}" data-nsj="${j}">${esc(n)}</button>`).join('');
