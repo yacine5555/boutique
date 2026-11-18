@@ -432,6 +432,15 @@ input,select{font-family:inherit}
 .lbl-qi{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #f1f1f1;font-size:12.5px}
 .lbl-qi button{border:1px solid #d4d4d8;background:#fff;border-radius:6px;width:26px;height:26px;cursor:pointer;font-weight:700}
 .lbl-qi span{min-width:18px;text-align:center;font-weight:700}
+/* 🏷 étiquettes rayon */
+.er-list{display:flex;flex-direction:column;gap:6px}
+.er-it{display:flex;gap:10px;align-items:center;border:1px solid #e5e7eb;border-radius:8px;padding:6px}
+.er-pv{width:150px;height:141px;image-rendering:pixelated;border-radius:3px;box-shadow:0 0 0 1px #cbd5e1;flex:none;background:#fff}
+.er-f{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.er-f .dlv-field{margin:0;padding:5px 8px;font-size:13px}
+.er-q{display:flex;align-items:center;gap:4px}
+.er-q button{border:1px solid #d4d4d8;background:#fff;border-radius:6px;width:28px;height:28px;cursor:pointer;font-weight:700}
+.er-q span{min-width:18px;text-align:center;font-weight:700}
 /* Name suggestions for unknown barcodes */
 .nsg{margin-top:6px;display:flex;flex-direction:column;gap:5px}
 .nsg .nsg-l{font-size:11.5px;color:var(--ink3,#64748b);font-weight:600}
@@ -1612,7 +1621,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-l</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-m</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1827,7 +1836,8 @@ input,select{font-family:inherit}
       <!-- Price labels (Xprinter XP-237B, 40 × 30 mm) -->
       <div class="admin-card" style="grid-column:1/-1" id="lbl-card">
         <div class="admin-card-title">🏷 Imprimer des étiquettes de prix</div>
-        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">Étiquettes 40 × 30 mm pour l'imprimante Xprinter : logo, nom, prix du magasin choisi, code-barres.</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">Étiquettes 40 × 30 mm pour l'imprimante Xprinter : logo, nom, prix du magasin choisi, code-barres.
+          <button class="btn-sm" style="background:#7c3aed;color:#fff;border:none;margin-left:8px" onclick="openEtiquetteRayon()">🏷 Étiquettes rayon (50 × 47)</button></div>
         <div id="lbl-body"></div>
       </div>
 
@@ -4921,6 +4931,7 @@ function _lblWrap(ctx, text, maxW, maxLines){
   return out.map(l => { let s = l; while(s.length > 1 && ctx.measureText(s).width > maxW) s = s.slice(0, -2) + '…'; return s; });
 }
 function lblDrawCanvas(it){
+  if(it && it.shelf) return erDrawCanvas(it); // 🏷 étiquette rayon (v7-nov-m)
   const W = LBL_DOTS.w, H = LBL_DOTS.h, d = LBL_DOTS.mm;
   const k = Math.max(1, Math.min(W / 320, H / 240));   // bigger roll = bigger text and barcode
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -5072,6 +5083,255 @@ function lblFeed(){ // one blank label forward, e.g. after loading a roll
   _lblUsbEnsure().then(u => u.dev.transferOut(u.ep, new TextEncoder().encode('SIZE ' + LBL_SIZE.w + ' mm,' + LBL_SIZE.h + ' mm\r\nGAP ' + (_lblOpt.gapMm != null ? _lblOpt.gapMm : 3) + ' mm,0 mm\r\nFORMFEED\r\n'))).catch(_lblUsbError);
 }
 function lblPrint(list){ if(_lblOpt.via === 'window') printLabels(list); else lblUsbPrint(list); }
+
+// ══════════════════════════════════════════
+//  🏷 ÉTIQUETTES RAYON (18 Nov 2026, v7-nov-m)
+//  One price label on the shelf edge instead of a sticker on every product.
+//  Always 50 × 47 mm (same roll as CARTON / GLACIÈRE). Brand, product and
+//  size are each optional (checkboxes); the CFA price is big, with the
+//  barcode underneath. Own queue on this computer ('er_queue'); printing
+//  goes through the same USB / print-window path as the price stickers.
+// ══════════════════════════════════════════
+const ER_MM = { w: 50, h: 47 }, ER_DPM = 8;
+let _erQ = (function(){ try { return JSON.parse(localStorage.getItem('er_queue') || '[]'); } catch(e){ return []; } })();
+let _erOpt = (function(){ const d = { store: 'Store 1', brand: true, product: true, size: true }; try { return Object.assign(d, JSON.parse(localStorage.getItem('er_opt') || '{}')); } catch(e){ return d; } })();
+function _erSave(){ try { localStorage.setItem('er_queue', JSON.stringify(_erQ)); localStorage.setItem('er_opt', JSON.stringify(_erOpt)); } catch(e){} }
+
+// ── Name → brand / product / size ──
+// New names are « Marque – Produit – Taille ». Older names are free text: the
+// size is picked out (metric first), and the brand is the longest start of the
+// name shared by several products in the catalogue (« Bath & Body Works », « CeraVe »).
+let _erBrandIdx = null;
+function _erTok(s){ return String(s || '').replace(/[,:;\/|«»"“”]+/g, ' ').replace(/\s+-\s+/g, ' ').trim().split(/\s+/).filter(Boolean); }
+function _erKey(t, k){ return t.slice(0, k).map(w => /^(and|et)$/i.test(w) ? '&' : w.toLowerCase()).join(' '); }
+function _erBuildBrands(){
+  _erBrandIdx = {};
+  const src = (_plAll && _plAll.length) ? _plAll.map(p => p.name) : Object.keys(BARCODE_DB).map(k => BARCODE_DB[k].name);
+  src.forEach(n => { const t = _erTok(n); for(let k = 1; k <= Math.min(4, t.length - 1); k++){ const key = _erKey(t, k); _erBrandIdx[key] = (_erBrandIdx[key] || 0) + 1; } });
+}
+function _erBrandOf(name){
+  if(!_erBrandIdx) _erBuildBrands();
+  const t = _erTok(name);
+  let c = _erBrandIdx[_erKey(t, 1)] || 0;
+  if(c < 3 || t.length < 2) return '';
+  let k = 1;
+  while(k < Math.min(4, t.length - 1)){
+    // « & » / « and » never ends a brand: step over it (« Bath & Body Works »)
+    const step = /^(&|and|et)$/i.test(t[k]) ? 2 : 1;
+    if(k + step > Math.min(4, t.length - 1)) break;
+    const c2 = _erBrandIdx[_erKey(t, k + step)] || 0;
+    if(c2 >= 3 && c2 >= 0.8 * c){ k += step; c = c2; } else break;
+  }
+  return t.slice(0, k).join(' ');
+}
+function _erSizeOf(name){
+  const s = String(name || '');
+  const m = s.match(/(\d+(?:[.,]\d+)?)\s*(ml|cl|l|g|kg)\b/i);
+  if(m){ const u = m[2].toLowerCase(); return { txt: m[1].replace('.', ',') + ' ' + (u === 'l' ? 'L' : u), raw: m[0] }; }
+  const fl = s.match(/(\d+(?:[.,]\d+)?)\s*(?:fl\.?\s*oz|fluid\s*ounces?)\b/i);
+  if(fl){ const ml = Math.round(parseFloat(fl[1].replace(',', '.')) * 29.57); return { txt: ml + ' ml', raw: fl[0] }; }
+  // plain « oz » can be a weight or a volume: kept as written, to correct by hand if needed
+  const oz = s.match(/(\d+(?:[.,]\d+)?)\s*(?:oz|ounces?)\b/i);
+  if(oz) return { txt: oz[1].replace('.', ',') + ' oz', raw: oz[0] };
+  const ct = s.match(/(\d+)\s*(pcs|pc|pi[eè]ces?|sachets?|count|ct|tablets?|capsules?|gummies)\b/i);
+  if(ct) return { txt: ct[1] + ' ' + ct[2].toLowerCase(), raw: ct[0] };
+  return { txt: '', raw: '' };
+}
+function erSplitName(name){
+  name = String(name || '').trim();
+  const parts = name.split(/\s+[–—]\s+/);
+  if(parts.length >= 3) return { brand: parts[0], product: parts.slice(1, -1).join(' – '), size: parts[parts.length - 1] };
+  if(parts.length === 2){ const sz = _erSizeOf(parts[1]); return sz.txt && sz.raw.length >= parts[1].trim().length - 1 ? { brand: '', product: parts[0], size: sz.txt } : { brand: parts[0], product: parts[1], size: '' }; }
+  const sz = _erSizeOf(name), brand = _erBrandOf(name);
+  let rest = name;
+  if(brand){ const t = _erTok(brand); let i = 0; for(const w of t){ const j = rest.toLowerCase().indexOf(w.toLowerCase(), i); if(j < 0) break; i = j + w.length; } rest = rest.slice(i); }
+  // drop the whole size group: « 16 Fl Oz (473 Ml) », « 12 0z - 340g », « 8oz /240mL »
+  rest = rest.replace(/[\(\[]?\s*\d+(?:[.,]\d+)?\s*(?:fl\.?\s*oz|fluid\s*ounces?|oz|0z|ounces?|ml|cl|l|g|kg|lb)\b\.?\s*[\)\]]?/gi, ' ');
+  rest = rest.replace(/\(\s*\)|\[\s*\]/g, ' ').replace(/\s*[\/|]\s*(?=[\/|]|$)/g, ' ').replace(/^[\s,:;\-–\/|.]+|[\s,:;\-–\/|.(]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+  return { brand: brand, product: rest || name, size: sz.txt };
+}
+
+// ── Price for the chosen store ──
+function erPrice(bc){
+  const p = (typeof _plMap !== 'undefined') ? _plMap[_bcKeyClient(bc)] : null;
+  if(!p) return (typeof psPriceFor === 'function' ? psPriceFor(bc) : null);
+  const c = _erOpt.store === 'Store 2' ? 's2' : 's1';
+  return p[c] != null ? p[c] : (p.m != null ? p.m : null);
+}
+
+// ── Drawing (400 × 376 dots = 50 × 47 mm at 203 dpi) ──
+function erDrawCanvas(it){
+  const d = ER_DPM, W = ER_MM.w * d, H = ER_MM.h * d;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.fillStyle = '#000';
+  const padX = 1.8 * d, padTop = 1.4 * d, padBot = 1.0 * d, inner = W - 2 * padX;
+  const font = (px, w) => w + ' ' + Math.round(px) + 'px Arial, Helvetica, sans-serif';
+  const show = it.opt || _erOpt;
+  const brand = show.brand ? String(it.brand || '').trim() : '';
+  const prod = show.product ? String(it.product || '').trim() : '';
+  const size = show.size ? String(it.size || '').trim() : '';
+  const nText = (brand ? 1 : 0) + (prod ? 1 : 0) + (size ? 1 : 0);
+  // barcode block
+  const enc = it.barcode ? (_ean13Modules(it.barcode) || _c128Modules(String(it.barcode).trim())) : null;
+  const bcH = enc ? (nText ? 7 : 9) * d : 0, bcTxt = enc ? 2.4 * d : 0;
+  // brand: one line, uppercase, shrinks to fit
+  let bSize = 3.2 * d, bLine = '';
+  if(brand){ bLine = brand.toUpperCase(); c.font = font(bSize, 'bold'); while(bSize > 2.2 * d && c.measureText(bLine).width > inner){ bSize -= 0.1 * d; c.font = font(bSize, 'bold'); } }
+  // product: up to 3 lines, shrinks before cutting
+  let pSize = (brand || size ? 3.9 : 4.6) * d, pLines = [];
+  if(prod){
+    for(;;){ c.font = font(pSize, 'bold'); pLines = _lblWrap(c, prod, inner, 3); const cut = pLines.some(l => /…$/.test(l)); if(!cut || pSize <= 2.7 * d) break; pSize -= 0.15 * d; }
+  }
+  const sSize = 3.2 * d;
+  // price: as big as the width and the space left allow
+  const pr = _lblFmtPrice(it.price).replace(/[  ]/g, ' ').trim(), unit = 'CFA';
+  const textH = (brand ? bSize * 1.1 : 0) + pLines.length * pSize * 1.1 + (size ? sSize * 1.1 : 0);
+  const room = H - padTop - padBot - textH - (enc ? bcH + bcTxt + 0.4 * d : 0) - (nText + (enc ? 1 : 0)) * 0.9 * d;
+  let prSize = Math.min(nText ? 13 * d : 17 * d, Math.max(7 * d, room));
+  const uSize = () => Math.max(2.8 * d, prSize * 0.3);
+  const prW = () => { c.font = font(prSize, '900'); const a = c.measureText(pr).width; c.font = font(uSize(), 'bold'); return a + 0.8 * d + c.measureText(unit).width; };
+  while(prSize > 6 * d && prW() > inner) prSize -= 0.2 * d;
+  // vertical layout: blocks spread over the label
+  const blocks = [];
+  if(brand) blocks.push({ h: bSize * 1.1, draw: y => { c.font = font(bSize, 'bold'); c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText(bLine, W / 2, y); } });
+  if(prod) blocks.push({ h: pLines.length * pSize * 1.1, draw: y => { c.font = font(pSize, 'bold'); c.textAlign = 'center'; c.textBaseline = 'top'; pLines.forEach((l, i) => c.fillText(l, W / 2, y + i * pSize * 1.1)); } });
+  if(size) blocks.push({ h: sSize * 1.1, draw: y => { c.font = font(sSize, 'normal'); c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText(size, W / 2, y); } });
+  blocks.push({ h: prSize * 0.78, draw: y => {
+    c.font = font(prSize, '900'); const a = c.measureText(pr).width;
+    c.font = font(uSize(), 'bold'); const b = c.measureText(unit).width;
+    const sx = (W - a - 0.8 * d - b) / 2; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    c.font = font(prSize, '900'); c.fillText(pr, sx, y + prSize * 0.76);
+    c.font = font(uSize(), 'bold'); c.fillText(unit, sx + a + 0.8 * d, y + prSize * 0.76);
+  } });
+  if(enc) blocks.push({ h: bcH + bcTxt + 0.4 * d, draw: y => {
+    const n = enc.modules.length, mw = Math.max(1, Math.min(3, Math.floor(inner / n))), bx = Math.round((W - n * mw) / 2);
+    for(let i = 0; i < n; i++) if(enc.modules[i] === '1') c.fillRect(bx + i * mw, Math.round(y), mw, Math.round(bcH));
+    c.font = font(2.2 * d, 'normal'); c.textAlign = 'center'; c.textBaseline = 'top';
+    c.fillText(enc.text.split('').join(String.fromCharCode(8202)), W / 2, y + bcH + 0.4 * d);
+  } });
+  const used = blocks.reduce((s, b) => s + b.h, 0);
+  // with text: spread top to bottom; price + barcode only: centred, same space around each
+  const free = Math.max(0, H - padTop - padBot - used), even = !nText;
+  const gap = even ? free / (blocks.length + 1) : (blocks.length > 1 ? free / (blocks.length - 1) : 0);
+  let y = padTop + (even ? gap : 0);
+  blocks.forEach(b => { b.draw(y); y += b.h + gap; });
+  return cv;
+}
+function erPreviewURL(it){
+  try {
+    const cv = erDrawCanvas(it), b = _lblBits(cv), c = cv.getContext('2d'), img = c.createImageData(cv.width, cv.height);
+    for(let y = 0; y < cv.height; y++) for(let x = 0; x < cv.width; x++){
+      const on = !(b.bytes[y * b.bpr + (x >> 3)] & (0x80 >> (x & 7))), i = (y * cv.width + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = on ? 0 : 255; img.data[i + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+    return cv.toDataURL('image/png');
+  } catch(e){ return ''; }
+}
+
+// ── Queue ──
+function erAdd(bc, silent){
+  bc = String(bc || '').trim(); if(!bc) return false;
+  const k = _bcKeyClient(bc);
+  if(_erQ.some(x => _bcKeyClient(x.barcode) === k)){ if(!silent) showToast('Déjà dans la file.', 2000); return false; }
+  const p = (typeof _plMap !== 'undefined') ? _plMap[k] : null;
+  const name = p ? p.name : ((lookupBarcode(bc) || {}).name || '');
+  if(!name && !p){ showToast('⚠ Code ' + bc + ' inconnu : faites d’abord sa Fiche rapide.', 4500); return false; }
+  const sp = erSplitName(name);
+  _erQ.unshift({ barcode: p ? p.barcode : bc, name: name, brand: sp.brand, product: sp.product, size: sp.size, qty: 1 });
+  _erSave(); renderEr();
+  if(!silent) showToast('🏷 Ajoutée (' + _erQ.length + ')', 1500);
+  return true;
+}
+function erScan(raw){
+  const v = String(raw || '').trim(); if(!v) return;
+  if(/^\d{6,}$/.test(v.replace(/\s/g, ''))){ erAdd(v.replace(/\s/g, '')); erFind(''); return; }
+  const r = _lblFind(v);
+  if(r.length === 1){ erAdd(r[0].barcode); erFind(''); }
+  else erFind(v);
+}
+function erFind(v){
+  const box = document.getElementById('er-results'); if(!box) return;
+  const res = String(v || '').trim().length >= 2 && !/^\d+$/.test(String(v).trim()) ? _lblFind(v) : [];
+  box.innerHTML = res.map(p => '<div class="lbl-res" onclick="erAdd(\'' + _lblEsc(p.barcode) + '\');erFind(\'\');document.getElementById(\'er-scan\').value=\'\';document.getElementById(\'er-scan\').focus()">' + lblThumb(p.barcode, p.name) + '<span style="flex:1;min-width:0">' + _lblEsc(p.name) + '<div class="dlv-dim">' + _lblEsc(p.barcode) + '</div></span><span class="dlv-dim">＋</span></div>').join('');
+}
+function erEdit(i, f, v){ const it = _erQ[i]; if(!it) return; it[f] = String(v || '').trim(); _erSave(); erRenderPreview(i); }
+function erQty(i, d){ const it = _erQ[i]; if(!it) return; it.qty = Math.max(1, Math.min(20, (it.qty || 1) + d)); _erSave(); renderEr(); }
+function erRemove(i){ _erQ.splice(i, 1); _erSave(); renderEr(); }
+function erClear(ask){ if(ask !== false && _erQ.length && !confirm('Vider la file des étiquettes rayon ?')) return; _erQ = []; _erSave(); renderEr(); }
+function erSetOpt(k, v){ _erOpt[k] = v; _erSave(); renderEr(); }
+function erReset(i){ const it = _erQ[i]; if(!it) return; Object.assign(it, erSplitName(it.name)); _erSave(); renderEr(); }
+
+// ── Printing: always 50 × 47, whatever roll the price stickers use ──
+async function erPrint(src, isTest){
+  src = src || _erQ;
+  if(!src.length) return;
+  try { if(!_plAll) await loadPriceList(true); } catch(e){}
+  const list = src.map(it => ({ shelf: true, barcode: it.barcode, brand: it.brand, product: it.product, size: it.size, price: erPrice(it.barcode), qty: it.qty || 1, opt: Object.assign({}, _erOpt) }));
+  const miss = list.filter(x => x.price == null);
+  if(miss.length && !isTest && !confirm(miss.length + ' produit(s) sans prix : ' + miss.slice(0, 5).map(x => x.product || x.barcode).join(', ') + '. L’étiquette affichera « — ». Imprimer quand même ?')) return;
+  const saved = { roll: _lblOpt.roll, w: _lblOpt.rollW, h: _lblOpt.rollH };
+  _lblOpt.roll = '50x47'; _lblApplyRoll();
+  let ok = false;
+  try {
+    if(_lblOpt.via === 'window'){
+      printLabels(list, { html: it => '<div class="L er"><img src="' + erPreviewURL(it) + '" alt=""></div>', css: '.L.er{padding:0}.L.er img{width:100%;height:100%;display:block}' });
+      ok = null;
+    } else ok = await lblUsbPrint(list);
+  } finally { _lblOpt.roll = saved.roll; _lblOpt.rollW = saved.w; _lblOpt.rollH = saved.h; _lblApplyRoll(); }
+  if(isTest) return;
+  if(ok === null) setTimeout(() => { if(confirm('Les étiquettes rayon sont-elles bien sorties ? OK = vider la file.')) erClear(false); }, 1500);
+  else if(ok && confirm('Étiquettes envoyées. Bien sorties ? OK = vider la file.')) erClear(false);
+}
+function erTest(){
+  const it = _erQ[0] || { barcode: '0722776004289', brand: 'Splenda', product: 'Édulcorant zéro calorie', size: '1000 sachets' };
+  erPrint([Object.assign({}, it, { qty: 1 })], true);
+}
+function erFeed(){ // one blank 50 × 47 label forward
+  _lblUsbEnsure().then(u => u.dev.transferOut(u.ep, new TextEncoder().encode('SIZE ' + ER_MM.w + ' mm,' + ER_MM.h + ' mm\r\nGAP ' + (_lblOpt.gapMm != null ? _lblOpt.gapMm : 3) + ' mm,0 mm\r\nFORMFEED\r\n'))).catch(_lblUsbError);
+}
+
+// ── Window ──
+function openEtiquetteRayon(){
+  document.getElementById('er-modal').classList.add('open');
+  try { if(!_plAll) loadPriceList(true).then(() => { _erBrandIdx = null; renderEr(); }); } catch(e){}
+  renderEr(); setTimeout(() => { const s = document.getElementById('er-scan'); if(s) s.focus(); }, 80);
+}
+function closeEtiquetteRayon(){ document.getElementById('er-modal').classList.remove('open'); }
+function erRenderPreview(i){
+  const it = _erQ[i]; const im = document.getElementById('er-pv-' + i); if(!it || !im) return;
+  im.src = erPreviewURL(Object.assign({}, it, { price: erPrice(it.barcode) }));
+}
+function renderEr(){
+  const el = document.getElementById('er-body'); if(!el) return;
+  const total = _erQ.reduce((s, x) => s + (x.qty || 1), 0);
+  const cb = (k, l) => '<label><input type="checkbox"' + (_erOpt[k] ? ' checked' : '') + ' onchange="erSetOpt(\'' + k + '\',this.checked)"> ' + l + '</label>';
+  const qb = document.getElementById('er-qbtn'); if(qb){ qb.textContent = '🖨 Imprimer (' + total + ')'; qb.disabled = !total; }
+  el.innerHTML =
+    '<div class="lbl-row" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px">' +
+      '<b>Afficher :</b>' + cb('brand', 'Marque') + cb('product', 'Produit') + cb('size', 'Taille') +
+      '<label style="margin-left:auto">Prix de <select class="dlv-field" style="width:auto;margin:0" onchange="erSetOpt(\'store\',this.value)">' +
+        '<option value="Store 1"' + (_erOpt.store !== 'Store 2' ? ' selected' : '') + '>Balkuy</option><option value="Store 2"' + (_erOpt.store === 'Store 2' ? ' selected' : '') + '>Ouaga 2000</option></select></label>' +
+    '</div>' +
+    '<div class="dlv-dim" style="margin:2px 0 6px">Rouleau 50 × 47 mm · ' + (_lblOpt.via === 'window' ? 'fenêtre d’impression' : 'USB direct') + ' (réglé dans « Imprimer des étiquettes de prix »). Le prix et le code-barres sont toujours imprimés.</div>' +
+    (_erQ.length ? '<div class="er-list">' + _erQ.map((it, i) => {
+      const pr = erPrice(it.barcode);
+      return '<div class="er-it"><img id="er-pv-' + i + '" class="er-pv" alt="" src="' + erPreviewURL(Object.assign({}, it, { price: pr })) + '">' +
+        '<div class="er-f">' +
+          '<input class="dlv-field" placeholder="Marque" value="' + _lblEsc(it.brand) + '" oninput="erEdit(' + i + ',\'brand\',this.value)">' +
+          '<input class="dlv-field" placeholder="Produit" value="' + _lblEsc(it.product) + '" oninput="erEdit(' + i + ',\'product\',this.value)">' +
+          '<input class="dlv-field" placeholder="Taille (ml, g)" value="' + _lblEsc(it.size) + '" oninput="erEdit(' + i + ',\'size\',this.value)">' +
+          '<div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + (pr == null ? '<b style="color:#b91c1c">sans prix</b>' : _lblFmtPrice(pr) + ' CFA') + ' · <a href="#" onclick="erReset(' + i + ');return false">nom d’origine</a></div>' +
+        '</div>' +
+        '<div class="er-q"><button onclick="erQty(' + i + ',-1)">−</button><span>' + (it.qty || 1) + '</span><button onclick="erQty(' + i + ',1)">+</button><button onclick="erRemove(' + i + ')" title="Retirer">✕</button></div>' +
+      '</div>';
+    }).join('') + '</div>'
+    : '<div class="dlv-dim" style="padding:14px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px">Scannez un produit du rayon : son étiquette s’ajoute ici.<br>Le texte se corrige directement dans les cases (sur cette étiquette seulement).</div>') +
+    '<div class="lbl-row" style="margin-top:8px"><button class="btn-sm btn-outline" onclick="erTest()">Test (1 étiquette)</button>' +
+      (_lblOpt.via !== 'window' ? '<button class="btn-sm btn-outline" onclick="erFeed()">⏭ Avancer</button>' : '') +
+      (_erQ.length ? '<button class="btn-sm btn-outline" style="margin-left:auto" onclick="erClear()">Vider la file</button>' : '') + '</div>';
+}
 function lblPreviewCanvas(it){
   try {
     const cv = lblDrawCanvas(it); const b = _lblBits(cv);
@@ -14632,6 +14892,20 @@ closeSale = function(){
 };
 </script>
 <!-- ══ PRICE EDIT MODAL (admin) ══ -->
+<!-- ══ 🏷 ÉTIQUETTES RAYON (18 Nov 2026) ══ -->
+<div class="modal-bg" id="er-modal">
+  <div class="modal" style="width:min(760px,96vw);max-height:96vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div class="modal-title" style="margin:0;flex:1">🏷 Étiquettes rayon <small style="font-weight:500;font-size:12px;opacity:.7">50 × 47 mm · un prix sur l'étagère</small></div>
+      <button class="btn-sm" style="width:auto;padding:8px 12px;background:#0f766e;color:#fff;border:none" id="er-qbtn" onclick="erPrint()">🖨 Imprimer (0)</button>
+      <button class="btn-cancel" style="width:auto;padding:8px 14px" onclick="closeEtiquetteRayon()">Fermer</button>
+    </div>
+    <input class="dlv-field" id="er-scan" autocomplete="off" placeholder="📷 Scannez le produit (ou tapez son nom + Entrée)…" style="font-size:18px" oninput="if(!/^\d+$/.test(this.value.trim()))erFind(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();erScan(this.value);this.value='';}"/>
+    <div id="er-results"></div>
+    <div id="er-body" style="overflow:auto;flex:1"></div>
+  </div>
+</div>
+
 <!-- ══ 🏷 FICHE RAPIDE (17 Nov 2026) ══ -->
 <div class="modal-bg" id="fr-modal">
   <div class="modal" style="width:min(720px,96vw);max-height:96vh;display:flex;flex-direction:column">
