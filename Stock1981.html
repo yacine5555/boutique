@@ -400,8 +400,8 @@ select.t{appearance:auto}
 .vrow{display:flex;align-items:center;gap:10px;text-align:left}.vrow .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.vrow .nm small{display:block;color:var(--muted);font-size:12px}.vrow .q{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}.vrow .q b{font-size:17px}.vrow .q small{font-size:12px;color:var(--muted)}
 .nsbox{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .nsbox .nsp{display:flex;gap:6px;width:100%}.nsbox .nsp img{width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #e5e7eb;border-radius:8px}
-.citem .nsbox .nsb,.nsbox .nsb{flex:1 1 100%;width:auto;height:auto;min-width:0;text-align:left;font:600 15px var(--body)!important;padding:11px 12px;border-radius:10px;border:2px solid #059669!important;background:#ecfdf5!important;color:var(--ink);cursor:pointer;line-height:1.25}
-.citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
+.citem .nsbox .nsb,.nsbox .nsb{flex:1 1 100%;width:auto;height:auto;min-width:0;text-align:left;font:700 17px var(--body)!important;padding:12px 14px;border-radius:10px;border:2px solid #059669!important;background:#ecfdf5!important;color:#064e3b!important;cursor:pointer;line-height:1.25}
+.citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;color:#1e3a8a!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
 </style>
 </head>
 <body>
@@ -1031,8 +1031,8 @@ function nsInner(k){
   if(e.st === 'wait') return '<small class="nsw">🔎 recherche du nom…</small>';
   if(e.st === 'err') return `<small class="nsw" style="width:100%;color:var(--bad)">⚠ ${esc(e.msg || 'Recherche impossible')}</small><button type="button" class="nsb nsset" data-nsre="1">↻ Réessayer</button><button type="button" class="nsb nsset" data-nsset="1">🔗 Changer l’adresse / la clé</button>`;
   if(e.st === 'none') return '<small class="nsw">Aucun nom trouvé en ligne — tapez-le.</small>';
-  return (e.p.length ? '<div class="nsp">' + e.p.map(u => `<img src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`).join('') + '</div>' : '') +
-    e.s.map((n, j) => `<button type="button" class="nsb" data-nsk="${esc(k)}" data-nsj="${j}">${esc(n)}</button>`).join('');
+  // 18 Nov soir : photos retirées (trop petites) — le nom d'abord, lisible
+  return e.s.map((n, j) => `<button type="button" class="nsb" data-nsk="${esc(k)}" data-nsj="${j}">${esc(n)}</button>`).join('');
 }
 function nsHTML(it){
   if(!it || it.name) return '';
