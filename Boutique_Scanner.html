@@ -441,6 +441,11 @@ input,select{font-family:inherit}
 .er-q{display:flex;align-items:center;gap:4px}
 .er-q button{border:1px solid #d4d4d8;background:#fff;border-radius:6px;width:28px;height:28px;cursor:pointer;font-weight:700}
 .er-q span{min-width:18px;text-align:center;font-weight:700}
+.er-it.grp{border-color:#c4b5fd;background:#faf5ff}
+.er-gb{font-size:12px;font-weight:700;color:#6d28d9}
+.er-grp-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.er-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:14px;padding:4px 10px;font-size:12.5px;cursor:pointer}
+.er-chip b{opacity:.5;font-size:14px}
 /* Name suggestions for unknown barcodes */
 .nsg{margin-top:6px;display:flex;flex-direction:column;gap:5px}
 .nsg .nsg-l{font-size:11.5px;color:var(--ink3,#64748b);font-weight:600}
@@ -1621,7 +1626,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-m</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-n</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -5159,6 +5164,41 @@ function erPrice(bc){
   return p[c] != null ? p[c] : (p.m != null ? p.m : null);
 }
 
+// ── Group labels: one label for a family sharing a price (« Victoria's Secret – Brume – 9 000 ») ──
+// The price is typed on the label (not read from one product). The barcode is a short
+// group code (G-VSBRUME) for the staff label check later; it sells nothing at the till.
+let _erGroups = (function(){ try { return JSON.parse(localStorage.getItem('er_groups') || '[]'); } catch(e){ return []; } })();
+function erItemPrice(it){ if(!it.group) return erPrice(it.barcode); const n = Number(String(it.price == null ? '' : it.price).replace(/[^\d]/g, '')); return n > 0 ? n : null; }
+function _erAscii(s){ return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').trim(); }
+function erGroupCode(brand, product){
+  const bw = _erAscii(brand).split(/\s+/).filter(w => w && w !== 'S' && w !== 'AND' && w !== 'ET');
+  const b = bw.length > 1 ? bw.map(w => w[0]).join('').slice(0, 4) : (bw[0] || '').slice(0, 4);
+  const p = _erAscii(product).replace(/\s+/g, '').slice(0, Math.max(3, 9 - b.length));
+  return 'G-' + (b + p || 'GROUPE');
+}
+function _erRememberGroup(it){
+  if(!it.gid) it.gid = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const g = { gid: it.gid, brand: it.brand, product: it.product, size: it.size || '', price: it.price, barcode: it.barcode };
+  _erGroups = [g].concat(_erGroups.filter(x => x.gid !== g.gid && x.barcode !== g.barcode)).slice(0, 12);
+  try { localStorage.setItem('er_groups', JSON.stringify(_erGroups)); } catch(e){}
+}
+function erAddGroup(g){
+  g = g || { brand: '', product: '', size: '', price: '' };
+  const it = { group: true, gid: g.gid, barcode: g.barcode || erGroupCode(g.brand, g.product), name: '', brand: g.brand || '', product: g.product || '', size: g.size || '', price: g.price != null ? g.price : '', qty: 1 };
+  if(it.brand || it.product) _erRememberGroup(it);
+  _erQ.unshift(it); _erSave(); renderEr();
+  setTimeout(() => { const f = document.querySelector('#er-it-0 input'); if(f && !it.brand) f.focus(); }, 30);
+}
+function erMakeGroup(i){ // a scanned product becomes its family's label: same brand, price kept, no size
+  const it = _erQ[i]; if(!it || it.group) return;
+  const pr = erPrice(it.barcode);
+  _erQ[i] = { group: true, barcode: erGroupCode(it.brand, it.product), name: '', brand: it.brand, product: it.product, size: '', price: pr != null ? pr : '', qty: it.qty || 1 };
+  _erRememberGroup(_erQ[i]); _erSave(); renderEr();
+  showToast('👥 Groupe : raccourcissez le produit (ex. « Brume ») et vérifiez le prix.', 4000);
+}
+function erRecentGroup(j){ const g = _erGroups[j]; if(g) erAddGroup(g); }
+function erForgetGroup(j){ _erGroups.splice(j, 1); try { localStorage.setItem('er_groups', JSON.stringify(_erGroups)); } catch(e){} renderEr(); }
+
 // ── Drawing (400 × 376 dots = 50 × 47 mm at 203 dpi) ──
 function erDrawCanvas(it){
   const d = ER_DPM, W = ER_MM.w * d, H = ER_MM.h * d;
@@ -5234,7 +5274,7 @@ function erPreviewURL(it){
 function erAdd(bc, silent){
   bc = String(bc || '').trim(); if(!bc) return false;
   const k = _bcKeyClient(bc);
-  if(_erQ.some(x => _bcKeyClient(x.barcode) === k)){ if(!silent) showToast('Déjà dans la file.', 2000); return false; }
+  if(_erQ.some(x => !x.group && _bcKeyClient(x.barcode) === k)){ if(!silent) showToast('Déjà dans la file.', 2000); return false; }
   const p = (typeof _plMap !== 'undefined') ? _plMap[k] : null;
   const name = p ? p.name : ((lookupBarcode(bc) || {}).name || '');
   if(!name && !p){ showToast('⚠ Code ' + bc + ' inconnu : faites d’abord sa Fiche rapide.', 4500); return false; }
@@ -5256,21 +5296,29 @@ function erFind(v){
   const res = String(v || '').trim().length >= 2 && !/^\d+$/.test(String(v).trim()) ? _lblFind(v) : [];
   box.innerHTML = res.map(p => '<div class="lbl-res" onclick="erAdd(\'' + _lblEsc(p.barcode) + '\');erFind(\'\');document.getElementById(\'er-scan\').value=\'\';document.getElementById(\'er-scan\').focus()">' + lblThumb(p.barcode, p.name) + '<span style="flex:1;min-width:0">' + _lblEsc(p.name) + '<div class="dlv-dim">' + _lblEsc(p.barcode) + '</div></span><span class="dlv-dim">＋</span></div>').join('');
 }
-function erEdit(i, f, v){ const it = _erQ[i]; if(!it) return; it[f] = String(v || '').trim(); _erSave(); erRenderPreview(i); }
+function erEdit(i, f, v){
+  const it = _erQ[i]; if(!it) return;
+  it[f] = String(v || '').trim();
+  if(it.group){
+    if(f === 'brand' || f === 'product'){ it.barcode = erGroupCode(it.brand, it.product); const c = document.getElementById('er-gc-' + i); if(c) c.textContent = it.barcode; }
+    if(it.brand || it.product) _erRememberGroup(it);
+  }
+  _erSave(); erRenderPreview(i);
+}
 function erQty(i, d){ const it = _erQ[i]; if(!it) return; it.qty = Math.max(1, Math.min(20, (it.qty || 1) + d)); _erSave(); renderEr(); }
 function erRemove(i){ _erQ.splice(i, 1); _erSave(); renderEr(); }
 function erClear(ask){ if(ask !== false && _erQ.length && !confirm('Vider la file des étiquettes rayon ?')) return; _erQ = []; _erSave(); renderEr(); }
 function erSetOpt(k, v){ _erOpt[k] = v; _erSave(); renderEr(); }
-function erReset(i){ const it = _erQ[i]; if(!it) return; Object.assign(it, erSplitName(it.name)); _erSave(); renderEr(); }
+function erReset(i){ const it = _erQ[i]; if(!it || it.group) return; Object.assign(it, erSplitName(it.name)); _erSave(); renderEr(); }
 
 // ── Printing: always 50 × 47, whatever roll the price stickers use ──
 async function erPrint(src, isTest){
   src = src || _erQ;
   if(!src.length) return;
   try { if(!_plAll) await loadPriceList(true); } catch(e){}
-  const list = src.map(it => ({ shelf: true, barcode: it.barcode, brand: it.brand, product: it.product, size: it.size, price: erPrice(it.barcode), qty: it.qty || 1, opt: Object.assign({}, _erOpt) }));
+  const list = src.map(it => ({ shelf: true, barcode: it.barcode, brand: it.brand, product: it.product, size: it.size, price: erItemPrice(it), qty: it.qty || 1, opt: Object.assign({}, _erOpt) }));
   const miss = list.filter(x => x.price == null);
-  if(miss.length && !isTest && !confirm(miss.length + ' produit(s) sans prix : ' + miss.slice(0, 5).map(x => x.product || x.barcode).join(', ') + '. L’étiquette affichera « — ». Imprimer quand même ?')) return;
+  if(miss.length && !isTest && !confirm(miss.length + ' produit(s) sans prix : ' + miss.slice(0, 5).map(x => x.product || x.brand || x.barcode).join(', ') + '. L’étiquette affichera « — ». Imprimer quand même ?')) return;
   const saved = { roll: _lblOpt.roll, w: _lblOpt.rollW, h: _lblOpt.rollH };
   _lblOpt.roll = '50x47'; _lblApplyRoll();
   let ok = false;
@@ -5301,7 +5349,7 @@ function openEtiquetteRayon(){
 function closeEtiquetteRayon(){ document.getElementById('er-modal').classList.remove('open'); }
 function erRenderPreview(i){
   const it = _erQ[i]; const im = document.getElementById('er-pv-' + i); if(!it || !im) return;
-  im.src = erPreviewURL(Object.assign({}, it, { price: erPrice(it.barcode) }));
+  im.src = erPreviewURL(Object.assign({}, it, { price: erItemPrice(it) }));
 }
 function renderEr(){
   const el = document.getElementById('er-body'); if(!el) return;
@@ -5314,15 +5362,20 @@ function renderEr(){
       '<label style="margin-left:auto">Prix de <select class="dlv-field" style="width:auto;margin:0" onchange="erSetOpt(\'store\',this.value)">' +
         '<option value="Store 1"' + (_erOpt.store !== 'Store 2' ? ' selected' : '') + '>Balkuy</option><option value="Store 2"' + (_erOpt.store === 'Store 2' ? ' selected' : '') + '>Ouaga 2000</option></select></label>' +
     '</div>' +
+    '<div class="er-grp-bar"><button class="btn-sm" style="background:#7c3aed;color:#fff;border:none" onclick="erAddGroup()">＋ Étiquette de groupe</button>' +
+      (_erGroups.length ? '<span class="dlv-dim">Récents :</span>' + _erGroups.map((g, j) => '<span class="er-chip" onclick="erRecentGroup(' + j + ')">' + _lblEsc([g.brand, g.product].filter(Boolean).join(' ') || g.barcode) + (erItemPrice(Object.assign({ group: true }, g)) ? ' · ' + _lblFmtPrice(erItemPrice(Object.assign({ group: true }, g))) : '') + '<b onclick="event.stopPropagation();erForgetGroup(' + j + ')" title="Oublier">×</b></span>').join('') : '<span class="dlv-dim">Un prix pour toute une famille (ex. Victoria’s Secret · Brume · 9 000). Ou scannez un produit puis « 👥 en faire un groupe ».</span>') +
+    '</div>' +
     '<div class="dlv-dim" style="margin:2px 0 6px">Rouleau 50 × 47 mm · ' + (_lblOpt.via === 'window' ? 'fenêtre d’impression' : 'USB direct') + ' (réglé dans « Imprimer des étiquettes de prix »). Le prix et le code-barres sont toujours imprimés.</div>' +
     (_erQ.length ? '<div class="er-list">' + _erQ.map((it, i) => {
-      const pr = erPrice(it.barcode);
-      return '<div class="er-it"><img id="er-pv-' + i + '" class="er-pv" alt="" src="' + erPreviewURL(Object.assign({}, it, { price: pr })) + '">' +
+      const pr = erItemPrice(it);
+      const fld = (f, ph, extra) => '<input class="dlv-field" placeholder="' + ph + '" value="' + _lblEsc(it[f]) + '" oninput="erEdit(' + i + ',\'' + f + '\',this.value)"' + (extra || '') + '>';
+      return '<div class="er-it' + (it.group ? ' grp' : '') + '" id="er-it-' + i + '"><img id="er-pv-' + i + '" class="er-pv" alt="" src="' + erPreviewURL(Object.assign({}, it, { price: pr })) + '">' +
         '<div class="er-f">' +
-          '<input class="dlv-field" placeholder="Marque" value="' + _lblEsc(it.brand) + '" oninput="erEdit(' + i + ',\'brand\',this.value)">' +
-          '<input class="dlv-field" placeholder="Produit" value="' + _lblEsc(it.product) + '" oninput="erEdit(' + i + ',\'product\',this.value)">' +
-          '<input class="dlv-field" placeholder="Taille (ml, g)" value="' + _lblEsc(it.size) + '" oninput="erEdit(' + i + ',\'size\',this.value)">' +
-          '<div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + (pr == null ? '<b style="color:#b91c1c">sans prix</b>' : _lblFmtPrice(pr) + ' CFA') + ' · <a href="#" onclick="erReset(' + i + ');return false">nom d’origine</a></div>' +
+          (it.group ? '<div class="er-gb">👥 Étiquette de groupe · <span id="er-gc-' + i + '">' + _lblEsc(it.barcode) + '</span></div>' : '') +
+          fld('brand', 'Marque') + fld('product', it.group ? 'Produit (ex. Brume)' : 'Produit') + fld('size', it.group ? 'Taille (facultatif)' : 'Taille (ml, g)') +
+          (it.group
+            ? '<div style="display:flex;align-items:center;gap:6px">' + fld('price', 'Prix CFA', ' inputmode="numeric" style="font-size:16px;font-weight:800;max-width:140px"') + '<span class="dlv-dim">CFA · même prix pour tout le groupe</span></div>'
+            : '<div class="dlv-dim">' + _lblEsc(it.barcode) + ' · ' + (pr == null ? '<b style="color:#b91c1c">sans prix</b>' : _lblFmtPrice(pr) + ' CFA') + ' · <a href="#" onclick="erReset(' + i + ');return false">nom d’origine</a> · <a href="#" onclick="erMakeGroup(' + i + ');return false">👥 en faire un groupe</a></div>') +
         '</div>' +
         '<div class="er-q"><button onclick="erQty(' + i + ',-1)">−</button><span>' + (it.qty || 1) + '</span><button onclick="erQty(' + i + ',1)">+</button><button onclick="erRemove(' + i + ')" title="Retirer">✕</button></div>' +
       '</div>';
