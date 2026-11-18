@@ -7,6 +7,79 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Boutique POS</title>
+<script>
+/* 🔒 UNE SEULE FENÊTRE DE CAISSE (18 Nov 2026, v7-nov-o)
+   Le 18/11 à Balkuy, deux fenêtres du Scanner étaient ouvertes en même
+   temps : elles partagent la même mémoire (localStorage) et réutilisaient
+   les mêmes numéros de ticket. Ce bloc tourne AVANT tout le reste :
+   - la première fenêtre prend le « verrou » (pos_till_lock) et le rafraîchit ;
+   - une deuxième fenêtre s'arrête tout de suite (window.stop) et affiche
+     un grand message rouge, avec un bouton « Utiliser cette fenêtre »
+     qui reprend la main proprement (l'autre fenêtre se bloque alors).
+   Deux vérifications : le verrou (immédiat) + un « ping » BroadcastChannel
+   (attrape une fenêtre en arrière-plan dont le minuteur est ralenti). */
+(function(){
+  var KEY = 'pos_till_lock', STALE = 150000, BEAT = 5000;
+  var me = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  var ch = null; try { ch = new BroadcastChannel('be-pos-lock'); } catch(e){}
+  function rd(){ try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ return null; } }
+  function wr(o){ try { localStorage.setItem(KEY, JSON.stringify(o)); } catch(e){} }
+  function claimFlag(){ try { var f = sessionStorage.getItem('pos_claim'); sessionStorage.removeItem('pos_claim'); return !!f; } catch(e){ return false; } }
+
+  window.__posClaimTill = function(){
+    var b = document.getElementById('posLockBtn'); if(b){ b.disabled = true; b.textContent = 'Un instant…'; }
+    wr({ id: 'claim-' + me, t: Date.now() });
+    try { ch && ch.postMessage({ type: 'takeover', from: me }); } catch(e){}
+    try { sessionStorage.setItem('pos_claim', '1'); } catch(e){}
+    setTimeout(function(){ location.reload(); }, 1500);
+  };
+
+  function blockPage(){
+    window.__POS_LOCKED = true;
+    try { window.stop(); } catch(e){}
+    var inner = '<div style="max-width:640px;padding:32px">' +
+      '<div style="font-size:72px;line-height:1">⛔</div>' +
+      '<h1 style="font-size:40px;margin:16px 0 8px">La caisse est déjà ouverte dans une autre fenêtre</h1>' +
+      '<p style="font-size:22px;margin:0 0 28px;opacity:.95">Fermez cette fenêtre et utilisez l\'autre.</p>' +
+      '<button id="posLockBtn" onclick="window.__posClaimTill()" style="font-size:18px;padding:14px 22px;border-radius:12px;border:2px solid #fff;background:transparent;color:#fff;cursor:pointer">Je ne trouve pas l\'autre fenêtre — utiliser celle-ci</button>' +
+      '</div>';
+    function show(){
+      try {
+        document.title = 'Caisse déjà ouverte';
+        var body = document.body;
+        if(!body){ body = document.createElement('body'); document.documentElement.appendChild(body); }
+        body.setAttribute('style', 'margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#b91c1c;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center');
+        body.innerHTML = inner;
+      } catch(e){}
+    }
+    setTimeout(show, 0);
+  }
+
+  var cur = rd();
+  var claimed = claimFlag();
+  if(!claimed && cur && cur.id !== me && (Date.now() - (cur.t || 0)) < STALE){ blockPage(); return; }
+
+  // Cette fenêtre est la caisse.
+  wr({ id: me, t: Date.now() });
+  var beat = setInterval(function(){ var c = rd(); if(c && c.id !== me){ return; } wr({ id: me, t: Date.now() }); }, BEAT);
+  function lose(){ clearInterval(beat); location.reload(); }
+  window.addEventListener('storage', function(e){
+    if(e.key !== KEY || window.__POS_LOCKED) return;
+    var c = null; try { c = JSON.parse(e.newValue || 'null'); } catch(_){}
+    if(c && c.id !== me && String(c.id).indexOf('claim-') === 0) lose();
+  });
+  window.addEventListener('pagehide', function(){ var c = rd(); if(c && c.id === me){ try { localStorage.removeItem(KEY); } catch(e){} } });
+  if(ch){
+    ch.onmessage = function(ev){
+      var d = ev.data || {};
+      if(d.type === 'hello' && d.from !== me){ wr({ id: me, t: Date.now() }); ch.postMessage({ type: 'here', to: d.from, from: me }); }
+      else if(d.type === 'here' && d.to === me){ clearInterval(beat); location.reload(); }
+      else if(d.type === 'takeover' && d.from !== me){ lose(); }
+    };
+    if(!claimed) ch.postMessage({ type: 'hello', from: me });
+  }
+})();
+</script>
 <!-- PWA (item 7): installable + a home-screen icon. The no-cache meta tags
      above still control the HTTP fetch of this page itself; the service
      worker (registered at the bottom of the script) is what gives it a
@@ -1626,7 +1699,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-n</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-o</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
