@@ -398,6 +398,10 @@ select.t{appearance:auto}
 .recvbtn .ic{font-size:26px}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:0}}}
 .vrow{display:flex;align-items:center;gap:10px;text-align:left}.vrow .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.vrow .nm small{display:block;color:var(--muted);font-size:12px}.vrow .q{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}.vrow .q b{font-size:17px}.vrow .q small{font-size:12px;color:var(--muted)}
+.nsbox{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.nsbox .nsp{display:flex;gap:6px;width:100%}.nsbox .nsp img{width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #e5e7eb;border-radius:8px}
+.citem .nsbox .nsb,.nsbox .nsb{flex:1 1 100%;width:auto;height:auto;min-width:0;text-align:left;font:600 15px var(--body)!important;padding:11px 12px;border-radius:10px;border:2px solid #059669!important;background:#ecfdf5!important;color:var(--ink);cursor:pointer;line-height:1.25}
+.citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
 </style>
 </head>
 <body>
@@ -940,7 +944,7 @@ function countHTML(){
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${isNewProd(it) ? `<input data-price="${i}" inputmode="numeric" placeholder="Prix en F (vide si vous ne savez pas)" value="${it.price || ''}" style="margin-top:4px">` : ''}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}${isNewProd(it) ? `<input data-price="${i}" inputmode="numeric" placeholder="Prix en F (vide si vous ne savez pas)" value="${it.price || ''}" style="margin-top:4px">` : ''}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -968,6 +972,92 @@ function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.
 // A product the master list does not know yet, with no price: its name and price typed here go
 // to the master list (Code GS stock1981Count → s1981MasterAdd_), so the tills can sell it.
 function isNewProd(it){ const k = bkey(aliasOf(it.barcode)); return !(DATA && DATA.names && DATA.names[k]) && !(priceOf(it.barcode) > 0); }
+// ── 🔎 Recherche de noms en ligne (18 Nov 2026) ───────────
+//   Un code inconnu scanné en comptage ou en réception : le nom est cherché
+//   en ligne (POS RECEIVER, action listScan — même recherche que la Fiche
+//   rapide du Scanner ; ne touche jamais au stock). Les noms trouvés
+//   s'affichent en gros boutons sous la ligne : un toucher = le nom.
+//   On peut tout scanner d'abord et choisir les noms à la fin.
+//   Réglage : celui du Scanner sur le même appareil (bc_sync_url /
+//   bc_write_key), sinon « 🔗 Activer la recherche de noms », une fois.
+let NS = lsj('s1981_ns', {}), NS_Q = [], NS_BUSY = false;
+function nsCfg(){
+  const u = ls('s1981_ns_url') || localStorage.getItem('bc_sync_url') || '';
+  const k = ls('s1981_ns_key') || localStorage.getItem('bc_write_key') || '';
+  return (u && k) ? { u, k } : null;
+}
+function nsSave(){
+  const ks = Object.keys(NS);
+  if(ks.length > 400) ks.sort((a, b) => (NS[a].t || 0) - (NS[b].t || 0)).slice(0, ks.length - 400).forEach(k => delete NS[k]);
+  ls('s1981_ns', JSON.stringify(NS));
+}
+function nsWant(code){
+  const k = bkey(code); if(!k || productName(code)) return;
+  const e = NS[k];
+  if(e && (e.st === 'ok' || e.st === 'none' || e.st === 'wait')) return;
+  NS[k] = { st: 'wait', s: [], p: [], code: String(code), t: Date.now() }; nsSave();
+  if(NS_Q.indexOf(k) < 0) NS_Q.push(k);
+  nsPaint(k); nsPump();
+}
+async function nsPump(){
+  if(NS_BUSY) return;
+  const cfg = nsCfg(); if(!cfg || !navigator.onLine) return;
+  const k = NS_Q.shift(); if(!k) return;
+  const e = NS[k]; if(!e){ nsPump(); return; }
+  NS_BUSY = true;
+  try {
+    const d = new Date(), day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const r = await fetch(cfg.u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: cfg.k, action: 'listScan', list: 'Stock1981 ' + day, barcode: e.code, known: false, name: '', by: (user && user.name) || 'Stock1981' }) });
+    const j = await r.json();
+    if(j && j.success === false) throw new Error(j.error || 'erreur');
+    const nc = (j && j.nc) || {};
+    const seen = {}, s = [];
+    [nc.name].concat((nc.sugg || []).map(x => x && x.name)).forEach(n => { n = String(n || '').replace(/\s+/g, ' ').trim(); if(n && !seen[n.toLowerCase()]){ seen[n.toLowerCase()] = 1; s.push(n); } });
+    NS[k] = { st: s.length ? 'ok' : 'none', s: s.slice(0, 5), p: (nc.photos || []).map(x => x && (x.thumb || x.img)).filter(Boolean).slice(0, 3), code: e.code, t: Date.now() };
+  } catch(err){
+    NS[k] = Object.assign(e, { st: 'err', t: Date.now() });
+  }
+  nsSave(); NS_BUSY = false; nsPaint(k); nsPump();
+}
+function nsRetry(){ Object.keys(NS).forEach(k => { if(NS[k].st === 'err' || (NS[k].st === 'wait' && NS_Q.indexOf(k) < 0)){ NS[k].st = 'wait'; NS_Q.push(k); } }); nsPump(); }
+window.addEventListener('online', nsRetry);
+function nsInner(k){
+  const e = NS[k];
+  if(!nsCfg()) return '<button type="button" class="nsb nsset" data-nsset="1">🔗 Activer la recherche de noms</button>';
+  if(!e) return '';
+  if(e.st === 'wait') return '<small class="nsw">🔎 recherche du nom…</small>';
+  if(e.st === 'err') return '<button type="button" class="nsb nsset" data-nsre="1">↻ Recherche impossible — réessayer</button>';
+  if(e.st === 'none') return '<small class="nsw">Aucun nom trouvé en ligne — tapez-le.</small>';
+  return (e.p.length ? '<div class="nsp">' + e.p.map(u => `<img src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`).join('') + '</div>' : '') +
+    e.s.map((n, j) => `<button type="button" class="nsb" data-nsk="${esc(k)}" data-nsj="${j}">${esc(n)}</button>`).join('');
+}
+function nsHTML(it){
+  if(!it || it.name) return '';
+  const k = bkey(it.barcode); if(!NS[k] && nsCfg()) setTimeout(() => nsWant(it.barcode), 0);
+  return `<div class="nsbox" data-ns="${esc(k)}">${nsInner(k)}</div>`;
+}
+function nsPaint(k){ document.querySelectorAll('[data-ns="' + k + '"]').forEach(el => { el.innerHTML = nsInner(k); }); }
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-nsk],[data-nsset],[data-nsre]'); if(!b) return;
+  ev.preventDefault(); ev.stopPropagation();
+  if(b.dataset.nsre){ nsRetry(); document.querySelectorAll('[data-ns]').forEach(el => nsPaint(el.dataset.ns)); return; }
+  if(b.dataset.nsset){
+    openSheet(`<h3>🔗 Recherche de noms</h3><div class="sub">Adresse et clé du script « POS RECEIVER » (une seule fois sur cet appareil).</div>
+      <label class="f" for="nsu">Adresse (https://script.google.com/…/exec)</label><input id="nsu" autocomplete="off" value="">
+      <label class="f" for="nsk">Clé d’écriture</label><input id="nsk" type="password" autocomplete="off" value="">
+      <button class="go" id="nsok">Enregistrer</button><button class="ghost" id="nsx">Annuler</button>`);
+    $('#nsx').onclick = closeSheet;
+    $('#nsok').onclick = () => { const u = $('#nsu').value.trim(), k = $('#nsk').value.trim(); if(!/^https:\/\//.test(u) || !k){ toast('Adresse et clé obligatoires.'); return; } ls('s1981_ns_url', u); ls('s1981_ns_key', k); closeSheet(); render(); nsRetry(); };
+    return;
+  }
+  const k = b.dataset.nsk, e = NS[k], name = e && e.s[+b.dataset.nsj]; if(!name) return;
+  if(VIEW.screen === 'count' && C){ C.items.forEach(it => { if(bkey(it.barcode) === k && !it.name){ it.name = name; delete it.pendingName; } }); saveDraft(); }
+  else if(VIEW.screen === 'unit' && R){ R.lines.forEach(l => { if(bkey(l.barcode) === k && !l.name){ l.name = name; delete l.pendingName; } }); saveRecv(); }
+  else return;
+  beep(true); render();
+}, true);
+setTimeout(nsRetry, 1500);
 let beepCtx;
 function beep(ok){
   try {
@@ -1001,6 +1091,7 @@ function addScanCode(code, nm){
   let i = C.items.findIndex(it => bkey(it.barcode) === k);
   if(i >= 0){ const it = C.items.splice(i, 1)[0]; it.count++; C.items.unshift(it); }
   else C.items.unshift({ barcode: code, name: productName(code) || nm || '', count: 1 });
+  if(!C.items[0].name) nsWant(code);
   C.flash = true; beep(true); saveDraft(); render();
 }
 // ── Codes partagés (etiquettes.json in the repo, 2 Nov 2026): a barcode on
@@ -1733,7 +1824,7 @@ function unitHTML(){
     <div class="hint">Chaque scan ajoute 1. Touchez un produit pour changer sa date.</div></div>
     ${R.lines.length ? lastCard(R.lines[0].barcode, R.lines[0].name, R.lines.filter(x => bkey(x.barcode) === bkey(R.lines[0].barcode)).reduce((a, x) => a + x.qty, 0), ' · ' + expBadge(R.lines[0])) : ''}
     <div class="sect" style="margin-top:6px">${R.lines.length} ligne(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${R.lines.length ? R.lines.map((l, i) => `<div class="citem ${i === 0 && R.flash ? 'flash' : ''}">${thumb(l.barcode, l.name)}<div class="nm" data-line="${i}" role="button" tabindex="0"><strong>${esc(l.name || 'Produit inconnu')}</strong><small class="num">${esc(l.barcode)}</small> ${expBadge(l)}${l.name ? '' : `<input data-rname="${i}" placeholder="Nom du produit (obligatoire)" value="${esc(l.pendingName || '')}">`}</div>
+    <div class="list">${R.lines.length ? R.lines.map((l, i) => `<div class="citem ${i === 0 && R.flash ? 'flash' : ''}">${thumb(l.barcode, l.name)}<div class="nm" data-line="${i}" role="button" tabindex="0"><strong>${esc(l.name || 'Produit inconnu')}</strong><small class="num">${esc(l.barcode)}</small> ${expBadge(l)}${l.name ? '' : `<input data-rname="${i}" placeholder="Nom du produit (obligatoire)" value="${esc(l.pendingName || '')}">`}${nsHTML(l)}</div>
       <button data-rdec="${i}" aria-label="Moins">−</button><span class="c num">${l.qty}</span><button data-rinc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier article.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="rquit">Annuler</button><button class="go" id="rsend">Terminer la ${esc(R.kind.toLowerCase())}</button></div>`;
 }
@@ -1850,6 +1941,7 @@ function recvScan(raw){
   const kd = knownDate(k);
   const l = { barcode: code, name: productName(code), qty: 1, mode: kd ? kd.mode : 'later', expiry: kd ? kd.expiry : '', solde: kd ? !!kd.solde : false, active: true };
   R.lines.unshift(l); R.flash = true; beep(true); saveRecv(); render();
+  if(!l.name) nsWant(code);
   if(!kd) openDatePanel(l.name, code, null, r => setLineDate(R.lines.indexOf(l), r));
 }
 function bindUnit(){
