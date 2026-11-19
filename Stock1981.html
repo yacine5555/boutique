@@ -403,6 +403,7 @@ select.t{appearance:auto}
 .citem .nsbox .nsb,.nsbox .nsb{flex:1 1 100%;width:auto;height:auto;min-width:0;text-align:left;font:700 17px var(--body)!important;padding:12px 14px;border-radius:10px;border:2px solid #059669!important;background:#ecfdf5!important;color:#064e3b!important;cursor:pointer;line-height:1.25}
 .citem .nsbox .nsb.nsset,.nsbox .nsb.nsset{border-color:#2563eb!important;background:#eff6ff!important;color:#1e3a8a!important;flex:0 1 auto}.nsw{color:var(--mut,#6b7280)}
 .pwbtn{display:block;width:100%;margin-top:6px;text-align:left;font:700 16px var(--body);padding:11px 12px;border-radius:10px;border:2px dashed #d97706;background:#fffbeb;color:#78350f;cursor:pointer}
+.pwbtn.usd{border-color:#2563eb;background:#eff6ff;color:#1e3a8a}
 .pwbtn.set{border-style:solid;border-color:#059669;background:#ecfdf5;color:#064e3b}
 .jtabs{display:flex;gap:6px;margin:8px 0}.jtabs button{flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);font:700 15px var(--body);cursor:pointer}.jtabs button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
 .jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;max-height:52vh;overflow:auto;padding:2px}
@@ -560,6 +561,10 @@ async function flushQueue(tried){
         if(QUEUE.some(o => !REORG_ACTIONS[o.kind])) progress = true;
       }
       else if(d && d.error){ toast(d.error); if(/Utilisateur|code|introuvable/i.test(d.error)){ QUEUE.shift(); progress = true; } }
+    } else if(first.kind === 'cost'){
+      const d = await post({ action:'updateCost', barcode: first.body.barcode, cost: first.body.cost, by: first.by });
+      if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
+      else if(d && d.error){ if(/invalide/i.test(d.error)){ toast('Coût refusé : ' + d.error); QUEUE.shift(); progress = true; } }
     } else if(first.kind === 'count'){
       const d = await post(Object.assign({ action:'stock1981Count', by: first.by, userHash: first.hash }, first.body));
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
@@ -975,7 +980,7 @@ function countHTML(){
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}${isNewProd(it) ? `<button type="button" class="pwbtn${it.price ? ' set' : ''}" data-pricew="${i}">${it.price ? '💰 ' + fmt(it.price) + ' F' : '💰 Prix — toucher pour choisir'}</button>` : ''}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}${(() => { const c = it.cost || USDC[bkey(it.barcode)]; return `<button type="button" class="pwbtn usd${c ? ' set' : ''}" data-usdw="${i}">${c ? '🏷 ' + usdFmt(c) + ' $ (coût)' : '🏷 Prix US $ — toucher'}</button>`; })()}${isNewProd(it) ? `<button type="button" class="pwbtn${it.price ? ' set' : ''}" data-pricew="${i}">${it.price ? '💰 ' + fmt(it.price) + ' F' : '💰 Prix — toucher pour choisir'}</button>` : ''}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -985,6 +990,7 @@ function bindCount(){
   C.flash = false;
   const focus = () => { if(!document.querySelector('[data-name]:focus,[data-price]:focus') && $('#sheet').hidden) inp.focus({ preventScroll: true }); };
   document.querySelectorAll('[data-pricew]').forEach(b => b.onclick = e => { e.stopPropagation(); priceWheel(+b.dataset.pricew); });
+  document.querySelectorAll('[data-usdw]').forEach(b => b.onclick = e => { e.stopPropagation(); usdWheel(+b.dataset.usdw); });
   document.querySelectorAll('[data-price]').forEach(x => { x.oninput = () => { const v = parseInt(String(x.value).replace(/\D/g, ''), 10); C.items[+x.dataset.price].price = v > 0 ? v : 0; saveDraft(); }; x.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); x.blur(); inp.focus({ preventScroll: true }); } }; });
   inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addScan(inp.value); inp.value = ''; } };
   $('#camb').onclick = () => openCamera();
@@ -1028,6 +1034,56 @@ function priceWheel(i){
   document.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => set(v + Number(b.dataset.pw)));
   $('#pwno').onclick = closeSheet;
   $('#pwok').onclick = () => { const cur = C && C.items[i]; if(cur && cur.barcode === it.barcode){ cur.price = v; saveDraft(); } closeSheet(); render(); };
+}
+// 🏷 Prix US sur l'étiquette (19 Nov 2026) — beaucoup de produits ont encore
+// leur étiquette américaine : on la saisit au toucher (roues dollars / cents),
+// + taxe US 8,25 % (case cochée par défaut), et le COÛT USD part vers
+// Product Master (action updateCost du Code GS, comme la Fiche rapide).
+// Le prix de vente n'est jamais changé : on montre seulement le prix formule
+// (coût × 1200, arrondi à 500 F) à côté du prix actuel, pour comparer.
+// Les coûts partent APRÈS le comptage de l'étagère (un nouveau produit doit
+// d'abord exister dans Product Master).
+let USDC = lsj('s1981_usdc', {});
+function usdFmt(c){ return (Math.round(Number(c) * 100) / 100).toFixed(2).replace('.', ','); }
+function queueCosts(items){
+  if(!user) return;
+  (items || []).forEach(it => { if(it.cost > 0){ QUEUE.push({ kind:'cost', body:{ barcode: it.barcode, cost: it.cost }, by: user.name, hash: user.hash }); USDC[bkey(it.barcode)] = it.cost; } });
+  ls('s1981_usdc', JSON.stringify(USDC));
+}
+function usdWheel(i){
+  const it = C && C.items[i]; if(!it) return;
+  const RW = 48, D = 200;
+  let tax = ls('s1981_tax') !== '0';
+  let dol = it.tag ? Math.floor(it.tag) : 0, cen = it.tag ? Math.round((it.tag - Math.floor(it.tag)) * 100) : 98;
+  openSheet(`<h3>🏷 Prix US · ${esc(it.name || it.barcode)}</h3><div class="sub num">${esc(it.barcode)}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
+      <div style="font:800 26px var(--body)">$</div>
+      <div class="rwheel" id="uwd" style="flex:1" aria-label="Dollars"><div class="rw-pad"></div>${Array.from({ length: D + 1 }, (_, k) => `<div class="rw-i">${k}</div>`).join('')}<div class="rw-pad"></div></div>
+      <div style="font:800 26px var(--body)">,</div>
+      <div class="rwheel" id="uwc" style="flex:1" aria-label="Cents"><div class="rw-pad"></div>${Array.from({ length: 100 }, (_, k) => `<div class="rw-i">${String(k).padStart(2, '0')}</div>`).join('')}<div class="rw-pad"></div></div>
+    </div>
+    <label style="display:flex;gap:10px;align-items:center;font:600 16px var(--body);margin:4px 0 8px"><input type="checkbox" id="utax" ${tax ? 'checked' : ''} style="width:22px;height:22px"> + taxe US 8,25 %</label>
+    <div class="where" id="usum"></div>
+    <button class="go" id="uok">Valider</button>${it.cost ? '<button class="ghost" id="udel" style="color:var(--bad)">Effacer le coût</button>' : ''}<button class="ghost" id="uno">Annuler</button>`);
+  const wd = $('#uwd'), wc = $('#uwc'), sum = $('#usum');
+  const tag = () => dol + cen / 100, cost = () => Math.round(tag() * (tax ? 1.0825 : 1) * 100) / 100;
+  const show = () => {
+    const c = cost(), f = Math.round(c * 1200 / 500) * 500, p = priceOf(it.barcode) || it.price || 0;
+    sum.innerHTML = `<div><span>Étiquette</span><b class="num">${usdFmt(tag())} $</b></div><div><span>Coût${tax ? ' (avec taxe)' : ''}</span><b class="num">${usdFmt(c)} $</b></div>
+      <div class="here"><span>Prix formule</span><b class="num">${c ? fmt(f) + ' F' : '—'}</b></div><div><span>Prix actuel</span><b class="num">${p ? fmt(p) + ' F' : '—'}</b></div>`;
+  };
+  wd.scrollTop = dol * RW; wc.scrollTop = cen * RW; show();
+  let t1 = null, t2 = null;
+  wd.onscroll = () => { clearTimeout(t1); t1 = setTimeout(() => { dol = Math.max(0, Math.min(D, Math.round(wd.scrollTop / RW))); show(); }, 90); };
+  wc.onscroll = () => { clearTimeout(t2); t2 = setTimeout(() => { cen = Math.max(0, Math.min(99, Math.round(wc.scrollTop / RW))); show(); }, 90); };
+  $('#utax').onchange = e => { tax = e.target.checked; ls('s1981_tax', tax ? '1' : '0'); show(); };
+  $('#uno').onclick = closeSheet;
+  const del = $('#udel'); if(del) del.onclick = () => { const cur = C && C.items[i]; if(cur){ delete cur.cost; delete cur.tag; saveDraft(); } closeSheet(); render(); };
+  $('#uok').onclick = () => {
+    const cur = C && C.items[i]; if(!cur || cur.barcode !== it.barcode){ closeSheet(); return; }
+    if(!tag()){ toast('Choisissez le prix de l’étiquette.'); return; }
+    cur.tag = tag(); cur.cost = cost(); saveDraft(); closeSheet(); render(); beep(true);
+  };
 }
 function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); const p = document.querySelector('[data-price="' + i + '"]'); if(p) p.focus(); }
 // A product the master list does not know yet, with no price: its name and price typed here go
@@ -1214,6 +1270,7 @@ function finishCount(){
         at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count, price: it.price || 0 })) };
       applyCountLocal(Object.assign({ by: user.name }, body));
       QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+      queueCosts(C.items);
       ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
       C = null; saveDraft(); closeSheet();
       VIEW = { screen:'zone', loc: body.location, zone: body.zone, tab:'shelves' }; history.replaceState(VIEW, ''); render();
@@ -1239,6 +1296,7 @@ function finishCount(){
       at: new Date().toISOString(), items: C.items.map(it => ({ barcode: it.barcode, name: it.name, count: it.count, price: it.price || 0 })) };
     applyCountLocal(Object.assign({ by: user.name }, body));
     QUEUE.push({ kind:'count', body, by: user.name, hash: user.hash });
+    queueCosts(C.items);
     ls('s1981_queue', JSON.stringify(QUEUE)); ls('s1981_cache', JSON.stringify(DATA));
     const nx = C.next;
     C = null; saveDraft(); closeSheet();
