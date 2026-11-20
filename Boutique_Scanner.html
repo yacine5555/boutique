@@ -1110,14 +1110,18 @@ input,select{font-family:inherit}
 .cat-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .cat-tab{border:1.5px solid #0f766e;color:#0f766e;background:#fff;border-radius:20px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer}
 .cat-tab.on{background:#0f766e;color:#fff}
-.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;overflow-y:auto;min-height:120px}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;overflow-y:auto;min-height:120px}
+.cat-tile .stk{font-size:13px;font-weight:800;margin-top:4px;color:#0f766e}.cat-tile .stk.low{color:#b91c1c}.cat-tile .stk.unk{color:#94a3b8;font-weight:600}
+.cat-tile .pkb{margin-top:6px;border:1.5px dashed #b45309;background:#fffbeb;color:#92400e;border-radius:8px;padding:7px 6px;font-size:12.5px;font-weight:700;cursor:pointer}
+.catadm-x{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;margin:2px 0 8px 54px;color:var(--ink3,#555)}.catadm-x input{width:auto;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px}
+
 .cat-tile{display:flex;flex-direction:column;align-items:stretch;border:1.5px solid var(--border,#e5e7eb);border-radius:10px;background:#fff;cursor:pointer;padding:6px;text-align:left}
 .cat-tile:hover{border-color:#0f766e;box-shadow:0 2px 8px rgba(15,118,110,.15)}
 .cat-tile .ph{aspect-ratio:1/1;border-radius:7px;background:#f6f7f9;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}
 .cat-tile .ph img{width:100%;height:100%;object-fit:contain}
 .cat-tile .ph .ini{font-size:26px;font-weight:800;color:#94a3b8}
-.cat-tile .nm{font-size:12px;font-weight:600;line-height:1.25;color:var(--ink,#111);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:3.75em}
-.cat-tile .pr{font-size:12.5px;font-weight:800;color:#15803d;margin-top:3px}
+.cat-tile .nm{font-size:14px;font-weight:700;line-height:1.25;color:var(--ink,#111);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:3.75em}
+.cat-tile .pr{font-size:15px;font-weight:800;color:#15803d;margin-top:3px}
 .cat-tile .pr.none{color:#b45309;font-weight:700}
 .catadm-row{display:grid;grid-template-columns:120px 1fr 200px 30px 30px 30px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f1f1}
 .catadm-row img,.catadm-row .noimg{width:120px;height:120px;object-fit:contain;border-radius:8px;background:#f6f7f9;display:flex;align-items:center;justify-content:center;font-size:12px;color:#94a3b8;cursor:pointer;border:1px solid #e5e7eb}
@@ -1699,7 +1703,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-o</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-p</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -1873,6 +1877,14 @@ input,select{font-family:inherit}
           <select class="dlv-field" id="catadm-list" style="width:auto;margin:0" onchange="catAdmPick(this.value)"></select>
           <button class="btn-sm btn-outline" onclick="catAdmNewList()">＋ Nouvelle liste</button>
           <button class="btn-sm btn-outline" onclick="catAdmDeleteList()">🗑 Supprimer la liste</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:12.5px">
+          <label for="catadm-kw"><b>🔑 Mot qui ouvre la page à la caisse :</b></label>
+          <input class="dlv-field" id="catadm-kw" placeholder="ex. bar soap" autocomplete="off" style="width:220px;margin:0" oninput="_catAdm.kw=this.value;_catAdm.dirty=true">
+          <span class="dlv-dim">La caissière tape ce mot dans la case du scan + Entrée. Plusieurs mots : séparez-les par une virgule.</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn-sm btn-outline" onclick="catAdmCreateNoCode()">➕ Nouveau produit sans code-barres (savon à l'unité…)</button>
         </div>
         <input class="dlv-field" id="catadm-search" type="search" placeholder="Ajouter : nom du produit ou code-barres…" autocomplete="off"
           oninput="catAdmSearch(this.value)" style="margin:8px 0 4px"/>
@@ -3468,6 +3480,7 @@ function processScan() {
   if(_reorgCatch(raw)) return;
   if(_ouCatch(raw)) return;
   if(_pnCatch(raw)) return;
+  if(_catKeyword(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
   raw = resolveAlias(raw);
   if(_lblTill(raw)) return;
@@ -7396,6 +7409,8 @@ function _adminTabBadges(){
 //  prices, remises and the sale work exactly as with a scanned barcode.
 // ══════════════════════════════════════════
 let CATALOGUE = (function(){ try { return JSON.parse(localStorage.getItem('bc_catalogue') || '{}'); } catch(e){ return {}; } })();
+// Per-page settings from the Sheet (21 Nov 2026): { page: { kw: 'bar soap, savon' } }
+let CATALOGUE_META = (function(){ try { return JSON.parse(localStorage.getItem('bc_catalogue_meta') || '{}'); } catch(e){ return {}; } })();
 let _catTab = null, _photoIndex = null, _catAdm = { list: null, items: [] };
 function _catEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 function _catNorm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
@@ -7404,10 +7419,11 @@ async function loadCatalogue(){
   try {
     const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getCatalogue', { cache: 'no-store' });
     const d = await r.json();
-    if(d && d.success && d.lists){ CATALOGUE = d.lists; try { localStorage.setItem('bc_catalogue', JSON.stringify(CATALOGUE)); } catch(e){} return true; }
+    if(d && d.success && d.lists){ CATALOGUE = d.lists; _catSetMeta(d.meta); try { localStorage.setItem('bc_catalogue', JSON.stringify(CATALOGUE)); } catch(e){} return true; }
   } catch(e){}
   return false;
 }
+function _catSetMeta(m){ if(!m) return; CATALOGUE_META = m; try { localStorage.setItem('bc_catalogue_meta', JSON.stringify(m)); } catch(e){} }
 async function loadPhotoIndex(){
   if(_photoIndex) return _photoIndex;
   try { const r = await fetch('images/products/index.json', { cache: 'no-store' }); _photoIndex = await r.json(); }
@@ -7428,23 +7444,38 @@ function suggestPhoto(name){
   return score >= 0.45 ? best : '';
 }
 function _catPriceOf(bc){ return bc ? psPriceFor(bc) : null; }
+// Photo: "drive:<id>" (taken at the till, Admin → Catalogue) or a file of images/products/.
+function _catImgSrc(photo){
+  const p = String(photo || '');
+  if(p.indexOf('drive:') === 0) return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.slice(6)) + '&sz=w800';
+  return 'images/products/' + encodeURIComponent(p);
+}
 function _catTileHTML(it, idx){
   const name = it.name || (lookupBarcode(it.barcode) || {}).name || it.barcode;
   const price = _catPriceOf(it.barcode);
   const ini = _catEsc(String(name).trim().slice(0, 2).toUpperCase());
-  const img = it.photo ? '<img src="images/products/' + encodeURIComponent(it.photo) + '" alt="" loading="lazy" onerror="this.outerHTML=\'<span class=ini>' + ini + '</span>\'">' : '<span class="ini">' + ini + '</span>';
-  return '<button type="button" class="cat-tile" onclick="catPick(' + idx + ')" title="' + _catEsc(name) + '">' +
+  const img = it.photo ? '<img src="' + _catImgSrc(it.photo) + '" alt="" loading="lazy" onerror="this.outerHTML=\'<span class=ini>' + ini + '</span>\'">' : '<span class="ini">' + ini + '</span>';
+  let stk = '';
+  if(_catTab !== '*' && it.barcode){
+    const q = _catStockOf(it.barcode);
+    stk = q == null ? '<div class="stk unk">' + (_catStk.loading ? 'Stock…' : 'Stock : pas compté') + '</div>'
+      : '<div class="stk' + (q <= 2 ? ' low' : '') + '">En stock : ' + q + '</div>';
+  }
+  const pk = (_catTab !== '*' && it.pack && it.per > 0) ? '<div class="pkb" onclick="event.stopPropagation();catOpenPack(' + idx + ')">📦 J\'ouvre un paquet (+' + it.per + ')</div>' : '';
+  return '<div role="button" tabindex="0" class="cat-tile" onclick="catPick(' + idx + ')" title="' + _catEsc(name) + '">' +
     '<div class="ph">' + img + '</div><div class="nm">' + _catEsc(name) + '</div>' +
-    '<div class="pr' + (price == null ? ' none' : '') + '">' + (price == null ? 'prix à saisir' : formatCFA(price)) + '</div></button>';
+    '<div class="pr' + (price == null ? ' none' : '') + '">' + (price == null ? 'prix à saisir' : formatCFA(price)) + '</div>' + stk + pk + '</div>';
 }
 let _catShown = [];
-function openCatalogue(){
+function openCatalogue(tab){
   const lists = Object.keys(CATALOGUE);
+  if(typeof tab === 'string' && lists.indexOf(tab) >= 0) _catTab = tab;
   if(!_catTab || (_catTab !== '*' && lists.indexOf(_catTab) < 0)) _catTab = lists[0] || '*';
   document.getElementById('cat-search').value = '';
   document.getElementById('cat-modal').classList.add('open');
   renderCatalogue();
   loadCatalogue().then(ok => { if(ok) renderCatalogue(); });
+  _catLoadStock().then(() => { if(document.getElementById('cat-modal').classList.contains('open')) renderCatalogue(); });
   setTimeout(() => document.getElementById('cat-search').focus(), 80);
 }
 function closeCatalogue(){
@@ -7489,6 +7520,7 @@ function catPick(i){
 async function renderCatalogueAdmin(){
   await loadPhotoIndex();
   await loadCatalogue();
+  _catLoadStock().then(() => catAdmRenderItems());
   const sel = document.getElementById('catadm-list'); if(!sel) return;
   const lists = Object.keys(CATALOGUE);
   if(!lists.length && !_catAdm.list){ _catAdm.list = 'Thaïlande'; _catAdm.items = []; }
@@ -7500,13 +7532,14 @@ async function renderCatalogueAdmin(){
 }
 function catAdmPick(l){
   if(_catAdm.dirty && !confirm('Les changements de « ' + _catAdm.list + ' » ne sont pas enregistrés. Changer de liste ?')){ document.getElementById('catadm-list').value = _catAdm.list; return; }
-  _catAdm = { list: l, items: JSON.parse(JSON.stringify(CATALOGUE[l] || [])), dirty: false };
+  _catAdm = { list: l, items: JSON.parse(JSON.stringify(CATALOGUE[l] || [])), dirty: false, kw: null };
   catAdmRenderItems();
 }
 function catAdmNewList(){
-  const n = (prompt('Nom de la nouvelle liste (ex. Thaïlande, Coréen, Parfums) :') || '').trim();
+  const n = (prompt('Nom de la nouvelle page (ex. Savons en barre, Thaïlande, Parfums) :') || '').trim();
   if(!n) return;
-  _catAdm = { list: n, items: [], dirty: true };
+  const kw = (prompt('Mot à taper à la caisse pour ouvrir cette page (ex. bar soap). Laissez vide si aucun :') || '').trim();
+  _catAdm = { list: n, items: [], dirty: true, kw: kw };
   renderCatalogueAdmin();
 }
 async function catAdmDeleteList(){
@@ -7546,15 +7579,17 @@ function catAdmRenderItems(){
   const el = document.getElementById('catadm-items'); if(!el) return;
   const photos = _photoIndex || [];
   const usedBy = {}; _catAdm.items.forEach((it, i) => { if(it.photo) usedBy[it.photo] = (usedBy[it.photo] || 0) + 1; });
+  const kwEl = document.getElementById('catadm-kw');
+  if(kwEl && document.activeElement !== kwEl) kwEl.value = _catAdm.kw != null ? _catAdm.kw : ((CATALOGUE_META[_catAdm.list] || {}).kw || '');
   el.innerHTML = '<div class="dlv-dim" style="margin-bottom:4px">' + _catEsc(_catAdm.list || '') + ' : ' + _catAdm.items.length + ' produit(s)' + (_catAdm.dirty ? ' · <b style="color:#b45309">pas encore enregistré</b>' : '') + '</div>' +
     (_catAdm.items.length ? _catAdm.items.map((it, i) =>
       '<div class="catadm-row">' +
-        (it.photo ? '<img src="images/products/' + encodeURIComponent(it.photo) + '" alt="" title="Changer la photo" onclick="catAdmPhotoPicker(' + i + ')" onerror="this.outerHTML=\'<div class=noimg onclick=catAdmPhotoPicker(' + i + ')>?</div>\'">' : '<div class="noimg" title="Choisir une photo" onclick="catAdmPhotoPicker(' + i + ')">🖼 Choisir</div>') +
+        (it.photo ? '<img src="' + _catImgSrc(it.photo) + '" alt="" title="Changer la photo" onclick="catAdmPhotoPicker(' + i + ')" onerror="this.outerHTML=\'<div class=noimg onclick=catAdmPhotoPicker(' + i + ')>?</div>\'">' : '<div class="noimg" title="Choisir une photo" onclick="catAdmPhotoPicker(' + i + ')">🖼 Choisir</div>') +
         '<div style="font-size:12.5px;line-height:1.25"><b>' + _catEsc(it.name) + '</b><div class="dlv-dim">' + _catEsc(it.barcode) + (usedBy[it.photo] > 1 ? ' · <span style="color:#b45309">photo utilisée 2 fois</span>' : '') + '</div></div>' +
         '<select onchange="catAdmSet(' + i + ',\'photo\',this.value)"><option value="">— pas de photo —</option>' +
           photos.map(f => '<option value="' + _catEsc(f) + '"' + (f === it.photo ? ' selected' : '') + '>' + _catEsc(f.replace(/\.[a-z]+$/i, '')) + '</option>').join('') + '</select>' +
         '<button title="Monter" onclick="catAdmMove(' + i + ',-1)">↑</button><button title="Descendre" onclick="catAdmMove(' + i + ',1)">↓</button>' +
-        '<button title="Retirer" style="color:#b91c1c" onclick="catAdmDel(' + i + ')">✕</button></div>').join('')
+        '<button title="Retirer" style="color:#b91c1c" onclick="catAdmDel(' + i + ')">✕</button></div>' + _catAdmExtraHTML(it, i)).join('')
     : '<div class="dlv-dim">Liste vide : cherchez un produit ci-dessus pour l\'ajouter.</div>');
 }
 // Big photo picker: tap a product's photo in Admin → Catalogue to see every photo large.
@@ -7583,16 +7618,206 @@ async function _catAdmPost(payload){
     const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(Object.assign({ key: writeKey, action: 'setCatalogueList' }, payload)) });
     const d = await r.json();
-    if(d && d.success && d.lists){ CATALOGUE = d.lists; try { localStorage.setItem('bc_catalogue', JSON.stringify(CATALOGUE)); } catch(e){}
+    if(d && d.success && d.lists){ CATALOGUE = d.lists; _catSetMeta(d.meta); try { localStorage.setItem('bc_catalogue', JSON.stringify(CATALOGUE)); } catch(e){}
       msg.textContent = '✅ Enregistré — visible sur tous les ordinateurs.'; return true; }
-    msg.textContent = '❌ ' + ((d && d.error) || 'Réponse inattendue (redéployez Code_updated.gs).');
+    msg.textContent = '❌ ' + ((d && d.error) || 'Réponse inattendue (collez « LATEST - Code GS » et redéployez).');
   } catch(e){ msg.textContent = '❌ Pas de connexion.'; }
   return false;
 }
 async function catAdmSave(){
   if(!_catAdm.list) return;
-  const ok = await _catAdmPost({ list: _catAdm.list, items: _catAdm.items.map(it => ({ barcode: it.barcode, name: it.name, photo: it.photo || '' })) });
-  if(ok){ _catAdm.dirty = false; catAdmRenderItems(); }
+  const kwEl = document.getElementById('catadm-kw');
+  const kw = kwEl ? kwEl.value.trim() : '';
+  const clash = kw && _catKwList(kw).find(k => Object.keys(CATALOGUE_META).some(l => l !== _catAdm.list && _catKwList((CATALOGUE_META[l] || {}).kw).indexOf(k) >= 0));
+  if(clash){ document.getElementById('catadm-msg').textContent = '❌ Le mot « ' + clash + ' » ouvre déjà une autre page : choisissez-en un autre.'; return; }
+  const ok = await _catAdmPost({ list: _catAdm.list, keyword: kw, items: _catAdm.items.map(it => ({ barcode: it.barcode, name: it.name, photo: it.photo || '', pack: it.pack || '', per: it.per || '' })) });
+  if(ok){ _catAdm.dirty = false; _catAdm.kw = null; catAdmRenderItems(); }
+}
+
+// ══════════════════════════════════════════
+//  CATALOGUE PAGES (21 Nov 2026, v7-nov-p) — savons en barre, etc.
+//  • A page can have a keyword (Admin → 📚 Catalogue → 🔑): typed in the scan
+//    box + Entrée, it opens that page directly (exact word, not a search).
+//  • Each tile shows the stock of THIS store (Zone Stock, all zones added up).
+//  • A unit sold from packs (e.g. one bar of a pack of 8) can name its pack:
+//    « 📦 J'ouvre un paquet » = pack −1 / unit +8 in the stock (reason
+//    « Pack ouvert », via stock1981Adjust with till:true).
+//  • Admin: 📷 photo taken here (saved in Drive), counter stock, products
+//    with no barcode get a store code in one step.
+// ══════════════════════════════════════════
+function _catKwList(s){ return String(s || '').split(/[,;]/).map(_catNorm).filter(Boolean); }
+function _catKeyword(raw){
+  const n = _catNorm(raw);
+  if(!n || !/[a-z]/.test(n)) return false;
+  const page = Object.keys(CATALOGUE_META).find(l => CATALOGUE[l] && _catKwList((CATALOGUE_META[l] || {}).kw).indexOf(n) >= 0);
+  if(!page) return false;
+  openCatalogue(page);
+  return true;
+}
+let _catStk = { loc: '', map: null, loading: false, at: 0 };
+function _catLoc(){ const l = _defaultPriceLocation(); return l === 'Store 2' ? 'Store 2' : 'Store 1'; }
+async function _catLoadStock(force){
+  const loc = _catLoc();
+  if(!productSyncUrl) return;
+  if(!force && _catStk.map && _catStk.loc === loc && Date.now() - _catStk.at < 60000) return;
+  _catStk.loading = true;
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=getZoneStock&location=' + encodeURIComponent(loc), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && d.success && d.zones){
+      const map = {};
+      Object.keys(d.zones).forEach(z => (d.zones[z].items || []).forEach(it => {
+        const k = _bcKeyClient(String(it.barcode)); if(!k) return;
+        const m = map[k] = map[k] || { qty: 0, zones: {} };
+        const q = Number(it.qty) || 0; m.qty += q; m.zones[z] = (m.zones[z] || 0) + q;
+      }));
+      _catStk = { loc: loc, map: map, loading: false, at: Date.now() };
+      return;
+    }
+  } catch(e){}
+  _catStk.loading = false;
+}
+function _catStockOf(bc){
+  if(!_catStk.map) return null;
+  const m = _catStk.map[_bcKeyClient(String(bc))];
+  return m ? m.qty : 0;
+}
+// Zone holding the most of a product in this store (getZoneStock lists only zones with stock > 0).
+function _catBestZone(bc, fallback){
+  const m = _catStk.map && _catStk.map[_bcKeyClient(String(bc))];
+  if(!m) return fallback;
+  let best = fallback, q = 0;
+  Object.keys(m.zones).forEach(z => { if(m.zones[z] > q){ q = m.zones[z]; best = z; } });
+  return best;
+}
+async function _catStockPost(ops){
+  if(!productSyncUrl || !writeKey) throw new Error('lien produits ou clé manquant sur cet ordinateur');
+  ops.forEach((op, i) => { op.opId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + i; });
+  const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: writeKey, action: 'stock1981Adjust', till: true, by: currentEmployee || 'caisse', ops: ops }) });
+  const d = await r.json();
+  if(!d || !d.success) throw new Error((d && d.error) || 'réponse inattendue — collez « LATEST - Code GS » et redéployez');
+  const bad = (d.results || []).find(x => x && x.ok === false);
+  if(bad) throw new Error(bad.error || 'refusé');
+  return d;
+}
+async function catOpenPack(i){
+  const it = _catShown[i]; if(!it || !it.pack || !(it.per > 0)) return;
+  const loc = _catLoc(), store = loc === 'Store 2' ? 'Ouaga 2000' : 'Balkuy';
+  const packName = (lookupBarcode(it.pack) || {}).name || ('paquet ' + it.pack);
+  const n = parseInt(prompt('📦 ' + store + ' — combien de paquets ouvrez-vous ?\n\n' + packName + '\n→ ' + it.per + ' × « ' + (it.name || it.barcode) + ' » par paquet', '1'), 10);
+  if(!(n > 0)) return;
+  if(n > 5 && !confirm(n + ' paquets, c\'est beaucoup. Confirmer ?')) return;
+  await _catLoadStock();
+  const packZone = _catBestZone(it.pack, 'Non placé'), unitZone = _catBestZone(it.barcode, 'Comptoir');
+  const note = n + ' paquet(s) ' + it.pack + ' ouvert(s) à la caisse';
+  try {
+    await _catStockPost([
+      { barcode: it.pack, name: packName, mode: 'delta', reason: 'Pack ouvert', location: loc, zone: packZone, qty: -n, note: note },
+      { barcode: it.barcode, name: it.name || '', mode: 'delta', reason: 'Pack ouvert', location: loc, zone: unitZone, qty: it.per * n, note: note }
+    ]);
+    const add = (bc, z, q) => { const k = _bcKeyClient(String(bc)); const m = _catStk.map = _catStk.map || {}; const e = m[k] = m[k] || { qty: 0, zones: {} }; e.qty += q; e.zones[z] = (e.zones[z] || 0) + q; };
+    add(it.pack, packZone, -n); add(it.barcode, unitZone, it.per * n);
+    showToast('📦 ' + n + ' paquet(s) ouvert(s) : +' + (it.per * n) + ' à vendre à l\'unité', 3500);
+    renderCatalogue();
+  } catch(e){ alert('Pas enregistré : ' + e.message + '\nRéessayez quand la connexion revient.'); }
+}
+
+// ---- Admin extras: photo, pack, counter stock, new product without barcode ----
+function _catAdmExtraHTML(it, i){
+  const q = _catStockOf(it.barcode);
+  return '<div class="catadm-x">' +
+    '<button class="btn-sm btn-outline" onclick="catAdmTakePhoto(' + i + ')">📷 Prendre / choisir la photo</button>' +
+    '<span>📦 Vendu à l\'unité depuis le paquet :</span><input inputmode="numeric" placeholder="code du paquet" value="' + _catEsc(it.pack || '') + '" style="width:140px" onchange="catAdmSetQuiet(' + i + ',\'pack\',this.value.trim())">' +
+    '<span>×</span><input inputmode="numeric" placeholder="unités" value="' + _catEsc(it.per || '') + '" style="width:60px" onchange="catAdmSetQuiet(' + i + ',\'per\',Math.max(0,parseInt(this.value,10)||0))">' +
+    '<span>· Stock ' + (_catLoc() === 'Store 2' ? 'Ouaga 2000' : 'Balkuy') + ' : <b>' + (q == null ? '?' : q) + '</b></span>' +
+    '<input inputmode="numeric" id="catadm-q' + i + '" placeholder="compté" style="width:70px"><button class="btn-sm btn-outline" onclick="catAdmSetStock(' + i + ')">✔ Enregistrer le compte</button>' +
+    '</div>';
+}
+function catAdmSetQuiet(i, f, v){
+  const it = _catAdm.items[i]; if(!it) return;
+  it[f] = f === 'pack' ? (v ? canonicalBarcode(v) : '') : v;
+  _catAdm.dirty = true;
+  document.getElementById('catadm-msg').textContent = 'Changement noté — appuyez sur 💾 Enregistrer la liste.';
+}
+function catAdmTakePhoto(i){
+  const it = _catAdm.items[i]; if(!it) return;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment');
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const msg = document.getElementById('catadm-msg');
+    if(!productSyncUrl || !writeKey){ msg.textContent = '❌ Lien produits ou clé manquant sur cet ordinateur.'; return; }
+    msg.textContent = '📷 Envoi de la photo…';
+    try {
+      const url = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+      const img = await new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = url; });
+      const k = Math.min(1, 1000 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ key: writeKey, action: 'setCataloguePhoto', barcode: it.barcode, name: it.name, dataUrl: c.toDataURL('image/jpeg', 0.82) }) });
+      const d = await r.json();
+      if(!d || !d.success || !d.id) throw new Error((d && d.error) || 'collez « LATEST - Code GS » et redéployez');
+      it.photo = 'drive:' + d.id; _catAdm.dirty = true;
+      catAdmRenderItems();
+      msg.textContent = '✅ Photo reçue — appuyez sur 💾 Enregistrer la liste.';
+    } catch(e){ msg.textContent = '❌ Photo pas envoyée : ' + (e && e.message || 'connexion ?'); }
+  };
+  inp.click();
+}
+async function catAdmSetStock(i){
+  const it = _catAdm.items[i]; if(!it) return;
+  const v = parseInt((document.getElementById('catadm-q' + i) || {}).value, 10);
+  const msg = document.getElementById('catadm-msg');
+  if(!(v >= 0)){ msg.textContent = 'Écrivez le nombre compté.'; return; }
+  const loc = _catLoc();
+  if(!confirm('Stock de « ' + it.name + ' » à ' + (loc === 'Store 2' ? 'Ouaga 2000' : 'Balkuy') + ' = ' + v + ' ?')) return;
+  msg.textContent = 'Envoi du compte…';
+  try {
+    await _catLoadStock(true);
+    const m = _catStk.map && _catStk.map[_bcKeyClient(String(it.barcode))];
+    const zones = m ? Object.keys(m.zones) : [];
+    const ops = [{ barcode: it.barcode, name: it.name, mode: 'set', reason: 'Recomptage', location: loc, zone: zones.length === 1 ? zones[0] : 'Comptoir', qty: v, note: 'compté à la caisse (Catalogue)' }];
+    // Kept in several zones: everything goes to « Comptoir », the other zones go to 0.
+    if(zones.length > 1) zones.filter(z => z !== 'Comptoir').forEach(z => ops.push({ barcode: it.barcode, name: it.name, mode: 'set', reason: 'Recomptage', location: loc, zone: z, qty: 0, note: 'regroupé au Comptoir' }));
+    await _catStockPost(ops);
+    await _catLoadStock(true);
+    catAdmRenderItems();
+    msg.textContent = '✅ Stock enregistré : ' + v;
+  } catch(e){ msg.textContent = '❌ Pas enregistré : ' + e.message; }
+}
+async function catAdmCreateNoCode(){
+  const msg = document.getElementById('catadm-msg');
+  if(!_catAdm.list){ msg.textContent = 'Choisissez ou créez d\'abord une page.'; return; }
+  if(!productSyncUrl || !writeKey){ msg.textContent = '❌ Lien produits ou clé manquant sur cet ordinateur.'; return; }
+  const name = (prompt('Nom du produit vendu à l\'unité (marque, parfum, taille) :') || '').trim().replace(/\s+/g, ' ');
+  if(name.length < 3) return;
+  const price = parseInt(String(prompt('Prix de vente à l\'unité (CFA) :') || '').replace(/\D/g, ''), 10);
+  if(!(price > 0)){ msg.textContent = 'Prix manquant : rien n\'a été créé.'; return; }
+  if(priceNeedsDigitWarning(price) && !confirm(formatCFA(price) + ' — plus de 6 chiffres. Confirmer ?')) return;
+  msg.textContent = 'Vérification des codes…';
+  try {
+    const fresh = await loadPriceList(true);
+    if(!fresh) throw new Error('impossible de lire le Product Master (connexion ?) — rien n\'a été créé');
+    const sim = _ccSimilar(name);
+    if(sim.length && sim[0].score >= 2) throw new Error('« ' + sim[0].p.name + ' » existe déjà avec le code ' + sim[0].p.code + ' : ajoutez-le avec la recherche ci-dessus');
+    const code = _ccNextCode();
+    if(!code) throw new Error('plus de code libre');
+    msg.textContent = 'Enregistrement de ' + code + '…';
+    const a = await _postProductSync({ key: writeKey, action: 'addNewProductWithStock', name: name, barcode: code, category: '', location: _catLoc(), qty: 0 });
+    if(!a || !a.success) throw new Error((a && a.error) || 'ajout du produit refusé');
+    if(a.masterResult && a.masterResult.success === false) throw new Error(a.masterResult.existingBarcode ? 'existe déjà avec le code ' + a.masterResult.existingBarcode : (describePriceSaveError(a.masterResult.error) || 'produit déjà présent'));
+    const d = await _postProductSync({ key: writeKey, action: 'updatePrice', barcode: code, newPrice: price,
+      location: storeBranding.name || '', session: currentEmployee || '', app: 'Scanner (Catalogue)' });
+    BARCODE_DB[code] = { name: name, category: '', brand: '', unit: '' };
+    if(d && d.success){ PRODUCT_PRICES[code] = price; try { localStorage.setItem('bc_psync_prices', JSON.stringify(PRODUCT_PRICES)); } catch(e){} }
+    (_plAll = _plAll || []).push({ barcode: code, name: name, m: d && d.success ? price : null, s1: null, s2: null }); _plIndex();
+    _catAdm.items.push({ barcode: code, name: name, photo: '' });
+    _catAdm.dirty = true;
+    catAdmRenderItems();
+    msg.textContent = '✅ ' + name + ' créé (code ' + code + ', ' + formatCFA(price) + '). Ajoutez la photo et le paquet, puis 💾 Enregistrer la liste.';
+  } catch(e){ msg.textContent = '❌ ' + e.message; }
 }
 
 // ══════════════════════════════════════════
