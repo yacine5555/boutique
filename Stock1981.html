@@ -753,6 +753,8 @@ function render(){
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'sorties') t.innerHTML = 'Sorties<small>' + esc(locName(SOV.loc)) + '</small>';
+  else if(v.screen === 'exp') t.innerHTML = 'Péremptions<small>Périmés et dates courtes</small>';
+  else if(v.screen === 'sens') t.innerHTML = 'Produits sensibles<small>Comptés à l’aveugle à la caisse</small>';
   else if(v.screen === 'valeur') t.innerHTML = 'Valeur & dormants<small>Ce qu’il y a en stock, ce qui ne se vend pas</small>';
   else if(v.screen === 'restock') t.innerHTML = 'À réassortir<small>Presque vides depuis le comptage</small>';
   else if(v.screen === 'boxput') t.innerHTML = 'Ranger en scannant<small>' + (BP && BP.toZone ? 'vers ' + esc(BP.toZone) : esc(locName(v.loc))) + '</small>';
@@ -769,6 +771,8 @@ function render(){
   if(v.screen === 'boxput'){ m.innerHTML = banner() + boxPutHTML(); bindBoxPut(); return; }
   if(v.screen === 'sorties'){ m.innerHTML = banner() + sortiesHTML(); bindSorties(); return; }
   if(v.screen === 'valeur'){ m.innerHTML = banner() + valHTML(); bindVal(); return; }
+  if(v.screen === 'exp'){ m.innerHTML = banner() + expHTML(); bindExp(); return; }
+  if(v.screen === 'sens'){ m.innerHTML = banner() + sensHTML(); bindSens(); return; }
   if(v.screen === 'restock'){ m.innerHTML = banner() + restockHTML(); document.querySelectorAll('[data-rsloc]').forEach(b => b.onclick = () => { VIEW.rsloc = b.dataset.rsloc; history.replaceState(VIEW, ''); render(); }); document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc)); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
   if(v.screen === 'recv' || v.screen === 'arrival'){ m.innerHTML = banner() + (v.screen === 'recv' ? recvHTML() : arrivalHTML(v.aid)); bindRecv(); return; }
@@ -807,6 +811,8 @@ function homeHTML(){
     + tool('transit', '🚚', 'En route', TR ? trN + ' envoi(s)' + (trReq ? ' · ' + trReq + ' dem.' : '') : '', trLate ? '!' : '')
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
+    + tool('exp', '⏰', 'Péremptions', 'périmés · à surveiller')
+    + tool('sens', '🔒', 'Sensibles', SENS && SENS.gaps.length ? SENS.gaps.length + ' écart(s)' : 'comptés à la caisse', SENS && SENS.gaps.length ? SENS.gaps.length : '')
     + (meIsAdmin() ? tool('bilan', '📊', 'Bilan', 'du jour') : '')
     + tool('reorg', '🔄', 'Réorg.', 'repérage')
     + tool('recv', '📦', 'Réception', R ? 'carton ' + esc(R.unit) : 'arrivage')
@@ -937,6 +943,8 @@ function bindMain(){
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; q.onkeydown = e => { if(e.key === 'Enter'){ const sh = parseShelf(q.value); if(sh){ e.preventDefault(); q.value = ''; VIEW.q = ''; shelfScanned(sh); } else if(/^\d{6,}$/.test(q.value.trim())){ e.preventDefault(); productWhere(q.value.trim()); } } }; renderResults(); }
   const ps = document.querySelector('[data-act="pscan"]'); if(ps) ps.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh) shelfScanned(sh); else productWhere(code); });
   const fl = document.querySelector('[data-act="flags"]'); if(fl) fl.onclick = flagsOpen;
+  const xp = document.querySelector('[data-act="exp"]'); if(xp) xp.onclick = () => { go({ screen:'exp' }); EXO = null; loadExo(); };
+  const sn = document.querySelector('[data-act="sens"]'); if(sn) sn.onclick = () => { go({ screen:'sens' }); SENS = null; loadSens(); };
   const vl = document.querySelector('[data-act="valeur"]'); if(vl) vl.onclick = () => { go({ screen:'valeur' }); loadSSum(); };
   const rs = document.querySelector('[data-act="restock"]'); if(rs) rs.onclick = () => { go({ screen:'restock' }); ['Store 1', 'Store 2'].forEach(l => loadSorties(l)); };
   const sp = document.querySelector('[data-act="sphoto"]'); if(sp) sp.onclick = () => zonePhotoTake(VIEW.loc, '__store');
@@ -3060,6 +3068,165 @@ function flagsOpen(){
 //  6 months of stock at the pace of the last 90 days.
 // ══════════════════════════════════════════════════════════════════
 let SSUM = (function(){ try { return JSON.parse(localStorage.getItem('s1981_ssum') || 'null'); } catch(e){ return null; } })(), SSUM_BUSY = false, SSUM_ERR = '';
+// ══════════════════════════════════════════════════════════════════
+//  ⏰ PÉREMPTIONS + 🔒 SENSIBLES (21 Nov 2026)
+//  Péremptions: every dated batch (Expiry Batches) by level — périmé,
+//  < 3 mois, < 6 mois — with the actions that already exist in Code GS:
+//  solde (setPromo on the product + the batch tagged), retiré périmé
+//  (stock −qty, loss « Périmé »), plus là / vendu.
+//  Sensibles: products counted blind at the till at closing (every day, or
+//  every week). Gaps come back here to be marked; list, suggestions
+//  (≥ 10 000 F, bureau, past « Vol »), and the progress of the cashier's
+//  « Tournée des dates ».
+// ══════════════════════════════════════════════════════════════════
+let EXO = null, EXO_BUSY = false, EXO_ERR = '';
+let SENS = null, SENS_BUSY = false, SENS_ERR = '';
+async function loadExo(){
+  if(EXO_BUSY || !URL_ || !KEY) return;
+  EXO_BUSY = true; EXO_ERR = '';
+  try {
+    const d = await api({ action:'getExpiryOverview' });
+    if(!d || !d.success) throw new Error((d && d.error) || 'réponse invalide');
+    EXO = { batches: d.batches || [], at: Date.now() };
+  } catch(e){ EXO_ERR = 'Pas chargé : ' + e.message; }
+  EXO_BUSY = false;
+  if(VIEW.screen === 'exp') render();
+}
+async function loadSens(){
+  if(SENS_BUSY || !URL_ || !KEY) return;
+  SENS_BUSY = true; SENS_ERR = '';
+  try {
+    const d = await api({ action:'getSensitive', admin: 1 });
+    if(!d || !d.success) throw new Error(d && d.error ? d.error : 'old');
+    SENS = d;
+  } catch(e){ SENS_ERR = e.message === 'old' || /Invalid|Unknown/i.test(e.message) ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas chargé : ' + e.message; }
+  SENS_BUSY = false;
+  if(VIEW.screen === 'sens') render();
+}
+function _exLevel(b){ return b.daysLeft < 0 ? 'past' : b.daysLeft < 91 ? 'red' : b.daysLeft < 183 ? 'orange' : 'ok'; }
+const EX_LV = [['past', '⛔ Périmés'], ['red', '🔴 < 3 mois'], ['orange', '🟠 < 6 mois']];
+function expHTML(){
+  if(!EXO){ if(!EXO_BUSY) loadExo(); return `<p class="empty">${EXO_ERR ? esc(EXO_ERR) : 'Chargement des dates…'}</p>`; }
+  const loc = VIEW.xloc || 'all', lv = VIEW.xlv || 'past';
+  const inLoc = b => loc === 'all' || b.location === loc;
+  const all = EXO.batches.filter(inLoc);
+  const sum = l => { const bs = all.filter(b => _exLevel(b) === l); return { n: bs.length, v: bs.reduce((a, b) => a + (b.price || 0) * (b.qty || 0), 0) }; };
+  let h = `<div class="chips">${VAL_LOCS.map(([id, l]) => `<button data-xloc="${id}" aria-pressed="${id === loc}">${l}</button>`).join('')}</div>`;
+  h += `<div class="chips">${EX_LV.map(([id, l]) => { const s = sum(id); return `<button data-xlv="${id}" aria-pressed="${id === lv}">${l} · ${s.n}</button>`; }).join('')}</div>`;
+  const list = all.filter(b => _exLevel(b) === lv);
+  const v = list.reduce((a, b) => a + (b.price || 0) * (b.qty || 0), 0);
+  h += `<div class="where"><div class="here"><span>${fmt(list.length)} lot(s)</span><b class="num">${fmt(v)} F</b></div></div>`;
+  if(!list.length) return h + `<p class="empty">Rien ici. Les dates arrivent avec la tournée des dates de la caisse et la réception.</p>`;
+  h += '<div class="list">' + list.map(b => {
+    const left = b.daysLeft < 0 ? 'périmé depuis ' + fmt(-b.daysLeft) + ' j' : 'dans ' + fmt(b.daysLeft) + ' j';
+    const tag = b.action === 'discount' ? ' · 🔥 en solde' + (b.actionPrice ? ' ' + fmt(b.actionPrice) + ' F' : '') : '';
+    return `<button class="row" data-exrow="${b.row}"><div class="nm"><strong>${esc(b.name || b.barcode)}</strong><small>${esc(locName(b.location))}${b.zone ? ' · ' + esc(b.zone) : ''} · ${esc(String(b.expiryDate).slice(3))} (${left})${tag}</small></div><span class="qty${b.qty ? '' : ' zero'}">${b.qty ? fmt(b.qty) : '?'}</span></button>`;
+  }).join('') + '</div>';
+  return h;
+}
+function bindExp(){
+  document.querySelectorAll('[data-xloc]').forEach(b => b.onclick = () => { VIEW.xloc = b.dataset.xloc; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-xlv]').forEach(b => b.onclick = () => { VIEW.xlv = b.dataset.xlv; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-exrow]').forEach(b => b.onclick = () => expSheet(Number(b.dataset.exrow)));
+}
+function expSheet(row, err){
+  const b = EXO && EXO.batches.find(x => x.row === row); if(!b) return;
+  const price = b.price || priceOf(b.barcode) || 0;
+  S = S && S.exrow === row ? S : { exrow: row, n: b.qty || 1 };
+  openSheet(`<h3>⏰ ${esc(b.name || b.barcode)}</h3>
+    <div class="sub num">${esc(b.barcode)} · ${esc(locName(b.location))}${b.zone ? ' · ' + esc(b.zone) : ''} · date ${esc(String(b.expiryDate).slice(3))}${price ? ' · ' + fmt(price) + ' F' : ''}</div>
+    ${err ? `<div class="err">${esc(err)}</div>` : ''}
+    ${b.daysLeft >= 0 && price ? `<label class="f">Mettre en solde (${esc(locName(b.location))}, jusqu'à épuisement)</label>
+    <div style="display:flex;gap:8px"><button class="cbtn" data-xs="30">🔥 −30 % · ${fmt(Math.round(price * 0.7 / 500) * 500)} F</button><button class="cbtn" data-xs="50">🔥 −50 % · ${fmt(Math.round(price * 0.5 / 500) * 500)} F</button></div>` : ''}
+    <label class="f">Retiré du rayon (périmé ou abîmé)</label>
+    <div class="stepper"><button data-step="-1" aria-label="Moins">−</button><input id="xn" class="num" inputmode="numeric" value="${S.n}" aria-label="Quantité"><button data-step="1" aria-label="Plus">+</button></div>
+    <button class="go" id="xdis" style="background:var(--bad)">🗑 Retirer ${fmt(S.n)} du stock (perte « Périmé »)</button>
+    <button class="ghost" id="xsold">✓ Plus là / vendu</button>
+    <button class="ghost" id="xx">Fermer</button>`);
+  const sh = $('#sheet');
+  sh.querySelectorAll('[data-step]').forEach(x => x.onclick = () => { S.n = Math.max(1, S.n + Number(x.dataset.step)); expSheet(row); });
+  $('#xn').onchange = e => { const v = parseInt(e.target.value, 10); if(v > 0) S.n = v; expSheet(row); };
+  $('#xx').onclick = closeSheet;
+  const done = (msg, f) => { if(f) f(); closeSheet(); toast(msg); render(); loadExo(); };
+  const run = async (btn, body, ok) => {
+    btn.disabled = true;
+    try { const d = await post(Object.assign({ action:'applyExpiryAction', row: row, by: user ? user.name : '' }, body)); if(!d || !d.success) throw new Error((d && d.error) || 'refusé'); ok(d); }
+    catch(e){ expSheet(row, 'Pas enregistré : ' + e.message); }
+  };
+  sh.querySelectorAll('[data-xs]').forEach(x => x.onclick = async () => {
+    const pct = Number(x.dataset.xs), np = Math.round(price * (1 - pct / 100) / 500) * 500;
+    x.disabled = true;
+    try {
+      const p = await post({ action:'setPromo', name: (b.name || b.barcode) + ' (date courte)', kind:'product', target: b.barcode, type:'percent', value: pct, store: b.location === 'Warehouse' ? 'all' : b.location, style:'destock', by: user ? user.name : '' });
+      if(!p || !p.success) throw new Error((p && p.error) || 'promo refusée');
+    } catch(e){ return expSheet(row, 'Promo pas créée : ' + e.message); }
+    run(x, { exAction:'discount', price: np, note: '−' + pct + ' %' }, () => done('🔥 En solde à ' + fmt(np) + ' F à la caisse', () => { b.action = 'discount'; b.actionPrice = np; }));
+  });
+  $('#xdis').onclick = e => { if(!confirm('Retirer ' + S.n + ' × « ' + (b.name || b.barcode) + ' » du stock ?')) return; run(e.target, { exAction:'discard', qty: S.n, reason: 'Périmé', opId: 'x' + Date.now().toString(36) + row }, () => done('Retiré du stock', () => { EXO.batches = EXO.batches.filter(x => x.row !== row || (b.qty && S.n < b.qty)); if(b.qty) b.qty = Math.max(0, b.qty - S.n); })); };
+  $('#xsold').onclick = e => run(e.target, { exAction:'sold' }, () => done('Lot retiré de la liste', () => { EXO.batches = EXO.batches.filter(x => x.row !== row); }));
+}
+
+function sensHTML(){
+  if(!SENS){ if(!SENS_BUSY) loadSens(); return `<p class="empty">${SENS_ERR ? esc(SENS_ERR) : 'Chargement…'}</p>`; }
+  const tab = VIEW.stab || (SENS.gaps.length ? 'gaps' : SENS.list.length ? 'list' : 'sug');
+  let h = `<div class="where"><div><span>À compter aujourd'hui · Balkuy</span><b class="num">${fmt(SENS.due['Store 1'])}</b></div><div><span>À compter aujourd'hui · Ouaga 2000</span><b class="num">${fmt(SENS.due['Store 2'])}</b></div></div>`;
+  h += `<div class="chips"><button data-stab="gaps" aria-pressed="${tab === 'gaps'}">⚠ Écarts · ${SENS.gaps.length}</button><button data-stab="list" aria-pressed="${tab === 'list'}">🔒 Liste · ${SENS.list.length}</button><button data-stab="sug" aria-pressed="${tab === 'sug'}">➕ À ajouter · ${SENS.suggestions.length}</button><button data-stab="round" aria-pressed="${tab === 'round'}">📅 Tournée des dates</button></div>`;
+  if(tab === 'gaps'){
+    if(!SENS.gaps.length) return h + '<p class="empty">Aucun écart à traiter. 👍</p>';
+    return h + '<p class="sub">Comptés à l’aveugle à la caisse, comparés au stock (moins les ventes pas encore synchronisées). Le stock n’est pas changé : recomptez dans la zone si besoin.</p><div class="list">' + SENS.gaps.map(g => `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="nm"><strong>${esc(g.name || g.barcode)}</strong><small>${esc(locName(g.location))} · ${esc(g.at)} · compté par ${esc(g.by || '?')} · attendu ${fmt(g.expected)}, compté ${fmt(g.counted)}${g.value != null ? ' · ' + fmt(g.value) + ' F' : ''}</small></div><span class="qty${g.diff < 0 ? ' neg' : ''}">${g.diff > 0 ? '+' : ''}${fmt(g.diff)}</span>
+      <div style="display:flex;gap:6px;width:100%;flex-wrap:wrap"><button class="cbtn alt" data-sres="${g.row}" data-r="Retrouvé">Retrouvé</button><button class="cbtn alt" data-sres="${g.row}" data-r="Perte connue">Perte connue</button><button class="cbtn alt" data-sres="${g.row}" data-r="Non expliqué">Non expliqué</button></div></div>`).join('') + '</div>';
+  }
+  if(tab === 'list'){
+    if(!SENS.list.length) return h + '<p class="empty">La liste est vide : ajoutez des produits dans « À ajouter ».</p>';
+    return h + '<div class="list">' + SENS.list.map(s => `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="nm"><strong>${esc(s.name || s.barcode)}</strong><small>${s.price ? fmt(s.price) + ' F · ' : ''}Balkuy ${fmt(s.s1)} · Ouaga 2000 ${fmt(s.s2)}</small></div>
+      <div class="chips" style="margin:0"><button data-sfreq="${esc(s.barcode)}" data-f="jour" aria-pressed="${s.freq === 'jour'}">Chaque jour</button><button data-sfreq="${esc(s.barcode)}" data-f="semaine" aria-pressed="${s.freq !== 'jour'}">Chaque semaine</button><button data-srm="${esc(s.barcode)}" aria-label="Retirer">✕</button></div></div>`).join('') + '</div>';
+  }
+  if(tab === 'sug'){
+    const pick = VIEW.spick || {};
+    if(!SENS.suggestions.length) return h + '<p class="empty">Aucune suggestion.</p>';
+    const n = Object.keys(pick).filter(k => pick[k]).length;
+    return h + `<p class="sub">Produits à ${fmt(SENS.minPrice)} F et plus, au bureau 🔒, ou déjà perdus pour vol ⚠. Cochez ceux à compter.</p>
+      <div style="display:flex;gap:8px;margin:6px 0"><button class="cbtn alt" id="sall">Tout cocher</button><button class="cbtn" id="sadd" ${n ? '' : 'disabled'}>Ajouter les ${fmt(n)} cochés</button></div><div class="list">` +
+      SENS.suggestions.map(s => `<label class="row" style="cursor:pointer"><input type="checkbox" data-spick="${esc(s.barcode)}" ${pick[s.barcode] ? 'checked' : ''} style="width:22px;height:22px"><div class="nm"><strong>${s.office ? '🔒 ' : ''}${s.theft ? '⚠ ' : ''}${esc(s.name || s.barcode)}</strong><small>${s.price ? fmt(s.price) + ' F · ' : ''}${fmt(s.qty)} en stock · ${s.freq === 'jour' ? 'chaque jour' : 'chaque semaine'}</small></div></label>`).join('') + '</div>';
+  }
+  return h + '<p class="sub">La caissière date 2 zones par jour à la caisse (📅 Dates du jour). Quand toutes les zones sont faites, un nouveau tour commence.</p><div class="where">' +
+    ['Store 1', 'Store 2'].map(l => { const r = SENS.rounds[l] || {}; const pct = r.total ? Math.round(r.done / r.total * 100) : 0;
+      return `<div><span>${esc(locName(l))} · tour ${fmt(r.cycle || 1)}<br><small>${fmt(r.done)} zone(s) sur ${fmt(r.total)}${r.lastDay ? ' · dernière le ' + esc(r.lastDay.split('-').reverse().join('/')) : ' · pas encore commencé'}</small></span><b class="num">${pct} %</b></div>`; }).join('') + '</div>';
+}
+async function sensPost(body, msg){
+  if(!user){ lock(); return; }
+  try {
+    const d = await post(Object.assign({ by: user.name, userHash: user.hash }, body));
+    if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+    if(d.list) SENS = d;
+    toast(msg);
+  } catch(e){ toast('Pas enregistré : ' + e.message); }
+  render();
+}
+function bindSens(){
+  document.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { VIEW.stab = b.dataset.stab; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-sres]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    await sensPost({ action:'resolveSensitive', row: Number(b.dataset.sres), resolution: b.dataset.r }, 'Écart marqué « ' + b.dataset.r + ' »');
+    if(SENS) SENS.gaps = SENS.gaps.filter(g => g.row !== Number(b.dataset.sres));
+    render();
+  });
+  document.querySelectorAll('[data-sfreq]').forEach(b => b.onclick = () => {
+    const s = SENS.list.find(x => x.barcode === b.dataset.sfreq); if(!s || s.freq === b.dataset.f) return;
+    sensPost({ action:'setSensitive', items: [{ barcode: s.barcode, name: s.name, freq: b.dataset.f }] }, b.dataset.f === 'jour' ? 'Compté chaque jour' : 'Compté chaque semaine');
+  });
+  document.querySelectorAll('[data-srm]').forEach(b => b.onclick = () => { if(confirm('Retirer ce produit de la liste ?')) sensPost({ action:'setSensitive', remove: [b.dataset.srm] }, 'Retiré de la liste'); });
+  document.querySelectorAll('[data-spick]').forEach(c => c.onchange = () => { VIEW.spick = Object.assign({}, VIEW.spick, { [c.dataset.spick]: c.checked }); history.replaceState(VIEW, ''); render(); });
+  const all = $('#sall'); if(all) all.onclick = () => { const p = {}; SENS.suggestions.forEach(s => p[s.barcode] = true); VIEW.spick = p; history.replaceState(VIEW, ''); render(); };
+  const add = $('#sadd'); if(add) add.onclick = () => {
+    const pick = VIEW.spick || {};
+    const items = SENS.suggestions.filter(s => pick[s.barcode]).map(s => ({ barcode: s.barcode, name: s.name, freq: s.freq }));
+    if(!items.length) return;
+    add.disabled = true; VIEW.spick = {}; VIEW.stab = 'list';
+    sensPost({ action:'setSensitive', items: items }, items.length + ' produit(s) ajouté(s)');
+  };
+}
+
 async function loadSSum(force){
   if(SSUM_BUSY || !URL_ || !KEY) return;
   if(!force && SSUM && Date.now() - (SSUM.at || 0) < 10 * 60 * 1000) return;

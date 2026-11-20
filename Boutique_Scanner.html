@@ -1543,6 +1543,8 @@ input,select{font-family:inherit}
             <button class="pos-tile" style="--c:#15803d" onclick="rgOpen()"><span class="i">📍</span><span class="l">À ranger</span><span class="b" id="rg-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#b91c1c" onclick="pnOpen()"><span class="i">🏷</span><span class="l">Étiquettes</span><span class="b" id="pn-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
+            <button class="pos-tile" style="--c:#0369a1" onclick="drOpen()"><span class="i">📅</span><span class="l">Dates du jour</span></button>
+            <button class="pos-tile" style="--c:#7f1d1d" onclick="scOpen()"><span class="i">🔒</span><span class="l">Sensibles</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
             <button class="pos-tile" style="--c:#0e7490" onclick="openRequestsModal()"><span class="i">📋</span><span class="l">Demandes clients</span><span class="b" id="req-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#b03a2e" onclick="openPinModal('return')"><span class="i">↩</span><span class="l">Retour</span></button>
@@ -1703,7 +1705,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-p</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-q</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3479,6 +3481,8 @@ function processScan() {
   if(!raw) return;
   if(_reorgCatch(raw)) return;
   if(_ouCatch(raw)) return;
+  if(_drCatch(raw)) return;
+  if(_scCatch(raw)) return;
   if(_pnCatch(raw)) return;
   if(_catKeyword(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
@@ -12346,6 +12350,236 @@ async function ouLoad(force){
 setInterval(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 5 * 60000);
 setTimeout(() => { try { if(productSyncUrl) ouLoad(); } catch(e){} }, 8000);
 function _ouStatus(t){ const el = document.getElementById('ou-status'); if(el) el.textContent = t; }
+// ══════════════════════════════════════════
+//  📅 TOURNÉE DES DATES + 🔒 SENSIBLES (21 Nov 2026, v7-nov-q) — for the cashier.
+//  Dates: the till gets today's zones (2 a day, in plan order) and their
+//  products; the cashier scans each one on the shelf and types month + year
+//  (or « Pas de date » / « Pas trouvé »). One zone is sent at a time
+//  (dateRoundZone); a draft survives a reload. The round restarts when every
+//  zone is done.
+//  Sensibles: at closing, the list due today; each article found is scanned
+//  (+1). No expected number is shown. Sent with sensitiveCount; gaps go to 1981.
+// ══════════════════════════════════════════
+let DR = null, _drIdx = 0, _drBusy = false;
+function _drEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function _drLoc(){ return _defaultPriceLocation() === 'Store 2' ? 'Store 2' : 'Store 1'; }
+function _drStore(){ return _drLoc() === 'Store 2' ? 'Ouaga 2000' : 'Balkuy'; }
+function _drOpen(){ const m = document.getElementById('dr-modal'); return !!(m && m.classList.contains('open')); }
+function _drKey(z){ return 'bc_dr_' + _drLoc() + '_' + _isoToday() + '_' + z; }
+function _drSave(){ const z = DR && DR.zones[_drIdx]; if(z) try { localStorage.setItem(_drKey(z.zone), JSON.stringify(z.items)); } catch(e){} }
+function _drCatch(raw){ if(!_drOpen()) return false; drScan(raw); return true; }
+async function drOpen(extra){
+  if(!productSyncUrl || !writeKey){ showToast('Synchro des produits non configurée.'); return; }
+  document.getElementById('dr-modal').classList.add('open');
+  document.getElementById('dr-body').innerHTML = '<div class="dlv-dim" style="padding:12px 2px">Chargement des zones du jour…</div>';
+  _drBusy = true;
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.includes('?') ? '&' : '?') + 'action=getDateRound&location=' + encodeURIComponent(_drLoc()) + (extra ? '&extra=1' : '') + '&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(!d || !d.success) throw new Error((d && d.error) || (d && d.error === undefined ? 'collez « LATEST - Code GS » et redéployez' : 'réponse invalide'));
+    DR = d; _drIdx = 0;
+    DR.zones.forEach(z => {
+      let saved = null; try { saved = JSON.parse(localStorage.getItem(_drKey(z.zone)) || 'null'); } catch(e){}
+      z.items.forEach(it => { it.st = ''; it.newDates = []; });
+      if(saved) saved.forEach(s => { const it = z.items.find(x => x.barcode === s.barcode); if(it){ it.st = s.st; it.newDates = s.newDates || []; } else if(s.extra) z.items.push(s); });
+    });
+  } catch(e){ DR = null; document.getElementById('dr-body').innerHTML = '<div class="dlv-dim" style="padding:12px 2px;color:#b91c1c">Pas chargé : ' + _drEsc(e.message || 'connexion ?') + '</div>'; _drBusy = false; return; }
+  _drBusy = false;
+  drRender();
+}
+function drClose(){ document.getElementById('dr-modal').classList.remove('open'); _drPadClose(); try { document.getElementById('scan-input').focus(); } catch(e){} }
+function drRender(){
+  const el = document.getElementById('dr-body'); if(!el || !DR) return;
+  const head = '<div class="dlv-dim" style="margin:2px 0 8px">' + _drStore() + ' · tour ' + DR.cycle + ' · ' + DR.done + ' zone(s) faite(s) sur ' + DR.total + '</div>';
+  const z = DR.zones[_drIdx];
+  if(!z){
+    el.innerHTML = head + '<div style="text-align:center;padding:18px 4px"><div style="font-size:40px">✅</div><div style="font-size:18px;font-weight:800;margin:6px 0">Fini pour aujourd\'hui</div>' +
+      '<div class="dlv-dim">' + (DR.doneToday.length ? 'Zones faites aujourd\'hui : ' + _drEsc(DR.doneToday.join(', ')) : 'Aucune zone à faire.') + '</div>' +
+      '<button class="btn-sm btn-outline" style="margin-top:14px" onclick="drOpen(true)">➕ Faire une zone de plus</button></div>';
+    return;
+  }
+  const done = z.items.filter(it => it.st).length;
+  const chip = it => it.st === 'date' ? '<span style="color:#15803d;font-weight:800">📅 ' + _drEsc(it.newDates.join(' + ')) + '</span>'
+    : it.st === 'none' ? '<span style="color:#475569;font-weight:700">Pas de date</span>'
+    : it.st === 'nf' ? '<span style="color:#b45309;font-weight:700">Pas trouvé</span>'
+    : '<span style="color:#94a3b8">à faire</span>';
+  el.innerHTML = head +
+    '<div style="font-size:20px;font-weight:800">Zone ' + _drEsc(z.zone) + ' <span class="dlv-dim" style="font-size:13px;font-weight:600">(' + (_drIdx + 1) + ' sur ' + DR.zones.length + ' aujourd\'hui)</span></div>' +
+    '<div class="dlv-dim" style="margin:2px 0 8px">Scannez chaque produit de cette zone, puis tapez le mois et l\'année écrits dessus.</div>' +
+    '<input class="dlv-field" id="dr-in" style="font-size:18px" placeholder="Scannez un produit de la zone" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();drScan(this.value);this.value=\'\'}"/>' +
+    '<div style="margin:8px 0 4px;font-weight:700">' + done + ' / ' + z.items.length + ' faits</div>' +
+    '<div style="max-height:46vh;overflow:auto;border:1px solid var(--border,#e5e7eb);border-radius:10px">' +
+    z.items.map((it, i) => '<div onclick="drPad(' + i + ')" style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border,#eee);cursor:pointer' + (it.st ? ';background:rgba(21,128,61,.05)' : '') + '">' +
+      '<div style="min-width:0"><div style="font-weight:700;font-size:14px;line-height:1.25">' + _drEsc(it.name || it.barcode) + '</div><div class="dlv-dim" style="font-size:11.5px">' + _drEsc(it.barcode) + (it.qty ? ' · ' + it.qty + ' en rayon' : '') + (it.dates && it.dates.length && !it.st ? ' · déjà noté ' + _drEsc(it.dates.map(d => d.slice(3)).join(', ')) : '') + '</div></div>' +
+      '<div style="flex-shrink:0;font-size:13px">' + chip(it) + '</div></div>').join('') + '</div>' +
+    '<button style="margin-top:10px;width:100%;padding:14px;border:0;border-radius:10px;background:#15803d;color:#fff;font-size:16px;font-weight:800;cursor:pointer" onclick="drSend()">✔ Zone ' + _drEsc(z.zone) + ' terminée — envoyer</button>';
+  setTimeout(() => { const i = document.getElementById('dr-in'); if(i && !document.getElementById('dr-pad')) i.focus(); }, 60);
+}
+function drScan(raw){
+  const z = DR && DR.zones[_drIdx]; if(!z) return;
+  const code = String(raw || '').trim(); if(!code) return;
+  if(!isCleanBarcode(code)){ showToast('Code illisible : vérifiez le clavier et rescannez.', 3000); return; }
+  const k = _bcKeyClient(resolveAlias(code));
+  let i = z.items.findIndex(it => _bcKeyClient(it.barcode) === k);
+  if(i < 0){
+    const p = lookupBarcode(code);
+    z.items.push({ barcode: canonicalBarcode(code), name: p ? p.name : 'Produit ' + code, qty: 0, dates: [], st: '', newDates: [], extra: true });
+    i = z.items.length - 1; showToast('Pas prévu dans cette zone : ajouté à la liste.', 2500);
+  }
+  drRender(); drPad(i);
+}
+let _drPad = null;
+function _drPadClose(){ const p = document.getElementById('dr-pad'); if(p) p.remove(); _drPad = null; }
+function drPad(i){
+  const z = DR && DR.zones[_drIdx], it = z && z.items[i]; if(!it) return;
+  _drPadClose();
+  _drPad = { i: i, digits: '', dates: [] };
+  const ov = document.createElement('div'); ov.id = 'dr-pad';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10050;display:flex;align-items:center;justify-content:center';
+  ov.onclick = e => { if(e.target === ov) _drPadClose(); };
+  document.body.appendChild(ov);
+  _drPadDraw();
+}
+function _drPadDraw(err){
+  const ov = document.getElementById('dr-pad'); if(!ov || !_drPad) return;
+  const z = DR.zones[_drIdx], it = z.items[_drPad.i], d = _drPad.digits;
+  const mm = d.slice(0, 2), yy = d.slice(2);
+  const shown = (mm.padEnd(2, '_')) + ' / ' + (yy.length <= 2 ? '20' + yy.padEnd(2, '_') : yy.padEnd(4, '_'));
+  const key = (v, lab, st) => '<button onclick="drKey(\'' + v + '\')" style="font-size:24px;font-weight:800;padding:14px 0;border-radius:10px;border:1.5px solid #cbd5e1;background:#fff;' + (st || '') + '">' + lab + '</button>';
+  const old = (it.dates || []).filter(x => x).map(x => x.slice(3));
+  ov.innerHTML = '<div style="background:var(--card,#fff);color:var(--ink,#111);border-radius:14px;padding:16px;width:min(380px,94vw)">' +
+    '<div style="font-weight:800;font-size:15px;line-height:1.25">' + _drEsc(it.name || it.barcode) + '</div>' +
+    '<div class="dlv-dim" style="margin:2px 0 10px">Tapez le mois puis l\'année (ex. 0327 = mars 2027).' + (_drPad.dates.length ? ' Déjà : ' + _drEsc(_drPad.dates.join(' + ')) : '') + '</div>' +
+    '<div style="font-size:34px;font-weight:900;text-align:center;letter-spacing:2px;margin-bottom:8px;font-variant-numeric:tabular-nums">' + shown + '</div>' +
+    (err ? '<div style="color:#b91c1c;font-weight:700;text-align:center;margin-bottom:6px">' + _drEsc(err) + '</div>' : '') +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' + [1,2,3,4,5,6,7,8,9].map(n => key(n, n)).join('') + key('C', '⌫', 'color:#b91c1c') + key(0, 0) + key('OK', 'OK', 'background:#15803d;color:#fff;border-color:#15803d') + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">' +
+      '<button class="btn-sm btn-outline" style="padding:10px" onclick="drKey(\'MORE\')">➕ Il y a une 2e date</button>' +
+      '<button class="btn-sm btn-outline" style="padding:10px" onclick="drMark(\'none\')">Pas de date</button>' +
+      '<button class="btn-sm btn-outline" style="padding:10px" onclick="drMark(\'nf\')">Pas trouvé</button>' +
+      (old.length ? '<button class="btn-sm btn-outline" style="padding:10px" onclick="drKeep()">Garder ' + _drEsc(old.join(', ')) + '</button>' : '<button class="btn-sm btn-outline" style="padding:10px" onclick="_drPadClose()">Annuler</button>') +
+    '</div></div>';
+}
+function _drParse(d){
+  if(d.length !== 4 && d.length !== 6) return null;
+  const m = Number(d.slice(0, 2)), y = d.length === 4 ? 2000 + Number(d.slice(2)) : Number(d.slice(2));
+  if(m < 1 || m > 12 || y < 2024 || y > 2040) return null;
+  return String(m).padStart(2, '0') + '/' + y;
+}
+function _drPast(s){ const [m, y] = s.split('/').map(Number); const n = new Date(); return y < n.getFullYear() || (y === n.getFullYear() && m < n.getMonth() + 1); }
+function drKey(v){
+  if(!_drPad) return;
+  if(v === 'C'){ _drPad.digits = _drPad.digits.slice(0, -1); return _drPadDraw(); }
+  if(v === 'OK' || v === 'MORE'){
+    if(!_drPad.digits && v === 'OK' && _drPad.dates.length) return _drFinish('date');
+    const s = _drParse(_drPad.digits);
+    if(!s) return _drPadDraw('Date incomplète : mois (2 chiffres) puis année.');
+    if(_drPad.dates.indexOf(s) < 0) _drPad.dates.push(s);
+    _drPad.digits = '';
+    if(_drPast(s)) showToast('⚠ PÉRIMÉ (' + s + ') : retirez-le du rayon et mettez-le de côté pour l\'admin.', 6000);
+    if(v === 'MORE') return _drPadDraw();
+    return _drFinish('date');
+  }
+  if(_drPad.digits.length >= 6) return;
+  _drPad.digits += String(v);
+  _drPadDraw();
+}
+function _drFinish(st){
+  const it = DR.zones[_drIdx].items[_drPad.i];
+  it.st = st; it.newDates = st === 'date' ? _drPad.dates.slice() : [];
+  _drSave(); _drPadClose(); drRender();
+}
+function drMark(st){ if(_drPad) _drFinish(st); }
+function drKeep(){ if(!_drPad) return; const it = DR.zones[_drIdx].items[_drPad.i]; _drPad.dates = (it.dates || []).map(x => x.slice(3)); _drFinish('date'); }
+async function drSend(){
+  const z = DR && DR.zones[_drIdx]; if(!z || _drBusy) return;
+  const left = z.items.filter(it => !it.st).length;
+  if(left && !confirm(left + ' produit(s) pas encore faits. Ils seront notés « pas trouvés ». Envoyer quand même ?')) return;
+  _drBusy = true;
+  try {
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: writeKey, action: 'dateRoundZone', location: _drLoc(), zone: z.zone, by: currentEmployee || 'caisse',
+        items: z.items.map(it => ({ barcode: it.barcode, name: it.name, qty: it.qty, none: it.st === 'none', notFound: !it.st || it.st === 'nf', dates: it.st === 'date' ? it.newDates : [] })) }) });
+    const d = await r.json();
+    if(!d || !d.success) throw new Error((d && d.error) || 'réponse invalide');
+    try { localStorage.removeItem(_drKey(z.zone)); } catch(e){}
+    DR.doneToday.push(z.zone); DR.done++;
+    _drIdx++;
+    showToast('✅ Zone ' + z.zone + ' envoyée', 2500);
+  } catch(e){ alert('Pas envoyé : ' + (e.message || 'connexion ?') + '\nRien n\'est perdu : réessayez quand la connexion revient.'); }
+  _drBusy = false;
+  drRender();
+}
+
+// ---- 🔒 Sensibles ----
+let SC = null, _scBusy = false;
+function _scOpen(){ const m = document.getElementById('sc-modal'); return !!(m && m.classList.contains('open')); }
+function _scKey(){ return 'bc_sc_' + _drLoc() + '_' + _isoToday(); }
+function _scCatch(raw){ if(!_scOpen()) return false; scScan(raw); return true; }
+async function scOpen(){
+  if(!productSyncUrl || !writeKey){ showToast('Synchro des produits non configurée.'); return; }
+  document.getElementById('sc-modal').classList.add('open');
+  const el = document.getElementById('sc-body');
+  el.innerHTML = '<div class="dlv-dim" style="padding:12px 2px">Chargement de la liste du jour…</div>';
+  try {
+    const r = await fetch(productSyncUrl + (productSyncUrl.includes('?') ? '&' : '?') + 'action=getSensitive&location=' + encodeURIComponent(_drLoc()) + '&key=' + encodeURIComponent(writeKey), { cache: 'no-store' });
+    const d = await r.json();
+    if(!d || !d.success) throw new Error((d && d.error) || 'collez « LATEST - Code GS » et redéployez');
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem(_scKey()) || '{}'); } catch(e){}
+    SC = { items: d.due.map(x => ({ barcode: x.barcode, name: x.name, n: saved[x.barcode] || 0 })), doneToday: d.doneToday };
+  } catch(e){ SC = null; el.innerHTML = '<div class="dlv-dim" style="padding:12px 2px;color:#b91c1c">Pas chargé : ' + _drEsc(e.message || 'connexion ?') + '</div>'; return; }
+  scRender();
+}
+function scClose(){ document.getElementById('sc-modal').classList.remove('open'); try { document.getElementById('scan-input').focus(); } catch(e){} }
+function _scSave(){ const o = {}; (SC ? SC.items : []).forEach(it => { if(it.n) o[it.barcode] = it.n; }); try { localStorage.setItem(_scKey(), JSON.stringify(o)); } catch(e){} }
+function scRender(){
+  const el = document.getElementById('sc-body'); if(!el || !SC) return;
+  if(!SC.items.length){
+    el.innerHTML = '<div style="text-align:center;padding:18px 4px"><div style="font-size:40px">✅</div><div style="font-size:18px;font-weight:800;margin:6px 0">Rien à compter aujourd\'hui</div><div class="dlv-dim">' + (SC.doneToday ? 'Le comptage du jour est déjà envoyé.' : '') + '</div></div>';
+    return;
+  }
+  const tot = SC.items.reduce((a, it) => a + it.n, 0);
+  el.innerHTML = '<div class="dlv-dim" style="margin:2px 0 8px">' + _drStore() + ' · ' + SC.items.length + ' produit(s) à compter. Cherchez-les partout (rayons, comptoir, bureau) et <b>scannez chaque article un par un</b>.</div>' +
+    '<input class="dlv-field" id="sc-in" style="font-size:18px" placeholder="Scannez chaque article" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();scScan(this.value);this.value=\'\'}"/>' +
+    '<div style="max-height:48vh;overflow:auto;border:1px solid var(--border,#e5e7eb);border-radius:10px;margin-top:8px">' +
+    SC.items.map((it, i) => '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--border,#eee)">' +
+      '<div style="min-width:0;font-weight:700;font-size:14px;line-height:1.25">' + _drEsc(it.name || it.barcode) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><button class="btn-sm btn-outline" style="width:38px;font-size:18px" onclick="scAdd(' + i + ',-1)">−</button>' +
+      '<b style="min-width:28px;text-align:center;font-size:20px">' + it.n + '</b><button class="btn-sm btn-outline" style="width:38px;font-size:18px" onclick="scAdd(' + i + ',1)">+</button></div></div>').join('') + '</div>' +
+    '<button style="margin-top:10px;width:100%;padding:14px;border:0;border-radius:10px;background:#15803d;color:#fff;font-size:16px;font-weight:800;cursor:pointer" onclick="scSend()">✔ J\'ai tout cherché — envoyer (' + tot + ' article' + (tot > 1 ? 's' : '') + ')</button>';
+  setTimeout(() => { const i = document.getElementById('sc-in'); if(i) i.focus(); }, 60);
+}
+function scAdd(i, d){ const it = SC && SC.items[i]; if(!it) return; it.n = Math.max(0, it.n + d); _scSave(); scRender(); }
+function scScan(raw){
+  if(!SC) return;
+  const code = String(raw || '').trim(); if(!code) return;
+  if(!isCleanBarcode(code)){ showToast('Code illisible : vérifiez le clavier et rescannez.', 3000); return; }
+  const k = _bcKeyClient(resolveAlias(code));
+  const it = SC.items.find(x => _bcKeyClient(x.barcode) === k);
+  if(!it){ showToast('Ce produit n\'est pas dans la liste du jour.', 2500); return; }
+  it.n++; _scSave(); scRender();
+  showToast('+1 ' + (it.name || ''), 1200);
+}
+async function scSend(){
+  if(!SC || _scBusy) return;
+  const zero = SC.items.filter(it => !it.n).length;
+  if(!confirm((zero ? zero + ' produit(s) à 0 : vous ne les avez pas trouvés. ' : '') + 'Envoyer le comptage ?')) return;
+  _scBusy = true;
+  try {
+    SC.opId = SC.opId || ('sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: writeKey, action: 'sensitiveCount', location: _drLoc(), by: currentEmployee || 'caisse', opId: SC.opId,
+        items: SC.items.map(it => ({ barcode: it.barcode, name: it.name, counted: it.n })) }) });
+    const d = await r.json();
+    if(!d || !d.success) throw new Error((d && d.error) || 'réponse invalide');
+    try { localStorage.removeItem(_scKey()); } catch(e){}
+    SC = { items: [], doneToday: 1 };
+    showToast('✅ Comptage envoyé. Merci !', 3000);
+  } catch(e){ alert('Pas envoyé : ' + (e.message || 'connexion ?') + '\nLe comptage reste gardé : réessayez.'); }
+  _scBusy = false;
+  scRender();
+}
+
 // 🎓 Formation (10 Nov 2026): opens the training game for the employee signed
 // in at the till — no separate code (formation.html reads #t=).
 function openFormation(){
@@ -15846,6 +16080,18 @@ closeSale = function(){
     <input class="dlv-field" id="pn-in" style="font-size:16px;margin:10px 0 8px" placeholder="Étiquette posée ? Scannez le produit" autocomplete="off"
       onkeydown="if(event.key==='Enter'){event.preventDefault();pnScan(this.value)}"/>
     <div id="pn-body"></div>
+  </div>
+</div>
+<div class="modal-bg" id="dr-modal">
+  <div class="modal" style="width:min(600px,96vw);text-align:left;max-height:94vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">📅 Dates du jour</div><button class="btn-sm btn-outline" onclick="drClose()">Fermer</button></div>
+    <div id="dr-body"></div>
+  </div>
+</div>
+<div class="modal-bg" id="sc-modal">
+  <div class="modal" style="width:min(560px,96vw);text-align:left;max-height:94vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🔒 Produits sensibles</div><button class="btn-sm btn-outline" onclick="scClose()">Fermer</button></div>
+    <div id="sc-body"></div>
   </div>
 </div>
 <div class="modal-bg" id="ou-modal">
