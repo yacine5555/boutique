@@ -1545,6 +1545,7 @@ input,select{font-family:inherit}
             <button class="pos-tile" style="--c:#6d28d9" onclick="ouOpen()"><span class="i">🔎</span><span class="l">Où est-il ?</span></button>
             <button class="pos-tile" style="--c:#0369a1" onclick="drOpen()"><span class="i">📅</span><span class="l">Dates du jour</span></button>
             <button class="pos-tile" style="--c:#7f1d1d" onclick="scOpen()"><span class="i">🔒</span><span class="l">Sensibles</span></button>
+            <button class="pos-tile" style="--c:#57534e" onclick="lpOpen()"><span class="i">🗑</span><span class="l">Pertes</span></button>
             <button class="pos-tile" style="--c:#0f766e" onclick="openCustomerModal('request')"><span class="i">📝</span><span class="l">Note / demande</span></button>
             <button class="pos-tile" style="--c:#0e7490" onclick="openRequestsModal()"><span class="i">📋</span><span class="l">Demandes clients</span><span class="b" id="req-tile-badge"></span></button>
             <button class="pos-tile" style="--c:#b03a2e" onclick="openPinModal('return')"><span class="i">↩</span><span class="l">Retour</span></button>
@@ -1705,7 +1706,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-q</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-r</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -3483,6 +3484,7 @@ function processScan() {
   if(_ouCatch(raw)) return;
   if(_drCatch(raw)) return;
   if(_scCatch(raw)) return;
+  if(_lpCatch(raw)) return;
   if(_pnCatch(raw)) return;
   if(_catKeyword(raw)) return;
   if(!isCleanBarcode(raw)){ rejectDirtyBarcode(raw); return; }
@@ -12580,6 +12582,73 @@ async function scSend(){
   scRender();
 }
 
+// ══════════════════════════════════════════
+//  🗑 PERTES À LA CAISSE (21 Nov 2026) — the cashier picks why (abîmé,
+//  périmé, utilisé / offert, disparu), scans each article, sends. Stock goes
+//  down in the zone that holds the product (stock1981Adjust, till:true) and
+//  each line lands in « Pertes », which 1981 reads in Stock1981 → 📉 Pertes.
+// ══════════════════════════════════════════
+const LP_REASONS = [['Abîmé', '💥 Abîmé / cassé / ouvert'], ['Périmé', '⏰ Périmé'], ['Offert / usage boutique', '🎁 Utilisé en boutique / offert'], ['Vol / inexpliqué', '❓ Disparu / volé']];
+let LP = null, _lpBusy = false;
+function _lpOpen(){ const m = document.getElementById('lp-modal'); return !!(m && m.classList.contains('open')); }
+function _lpCatch(raw){ if(!_lpOpen() || !LP || !LP.reason) return false; lpScan(raw); return true; }
+function lpOpen(){
+  if(!productSyncUrl || !writeKey){ showToast('Synchro des produits non configurée.'); return; }
+  if(!currentEmployee){ showToast('Connectez-vous d’abord à la caisse.'); return; }
+  LP = { reason: '', items: [] };
+  document.getElementById('lp-modal').classList.add('open');
+  _catLoadStock();
+  lpRender();
+}
+function lpClose(){ if(LP && LP.items.length && !confirm('Les articles scannés ne sont pas envoyés. Fermer quand même ?')) return; document.getElementById('lp-modal').classList.remove('open'); LP = null; try { document.getElementById('scan-input').focus(); } catch(e){} }
+function lpRender(){
+  const el = document.getElementById('lp-body'); if(!el || !LP) return;
+  if(!LP.reason){
+    el.innerHTML = '<div class="dlv-dim" style="margin:4px 0 10px">Pourquoi ces articles sortent-ils du stock ?</div>' +
+      LP_REASONS.map(([r, l]) => '<button onclick="lpReason(\'' + r.replace(/'/g, "\\'") + '\')" style="display:block;width:100%;text-align:left;margin:0 0 8px;padding:14px;border-radius:10px;border:1.5px solid #cbd5e1;background:#fff;font-size:16px;font-weight:700;cursor:pointer">' + l + '</button>').join('');
+    return;
+  }
+  const lab = (LP_REASONS.find(x => x[0] === LP.reason) || [])[1] || LP.reason;
+  const n = LP.items.reduce((a, it) => a + it.n, 0);
+  el.innerHTML = '<div style="font-weight:800;font-size:16px;margin:2px 0 4px">' + _drEsc(lab) + ' <button class="btn-sm btn-outline" style="margin-left:6px" onclick="LP.reason=\'\';lpRender()">changer</button></div>' +
+    '<div class="dlv-dim" style="margin-bottom:8px">Scannez chaque article, un par un.' + (LP.reason === 'Périmé' || LP.reason === 'Abîmé' ? ' Mettez-les ensuite de côté pour l\'admin.' : '') + '</div>' +
+    '<input class="dlv-field" id="lp-in" style="font-size:18px" placeholder="Scannez l\'article" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();lpScan(this.value);this.value=\'\'}"/>' +
+    (LP.items.length ? '<div style="max-height:44vh;overflow:auto;border:1px solid var(--border,#e5e7eb);border-radius:10px;margin-top:8px">' + LP.items.map((it, i) =>
+      '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--border,#eee)"><div style="min-width:0;font-weight:700;font-size:14px">' + _drEsc(it.name) + '<div class="dlv-dim" style="font-size:11.5px;font-weight:400">' + _drEsc(it.barcode) + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><button class="btn-sm btn-outline" style="width:38px;font-size:18px" onclick="lpAdd(' + i + ',-1)">−</button><b style="min-width:28px;text-align:center;font-size:20px">' + it.n + '</b><button class="btn-sm btn-outline" style="width:38px;font-size:18px" onclick="lpAdd(' + i + ',1)">+</button></div></div>').join('') + '</div>' +
+      '<button style="margin-top:10px;width:100%;padding:14px;border:0;border-radius:10px;background:#b91c1c;color:#fff;font-size:16px;font-weight:800;cursor:pointer" onclick="lpSend()">Retirer ' + n + ' article' + (n > 1 ? 's' : '') + ' du stock</button>'
+    : '<div class="dlv-dim" style="padding:14px 2px">Aucun article scanné pour l\'instant.</div>');
+  setTimeout(() => { const i = document.getElementById('lp-in'); if(i) i.focus(); }, 60);
+}
+function lpReason(r){ if(!LP) return; LP.reason = r; lpRender(); }
+function lpAdd(i, d){ const it = LP && LP.items[i]; if(!it) return; it.n += d; if(it.n <= 0) LP.items.splice(i, 1); lpRender(); }
+function lpScan(raw){
+  if(!LP || !LP.reason) return;
+  const code = String(raw || '').trim(); if(!code) return;
+  if(!isCleanBarcode(code)){ showToast('Code illisible : vérifiez le clavier et rescannez.', 3000); return; }
+  const bc = canonicalBarcode(resolveAlias(code)), k = _bcKeyClient(bc);
+  const p = lookupBarcode(bc);
+  if(!p){ showToast('Code inconnu : montrez l\'article à l\'admin.', 3500); return; }
+  const it = LP.items.find(x => _bcKeyClient(x.barcode) === k);
+  if(it) it.n++; else LP.items.push({ barcode: bc, name: p.name || bc, n: 1 });
+  lpRender();
+}
+async function lpSend(){
+  if(!LP || !LP.items.length || _lpBusy) return;
+  const n = LP.items.reduce((a, it) => a + it.n, 0);
+  if(!confirm('Retirer ' + n + ' article(s) du stock comme « ' + LP.reason + ' » ?')) return;
+  _lpBusy = true;
+  try {
+    await _catLoadStock(true);
+    const loc = _catLoc();
+    await _catStockPost(LP.items.map(it => ({ barcode: it.barcode, name: it.name, mode: 'delta', reason: LP.reason, location: loc, zone: _catBestZone(it.barcode, 'Non placé'), qty: -it.n, note: 'Perte enregistrée à la caisse' })));
+    document.getElementById('lp-modal').classList.remove('open'); LP = null;
+    showToast('✅ ' + n + ' article(s) retiré(s) du stock. Merci !', 3500);
+    try { document.getElementById('scan-input').focus(); } catch(e){}
+  } catch(e){ alert('Pas envoyé : ' + (e.message || 'connexion ?') + '\nLa liste reste à l\'écran : réessayez.'); }
+  _lpBusy = false;
+}
+
 // 🎓 Formation (10 Nov 2026): opens the training game for the employee signed
 // in at the till — no separate code (formation.html reads #t=).
 function openFormation(){
@@ -16092,6 +16161,12 @@ closeSale = function(){
   <div class="modal" style="width:min(560px,96vw);text-align:left;max-height:94vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🔒 Produits sensibles</div><button class="btn-sm btn-outline" onclick="scClose()">Fermer</button></div>
     <div id="sc-body"></div>
+  </div>
+</div>
+<div class="modal-bg" id="lp-modal">
+  <div class="modal" style="width:min(520px,96vw);text-align:left;max-height:94vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="modal-title" style="margin:0">🗑 Pertes</div><button class="btn-sm btn-outline" onclick="lpClose()">Fermer</button></div>
+    <div id="lp-body"></div>
   </div>
 </div>
 <div class="modal-bg" id="ou-modal">

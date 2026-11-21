@@ -753,6 +753,8 @@ function render(){
   else if(v.screen === 'reorgmark') t.innerHTML = 'Repérage<small>' + (REM ? esc(REM.zone) : '') + '</small>';
   else if(v.screen === 'transit') t.innerHTML = 'En route<small>Transferts entre magasins</small>';
   else if(v.screen === 'sorties') t.innerHTML = 'Sorties<small>' + esc(locName(SOV.loc)) + '</small>';
+  else if(v.screen === 'loss') t.innerHTML = 'Pertes<small>Nombre et coût en F</small>';
+  else if(v.screen === 'order') t.innerHTML = 'Commandes<small>Stock minimum et réassort</small>';
   else if(v.screen === 'exp') t.innerHTML = 'Péremptions<small>Périmés et dates courtes</small>';
   else if(v.screen === 'sens') t.innerHTML = 'Produits sensibles<small>Comptés à l’aveugle à la caisse</small>';
   else if(v.screen === 'valeur') t.innerHTML = 'Valeur & dormants<small>Ce qu’il y a en stock, ce qui ne se vend pas</small>';
@@ -772,6 +774,8 @@ function render(){
   if(v.screen === 'sorties'){ m.innerHTML = banner() + sortiesHTML(); bindSorties(); return; }
   if(v.screen === 'valeur'){ m.innerHTML = banner() + valHTML(); bindVal(); return; }
   if(v.screen === 'exp'){ m.innerHTML = banner() + expHTML(); bindExp(); return; }
+  if(v.screen === 'loss'){ m.innerHTML = banner() + lossHTML(); bindLoss(); return; }
+  if(v.screen === 'order'){ m.innerHTML = banner() + orderHTML(); bindOrder(); return; }
   if(v.screen === 'sens'){ m.innerHTML = banner() + sensHTML(); bindSens(); return; }
   if(v.screen === 'restock'){ m.innerHTML = banner() + restockHTML(); document.querySelectorAll('[data-rsloc]').forEach(b => b.onclick = () => { VIEW.rsloc = b.dataset.rsloc; history.replaceState(VIEW, ''); render(); }); document.querySelectorAll('.row[data-bc]').forEach(b => b.onclick = () => openProduct(b.dataset.loc2, b.dataset.zone2, b.dataset.bc)); return; }
   if(v.screen === 'transit'){ m.innerHTML = banner() + transitHTML(); const r = document.querySelector('[data-act="trreload"]'); if(r) r.onclick = loadTransit; return; }
@@ -812,6 +816,8 @@ function homeHTML(){
     + tool('sorties', '📤', 'Sorties', 'vendus · transférés')
     + tool('ctl', '🔍', 'Contrôle', '4 étagères')
     + tool('exp', '⏰', 'Péremptions', 'périmés · à surveiller')
+    + tool('loss', '📉', 'Pertes', 'nombre et coût en F')
+    + tool('order', '🛒', 'Commandes', 'à remonter · à racheter')
     + tool('sens', '🔒', 'Sensibles', SENS && SENS.gaps.length ? SENS.gaps.length + ' écart(s)' : 'comptés à la caisse', SENS && SENS.gaps.length ? SENS.gaps.length : '')
     + (meIsAdmin() ? tool('bilan', '📊', 'Bilan', 'du jour') : '')
     + tool('reorg', '🔄', 'Réorg.', 'repérage')
@@ -943,6 +949,8 @@ function bindMain(){
   if(q){ q.oninput = () => { VIEW.q = q.value; renderResults(); }; q.onkeydown = e => { if(e.key === 'Enter'){ const sh = parseShelf(q.value); if(sh){ e.preventDefault(); q.value = ''; VIEW.q = ''; shelfScanned(sh); } else if(/^\d{6,}$/.test(q.value.trim())){ e.preventDefault(); productWhere(q.value.trim()); } } }; renderResults(); }
   const ps = document.querySelector('[data-act="pscan"]'); if(ps) ps.onclick = () => openCamera(code => { const sh = parseShelf(code); if(sh) shelfScanned(sh); else productWhere(code); });
   const fl = document.querySelector('[data-act="flags"]'); if(fl) fl.onclick = flagsOpen;
+  const lo = document.querySelector('[data-act="loss"]'); if(lo) lo.onclick = () => { go({ screen:'loss' }); LOSSR = null; loadLossR(); };
+  const od = document.querySelector('[data-act="order"]'); if(od) od.onclick = () => { go({ screen:'order' }); loadSSum(); loadMins(); };
   const xp = document.querySelector('[data-act="exp"]'); if(xp) xp.onclick = () => { go({ screen:'exp' }); EXO = null; loadExo(); };
   const sn = document.querySelector('[data-act="sens"]'); if(sn) sn.onclick = () => { go({ screen:'sens' }); SENS = null; loadSens(); };
   const vl = document.querySelector('[data-act="valeur"]'); if(vl) vl.onclick = () => { go({ screen:'valeur' }); loadSSum(); };
@@ -3227,6 +3235,183 @@ function bindSens(){
   };
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  📉 PERTES + 🛒 COMMANDES (21 Nov 2026)
+//  Pertes: getLossReport (Pertes tab, count gaps from Stock1981 Log,
+//  sensibles marked as lost), in units and CFA — at cost (Product Master
+//  col. I × 600, else price ÷ 2) and at selling price.
+//  Commandes: minimum per store = about 1 week of sales (60-day rhythm),
+//  at least 1, or the minimum typed by 1981. « À remonter »: below the
+//  minimum while the warehouse has some → transfer request for 2 weeks.
+//  « À racheter »: what the 2 stores + warehouse won't cover until the
+//  container AFTER the next one (containers: March, August, November).
+// ══════════════════════════════════════════════════════════════════
+let LOSSR = null, LOSSR_BUSY = false, LOSSR_ERR = '';
+let MINS = null;
+const CONTAINER_MONTHS = [3, 8, 11];
+async function loadLossR(){
+  if(LOSSR_BUSY || !URL_ || !KEY) return;
+  LOSSR_BUSY = true; LOSSR_ERR = '';
+  try {
+    const d = await api({ action:'getLossReport', days: 200 });
+    if(!d || !d.success) throw new Error(d && d.error ? d.error : 'old');
+    LOSSR = d;
+  } catch(e){ LOSSR_ERR = e.message === 'old' || /Invalid|Unknown/i.test(e.message) ? 'Collez « LATEST - Code GS » et redéployez.' : 'Pas chargé : ' + e.message; }
+  LOSSR_BUSY = false;
+  if(VIEW.screen === 'loss') render();
+}
+async function loadMins(){
+  try { const d = await api({ action:'getMinStock' }); if(d && d.success){ MINS = d.mins || {}; if(VIEW.screen === 'order') render(); } } catch(e){}
+}
+function _lossPeriod(per){
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if(per === 'month') return [iso(new Date(y, m, 1)), '9999'];
+  if(per === 'prev') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 1))];
+  return [iso(new Date(Date.now() - 90 * 864e5)), '9999'];
+}
+function lossHTML(){
+  if(!LOSSR){ if(!LOSSR_BUSY) loadLossR(); return `<p class="empty">${LOSSR_ERR ? esc(LOSSR_ERR) : 'Chargement des pertes…'}</p>`; }
+  const per = VIEW.lper || 'month', loc = VIEW.lloc || 'all';
+  const from = ls('s1981_ecart_from') || '2026-12-01';
+  const [a, b] = _lossPeriod(per);
+  // row: [day, loc, zone, bc, name, qty, price, cost, est, reason, source, by]
+  const keep = r => (loc === 'all' || r[1] === loc) && !(r[10] === 'ecart' && r[0] < from);
+  const rows = LOSSR.rows.filter(r => r[0] >= a && r[0] < b && keep(r));
+  const cost = r => (r[7] || 0) * r[5], sale = r => (r[6] || 0) * r[5];
+  const sum = rs => rs.reduce((t, r) => { t.u += r[5]; t.c += cost(r); t.s += sale(r); return t; }, { u: 0, c: 0, s: 0 });
+  const T = sum(rows);
+  let h = `<div class="chips">${[['month', 'Ce mois'], ['prev', 'Mois dernier'], ['90', '90 jours']].map(([id, l]) => `<button data-lper="${id}" aria-pressed="${id === per}">${l}</button>`).join('')}</div>`;
+  h += `<div class="chips">${VAL_LOCS.map(([id, l]) => `<button data-lloc="${id}" aria-pressed="${id === loc}">${l}</button>`).join('')}</div>`;
+  h += `<div class="where"><div class="here"><span>Pertes · ${fmt(T.u)} article(s)<br><small>au prix de vente : ${fmt(T.s)} F</small></span><b class="num">${fmt(T.c)} F</b></div></div>
+    <p class="sub" style="font-size:12px">Le gros chiffre est le coût (ce que tu as payé : coût d’achat × 600, ou prix ÷ 2 quand il manque).</p>`;
+  // by cause
+  const byC = {};
+  rows.forEach(r => {
+    const key = r[10] === 'ecart' ? (r[5] > 0 ? 'Manquants aux comptages' : 'Retrouvés aux comptages') : r[9] || '—';
+    (byC[key] = byC[key] || []).push(r);
+  });
+  h += '<div class="sect">Par cause</div><div class="where">' + (Object.keys(byC).length ? Object.keys(byC).map(k => ({ k, t: sum(byC[k]) })).sort((x, y) => y.t.c - x.t.c)
+    .map(o => `<div><span>${esc(o.k)}<br><small>${fmt(o.t.u)} article(s)</small></span><b class="num">${fmt(o.t.c)} F</b></div>`).join('') : '<div><span>Aucune perte sur cette période</span><b></b></div>') + '</div>';
+  // top products
+  const byP = {};
+  rows.forEach(r => { const k = bkey(r[3]); const o = byP[k] || (byP[k] = { name: r[4], bc: r[3], rows: [] }); o.rows.push(r); });
+  const top = Object.values(byP).map(o => Object.assign(o, { t: sum(o.rows), zones: [...new Set(o.rows.map(r => locName(r[1]) + (r[2] ? ' · ' + r[2] : '')))].slice(0, 2) })).filter(o => o.t.u > 0).sort((x, y) => y.t.c - x.t.c).slice(0, 15);
+  if(top.length) h += '<div class="sect">Les produits qui coûtent le plus</div><div class="list">' + top.map(o => `<div class="row" style="cursor:default"><div class="nm"><strong>${esc(o.name || o.bc)}</strong><small>${esc(o.zones.join(' / '))} · ${fmt(o.t.u)} article(s)</small></div><b class="num">${fmt(o.t.c)} F</b></div>`).join('') + '</div>';
+  // by person
+  const byW = {};
+  rows.filter(r => r[10] !== 'ecart' && r[5] > 0).forEach(r => { const w = String(r[11] || '?').replace(/^Caisse — /, ''); (byW[w] = byW[w] || []).push(r); });
+  if(Object.keys(byW).length) h += '<div class="sect">Enregistrées par</div><div class="where">' + Object.keys(byW).map(k => ({ k, t: sum(byW[k]) })).sort((x, y) => y.t.c - x.t.c).map(o => `<div><span>${esc(o.k)}</span><b class="num">${fmt(o.t.u)} art. · ${fmt(o.t.c)} F</b></div>`).join('') + '</div>';
+  // 6 months
+  const months = []; for(let i = 5; i >= 0; i--){ const d = new Date(new Date().getFullYear(), new Date().getMonth() - i, 1); months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  const mv = months.map(m => sum(LOSSR.rows.filter(r => r[0].slice(0, 7) === m && keep(r))).c);
+  const mx = Math.max(1, ...mv);
+  h += '<div class="sect">6 derniers mois (coût)</div><div style="display:flex;gap:6px;align-items:flex-end;height:120px;padding:0 4px">' + months.map((m, i) =>
+    `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><small class="num" style="font-size:10px">${mv[i] ? fmt(Math.round(mv[i] / 1000)) + 'k' : ''}</small><div style="width:100%;background:var(--bad);opacity:.75;border-radius:6px 6px 0 0;height:${Math.round(mv[i] / mx * 90)}px"></div><small style="font-size:11px">${['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct', 'nov', 'déc'][Number(m.slice(5)) - 1]}</small></div>`).join('') + '</div>';
+  h += `<p class="sub" style="font-size:12px;margin-top:14px">Les écarts de comptage comptent à partir du <input type="date" id="lfrom" value="${esc(from)}" style="font:inherit"> : avant, les comptages de la réorganisation faussent le chiffre.</p>`;
+  return h;
+}
+function bindLoss(){
+  document.querySelectorAll('[data-lper]').forEach(b => b.onclick = () => { VIEW.lper = b.dataset.lper; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-lloc]').forEach(b => b.onclick = () => { VIEW.lloc = b.dataset.lloc; history.replaceState(VIEW, ''); render(); });
+  const f = $('#lfrom'); if(f) f.onchange = () => { if(f.value){ ls('s1981_ecart_from', f.value); render(); } };
+}
+
+function _ordStock(){
+  const st = {};
+  (DATA ? DATA.zones : []).forEach(r => { const k = bkey(r[2]); const o = st[k] || (st[k] = { bc: r[2], name: r[3], 'Store 1': 0, 'Store 2': 0, Warehouse: 0 }); o[r[0]] = (o[r[0]] || 0) + (Number(r[4]) || 0); });
+  return st;
+}
+function _ordRate(loc, k){ const e = SSUM && SSUM.stores && SSUM.stores[loc] && SSUM.stores[loc][k]; return e ? (e[2] || 0) / 60 * 7 : 0; }
+function _ordNext(){
+  const now = new Date(), out = [];
+  for(let y = now.getFullYear(); out.length < 2; y++) CONTAINER_MONTHS.forEach(m => { const d = new Date(y, m - 1, 15); if(d > now && out.length < 2 && !out.some(x => +x === +d)) out.push(d); });
+  return out.sort((a, b) => a - b);
+}
+function _ordName(k, o){ return (o && o.name) || (DATA && DATA.names && DATA.names[k]) || productName(k) || k; }
+function orderHTML(){
+  if(!SSUM){ if(!SSUM_BUSY) loadSSum(); return `<p class="empty">${SSUM_ERR ? esc(SSUM_ERR) : 'Chargement des ventes…'}</p>`; }
+  if(!MINS) loadMins();
+  const tab = VIEW.otab || 'up', loc = VIEW.oloc || 'Store 1';
+  const st = _ordStock();
+  let h = `<div class="chips"><button data-otab="up" aria-pressed="${tab === 'up'}">🧺 À remonter de l’entrepôt</button><button data-otab="buy" aria-pressed="${tab === 'buy'}">🛒 À racheter</button></div>`;
+  if(tab === 'up'){
+    h += `<div class="chips">${[['Store 1', 'Balkuy'], ['Store 2', 'Ouaga 2000']].map(([id, l]) => `<button data-oloc="${id}" aria-pressed="${id === loc}">${l}</button>`).join('')}</div>`;
+    const keys = new Set(Object.keys((SSUM.stores || {})[loc] || {}).concat(Object.keys(MINS || {}).filter(x => x.indexOf(loc + '|') === 0).map(x => x.split('|')[1])));
+    const list = [];
+    keys.forEach(k => {
+      const o = st[k] || {}, have = o[loc] || 0, wh = o.Warehouse || 0, rate = _ordRate(loc, k);
+      const ov = MINS ? MINS[loc + '|' + k] : undefined;
+      const min = ov != null ? ov : rate > 0 ? Math.max(1, Math.ceil(rate)) : 0;
+      if(!min || have >= min || wh <= 0) return;
+      const want = Math.min(wh, Math.max(min, Math.ceil(rate * 2)) - have);
+      if(want > 0) list.push({ k, bc: o.bc || k, name: _ordName(k, o), have, wh, rate, min, ov: ov != null, qty: VIEW.oqty && VIEW.oqty[k] != null ? VIEW.oqty[k] : want });
+    });
+    list.sort((x, y) => y.rate - x.rate);
+    const off = VIEW.ooff || {};
+    const sel = list.filter(x => !off[x.k] && x.qty > 0);
+    h += `<p class="sub">Sous le minimum dans le magasin (≈ 1 semaine de ventes), et il en reste à l’entrepôt. Quantité proposée : de quoi tenir 2 semaines. Touchez un produit pour changer son minimum.</p>`;
+    if(!list.length) return h + '<p class="empty">Rien à remonter pour l’instant. 👍</p>';
+    h += `<button class="go" id="oreq" ${sel.length ? '' : 'disabled'} style="margin:0 0 10px">📨 Demander ${fmt(sel.reduce((a, x) => a + x.qty, 0))} article(s) à l’entrepôt</button><div class="list">` + list.map(x =>
+      `<div class="row" style="flex-wrap:wrap"><input type="checkbox" data-ooff="${x.k}" ${off[x.k] ? '' : 'checked'} style="width:22px;height:22px"><div class="nm" data-omin="${x.k}" style="cursor:pointer"><strong>${esc(x.name)}</strong><small>en rayon ${fmt(x.have)} · min ${fmt(x.min)}${x.ov ? ' (fixé)' : ''} · ${x.rate >= 1 ? fmt(x.rate) : x.rate.toFixed(1)}/sem · entrepôt ${fmt(x.wh)}</small></div>
+       <div style="display:flex;align-items:center;gap:6px"><button class="cbtn alt" data-oq="${x.k}" data-d="-1">−</button><b class="num" style="min-width:26px;text-align:center">${fmt(x.qty)}</b><button class="cbtn alt" data-oq="${x.k}" data-d="1">+</button></div></div>`).join('') + '</div>';
+    VIEW._olist = list;
+    return h;
+  }
+  const [n1, n2] = _ordNext();
+  const W = Math.round((n2 - Date.now()) / (7 * 864e5));
+  const mn = d => d.toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+  const keys = new Set(Object.keys((SSUM.stores || {})['Store 1'] || {}).concat(Object.keys((SSUM.stores || {})['Store 2'] || {})));
+  const list = [];
+  keys.forEach(k => {
+    const rate = _ordRate('Store 1', k) + _ordRate('Store 2', k); if(rate <= 0) return;
+    const o = st[k] || {}, stock = (o['Store 1'] || 0) + (o['Store 2'] || 0) + (o.Warehouse || 0);
+    const need = Math.ceil(rate * W - stock);
+    if(need > 0) list.push({ k, name: _ordName(k, o), rate, stock, need, price: priceOf(o.bc || k) });
+  });
+  list.sort((x, y) => y.rate - x.rate);
+  h += `<p class="sub">Prochain conteneur ≈ ${esc(mn(n1))}, le suivant ≈ ${esc(mn(n2))} : ce qu’on achète maintenant doit tenir ${fmt(W)} semaines. Besoin = ventes/semaine (60 derniers jours, 2 magasins) × ${fmt(W)} − stock total (magasins + entrepôt).</p>`;
+  if(!list.length) return h + '<p class="empty">Rien à racheter d’après les ventes.</p>';
+  h += `<button class="cbtn alt" id="ocopy" style="margin:0 0 10px">📋 Copier la liste (${fmt(list.length)} produits)</button><div class="list">` + list.map(x =>
+    `<div class="row" style="cursor:default"><div class="nm"><strong>${esc(x.name)}</strong><small>${x.rate >= 1 ? fmt(x.rate) : x.rate.toFixed(1)}/sem · stock ${fmt(x.stock)}${x.price ? ' · ' + fmt(x.price) + ' F' : ''}</small></div><span class="qty">${fmt(x.need)}</span></div>`).join('') + '</div>';
+  VIEW._obuy = list;
+  return h;
+}
+function bindOrder(){
+  document.querySelectorAll('[data-otab]').forEach(b => b.onclick = () => { VIEW.otab = b.dataset.otab; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-oloc]').forEach(b => b.onclick = () => { VIEW.oloc = b.dataset.oloc; VIEW.oqty = {}; VIEW.ooff = {}; history.replaceState(VIEW, ''); render(); });
+  document.querySelectorAll('[data-ooff]').forEach(c => c.onchange = () => { VIEW.ooff = Object.assign({}, VIEW.ooff, { [c.dataset.ooff]: !c.checked }); render(); });
+  document.querySelectorAll('[data-oq]').forEach(b => b.onclick = () => {
+    const x = (VIEW._olist || []).find(o => o.k === b.dataset.oq); if(!x) return;
+    VIEW.oqty = Object.assign({}, VIEW.oqty, { [x.k]: Math.max(0, Math.min(x.wh, x.qty + Number(b.dataset.d))) }); render();
+  });
+  document.querySelectorAll('[data-omin]').forEach(b => b.onclick = async () => {
+    const x = (VIEW._olist || []).find(o => o.k === b.dataset.omin); if(!x || !user) return;
+    const v = prompt('Stock minimum de « ' + x.name + ' » à ' + locName(VIEW.oloc || 'Store 1') + ' (vide = calcul automatique) :', x.ov ? x.min : '');
+    if(v === null) return;
+    try {
+      const d = await post({ action:'setMinStock', by: user.name, userHash: user.hash, barcode: x.bc, location: VIEW.oloc || 'Store 1', min: v.trim() === '' ? null : Number(v) });
+      if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+      MINS = d.mins || {}; toast('Minimum enregistré'); render();
+    } catch(e){ toast('Pas enregistré : ' + e.message); }
+  });
+  const rq = $('#oreq'); if(rq) rq.onclick = async () => {
+    const off = VIEW.ooff || {}, loc = VIEW.oloc || 'Store 1';
+    const lines = (VIEW._olist || []).filter(x => !off[x.k] && x.qty > 0).map(x => ({ barcode: x.bc, name: x.name, qty: x.qty }));
+    if(!lines.length || !user) return;
+    rq.disabled = true; rq.textContent = 'Envoi…';
+    try {
+      const d = await post({ action:'stock1981RequestTransfer', by: user.name, userHash: user.hash, from: 'Warehouse', to: loc, lines, note: 'Sous le minimum (Stock1981 → Commandes)' });
+      if(!d || !d.success) throw new Error((d && d.error) || 'refusé');
+      toast('📨 Demande ' + d.id + ' envoyée à l’entrepôt (' + d.lines + ' produit(s))'); VIEW.oqty = {}; VIEW.ooff = {}; render(); try { loadTransit(); } catch(e){}
+    } catch(e){ rq.disabled = false; toast('Pas envoyé : ' + e.message); }
+  };
+  const cp = $('#ocopy'); if(cp) cp.onclick = async () => {
+    const txt = (VIEW._obuy || []).map(x => x.name + ' — ' + x.need).join('\n');
+    try { await navigator.clipboard.writeText(txt); toast('Liste copiée'); } catch(e){ toast('Copie impossible sur cet appareil'); }
+  };
+}
+
 async function loadSSum(force){
   if(SSUM_BUSY || !URL_ || !KEY) return;
   if(!force && SSUM && Date.now() - (SSUM.at || 0) < 10 * 60 * 1000) return;
@@ -3238,7 +3423,7 @@ async function loadSSum(force){
     ls('s1981_ssum', JSON.stringify(SSUM));
   } catch(e){ SSUM_ERR = e.message === 'old' || /Unknown|invalid/i.test(e.message) ? 'Collez « LATEST - Code GS » et redéployez pour voir les ventes par produit.' : 'Pas de connexion : derniers chiffres gardés sur ce téléphone.'; }
   SSUM_BUSY = false;
-  if(VIEW.screen === 'valeur') render();
+  if(VIEW.screen === 'valeur' || VIEW.screen === 'order') render();
 }
 const VAL_LOCS = [['all', 'Tout'], ['Store 1', 'Balkuy'], ['Store 2', 'Ouaga 2000'], ['Warehouse', 'Entrepôt']];
 function _valDay(n){ const d = new Date(Date.now() - n * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
