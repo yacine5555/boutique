@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<script src="device-setup.js"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2a1022">
@@ -3906,8 +3907,10 @@ function openSettings(){
   openSheet(`<h3>${esc(user ? user.name : 'Stock1981')}</h3><div class="sub">${user ? esc(user.role) : ''}</div>
     <div class="setrow"><div>Lien du Sheet<small>${URL_ ? '…' + esc(tail) + '/exec' : 'non configuré'}</small></div><button class="cbtn alt" id="slink">Modifier</button></div>
     <div class="setrow"><div>Données<small>${DATA && DATA.generatedAt ? 'à jour ' + new Date(DATA.generatedAt).toLocaleString('fr-FR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : 'pas encore chargées'}${QUEUE.length ? ' · ' + QUEUE.length + ' en attente' : ''}</small></div><button class="cbtn alt" id="sreload">Recharger</button></div>
+    ${user && user.role === 'Admin' && URL_ && KEY ? '<div class="setrow"><div>Ajouter un appareil<small>QR pour configurer un nouveau téléphone</small></div><button class="cbtn alt" id="sdev">📲 QR</button></div>' : ''}
     <button class="go" id="slock">Verrouiller</button><button class="ghost" id="sx">Fermer</button>`);
   $('#sx').onclick = closeSheet;
+  if($('#sdev')) $('#sdev').onclick = () => { closeSheet(); if(window.deviceSetupShowQR) deviceSetupShowQR(); else toast('Rechargez la page'); };
   $('#slock').onclick = () => { closeSheet(); lock(); };
   $('#sreload').onclick = () => { closeSheet(); loadData(); loadTraces(); loadMaps(); flushQueue(); };
   $('#slink').onclick = () => {

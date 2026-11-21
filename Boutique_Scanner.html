@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="device-setup.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1706,7 +1707,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v7-nov-r</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v21-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -2266,6 +2267,16 @@ input,select{font-family:inherit}
         </div>
         <div style="font-size:11px;color:var(--ink4);margin-top:8px" id="psync-last">Never synced</div>
         <div style="font-size:12px;color:var(--ink3);margin-top:6px" id="psync-price-report"></div>
+      </div>
+
+      <!-- 📲 Ajouter un appareil (21 Nov 2026) -->
+      <div class="admin-card">
+        <div class="admin-card-title">📲 Ajouter un appareil</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">
+          Configure un nouveau téléphone ou une tablette en 1 scan : liens + clé de cet
+          appareil copiés pour la Caisse, Comptage et Stock1981. Rien à taper.
+        </div>
+        <div class="btn-row"><button class="btn-sm btn-blue" onclick="if(window.deviceSetupShowQR) deviceSetupShowQR(); else showToast('⚠ Rechargez la page (fichier device-setup.js manquant).', 4000)">📲 Afficher le QR</button></div>
       </div>
 
       <!-- Sales Sync (real-time push to Sheets) -->

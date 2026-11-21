@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<script src="device-setup.js"></script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 <title>Comptage Inventaire — Boutique</title>
@@ -495,6 +496,7 @@ body.ctl-mode #zone-notes-input{display:none!important;}
     <p class="sub" style="margin:0 0 12px;font-size:12.5px">Quelques étagères tirées au sort à compter chaque jour : l'appli compare avec les ventes et signale ce qui manque.</p>
     <button class="btn-secondary" id="btn-manage-zones" style="display:none" onclick="openZoneManager()">🗺 Gérer les zones de cet emplacement</button>
     <button class="btn-secondary admin-only" onclick="openUsersAdmin()">👥 Codes d'accès (1981 / Patronne)</button>
+    <button class="btn-secondary admin-only" onclick="if(currentUser && currentUser.role === 'Admin' && window.deviceSetupShowQR) deviceSetupShowQR(); else showToast('Connectez-vous avec un code Admin.')">📲 Ajouter un appareil</button>
     <button class="btn-secondary admin-only" onclick="openTracer()">📷 Tracer les cases sur les photos</button>
 
     <button class="btn-primary" onclick="startSession()">Commencer le comptage</button>
