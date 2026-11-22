@@ -47,7 +47,7 @@ const HEADER_ROW = 3;
 const FIRST_DATA_ROW = 4;
 // Change this to anything private only you know. The Barcode Generator
 // must send this same value for writes to be accepted.
-const WRITE_KEY = "PUT-YOUR-WRITE-KEY-HERE"; // the real key is only in Apps Script, never on GitHub
+const WRITE_KEY = "AH202520";
 /**
  * handleUpdateCounts — called by the Inventory Counter app when the user
  * taps "Envoyer au Sheet". Expects:
@@ -204,11 +204,11 @@ function doGet(e) {
       return jsonResponse({ success: true, layouts: readMapLayouts_() });
     }
     if (e.parameter && e.parameter.action === 'getCatalogue') {
-      return jsonResponse({ success: true, lists: readCatalogue_() });
+      return jsonResponse({ success: true, lists: readCatalogue_(), meta: readCatalogueMeta_() });
     }
     if (e.parameter && e.parameter.action === 'getZonePhotos') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
-      return jsonResponse({ success: true, traces: readZonePhotoTraces_() });
+      return jsonResponse({ success: true, traces: readZonePhotoTraces_(), images: readZoneImages_() });
     }
     if (e.parameter && e.parameter.action === 'getControlReport') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
@@ -239,6 +239,26 @@ function doGet(e) {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
       return handleGetPrintQueue(e.parameter.store || '');
     }
+    if (e.parameter && e.parameter.action === 'getReorg') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetReorg(e.parameter);
+    }
+    if (e.parameter && e.parameter.action === 'getSensitive') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetSensitive(e.parameter);
+    }
+    if (e.parameter && e.parameter.action === 'getLossReport') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetLossReport(e.parameter);
+    }
+    if (e.parameter && e.parameter.action === 'getMinStock') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetMinStock();
+    }
+    if (e.parameter && e.parameter.action === 'getDateRound') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetDateRound(e.parameter);
+    }
     if (e.parameter && e.parameter.action === 'getStock1981') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
       return handleGetStock1981();
@@ -250,6 +270,14 @@ function doGet(e) {
     if (e.parameter && e.parameter.action === 'getArrivals') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
       return handleGetArrivals();
+    }
+    if (e.parameter && e.parameter.action === 'getSalesSummary') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetSalesSummary(e.parameter);
+    }
+    if (e.parameter && e.parameter.action === 'getSorties') {
+      if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
+      return handleGetSorties(e.parameter);
     }
     if (e.parameter && e.parameter.action === 'getMovements') {
       if (e.parameter.key !== WRITE_KEY) return jsonResponse({ error: "Invalid key" }, 403);
@@ -329,8 +357,32 @@ function doPost(e) {
     if (body.action === "setCatalogueList") {
       return handleSetCatalogueList(body);
     }
+    if (body.action === "setMinStock") return handleSetMinStock(body);
+    if (body.action === "setSensitive") return handleSetSensitive(body);
+    if (body.action === "sensitiveCount") return handleSensitiveCount(body);
+    if (body.action === "resolveSensitive") return handleResolveSensitive(body);
+    if (body.action === "dateRoundZone") return handleDateRoundZone(body);
+    if (body.action === "setCataloguePhoto") {
+      return handleSetCataloguePhoto(body);
+    }
     if (body.action === "setZonePhotoTraces") {
       return handleSetZonePhotoTraces(body);
+    }
+    if (body.action === "setPromo") return handleSetPromo(body);
+    if (body.action === "reportMissing") return handleReportMissing(body);
+    if (body.action === "resolveMissing") return handleResolveMissing(body);
+    if (body.action === "customerRequest") return handleCustomerRequest(body);
+    if (body.action === "setLotPrice") {
+      return handleSetLotPrice(body);
+    }
+    if (body.action === "setPack") {
+      return handleSetPack(body);
+    }
+    if (body.action === "setZoneImage") {
+      return handleSetZoneImage(body);
+    }
+    if (body.action === "setSpotEmpty") {
+      return handleSetSpotEmpty(body);
     }
     if (body.action === "getControlPlan") {
       return handleGetControlPlan(body);
@@ -395,6 +447,11 @@ function doPost(e) {
     if (body.action === "stock1981Count") {
       return handleStock1981Count(body);
     }
+    if (body.action === "reorgMark") return handleReorgMark(body);
+    if (body.action === "reorgStatus") return handleReorgStatus(body);
+    if (body.action === "reorgScans") return handleReorgScans(body);
+    if (body.action === "stock1981RequestTransfer") return handleStock1981RequestTransfer(body);
+    if (body.action === "getBilan") return jsonResponse(Object.assign({ success: true }, buildBilan_(body.date)));
     if (body.action === "stock1981Labels") {
       return handleStock1981Labels(body);
     }
@@ -1185,11 +1242,21 @@ function handleGetPriceList(withCost) {
     if (aliases[k]) return; // old made-up code, replaced by its real barcode
     const m = mm[k], s = sp[k];
     const p = { barcode: m.barcode, name: m.name, category: m.category, m: m.price, s1: s ? s.s1 : null, s2: s ? s.s2 : null };
-    if (withCost) p.cost = cost[k] != null ? cost[k] : null;
+    if (withCost) {
+      const c = cost[k];
+      p.cost = c && c.usd != null ? c.usd : null;
+      p.costCfa = c && c.cfa != null ? c.cfa : null;
+      p.costCur = c ? c.cur : '';
+      p.supplier = c ? c.sup : '';
+    }
     products.push(p);
   });
   products.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  return jsonResponse({ success: true, products: products, generatedAt: new Date().toISOString() });
+  let lots = [];
+  try { lots = readLots_(); } catch (eLots) {}
+  let promos = [];
+  try { promos = readPromos_(); } catch (ePromo) {}
+  return jsonResponse({ success: true, products: products, lots: lots, promos: promos, generatedAt: new Date().toISOString() });
 }
 
 function _ptOpenFor(rows, loc, key) {
@@ -2018,6 +2085,401 @@ function readZonePhotoTraces_() {
   });
   return out;
 }
+// ══════════════════════════════════════════════════════════════════
+//  STOCK1981 — ZONE PHOTOS TAKEN IN THE APP + EMPTY SHELVES (4 Nov 2026)
+//  setZoneImage (POST, Admin): { location, zone, dataUrl: "data:image/jpeg;base64,…",
+//    width, height, adminName, adminHash } → the photo is saved in the Drive
+//    folder « Stock1981 — Photos de zones » (shared: anyone with the link can
+//    view, so the app can show it), logged in the « Zone Images » tab (latest
+//    row of a zone wins). The zone's shelf boxes drawn on the old photo are
+//    removed from « Zone Photos »: they are redrawn on the new photo.
+//  setSpotEmpty (POST, Admin): { location, zone, spots: [codes], empty: true|false,
+//    adminName, adminHash } → « Étagères vides » tab. A shelf counted with
+//    items later is cleared automatically (stock1981Count).
+//  Read back: getZonePhotos → images, getStock1981 → empty.
+// ══════════════════════════════════════════════════════════════════
+const ZONE_IMAGES_SHEET = "Zone Images";
+const ZONE_IMAGES_HEADERS = ['Location', 'Zone', 'Drive File ID', 'Photo W', 'Photo H', 'Taken By', 'Taken At'];
+const ZONE_IMAGES_FOLDER = "Stock1981 — Photos de zones";
+const SPOT_EMPTY_SHEET = "Étagères vides";
+const SPOT_EMPTY_HEADERS = ['Location', 'Zone', 'Spot', 'Marked By', 'Marked At'];
+
+function s1981Tab_(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName(name);
+  if (!ws) {
+    ws = ss.insertSheet(name);
+    ws.appendRow(headers);
+    ws.setFrozenRows(1);
+    ws.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  }
+  return ws;
+}
+function readZoneImages_() {
+  const ws = s1981Tab_(ZONE_IMAGES_SHEET, ZONE_IMAGES_HEADERS);
+  const last = ws.getLastRow(), out = {};
+  if (last < 2) return out;
+  ws.getRange(2, 1, last - 1, ZONE_IMAGES_HEADERS.length).getValues().forEach(r => {
+    const loc = String(r[0]).trim(), zone = String(r[1]).trim(), id = String(r[2]).trim();
+    if (!loc || !zone || !id) return;
+    out[loc] = out[loc] || {};
+    out[loc][zone] = { id: id, w: Number(r[3]) || 0, h: Number(r[4]) || 0, by: String(r[5] || ''), at: r[6] instanceof Date ? r[6].toISOString() : String(r[6] || '') };
+  });
+  return out;
+}
+function handleSetZoneImage(body) {
+  if (!counterAdminOk_(body)) return jsonResponse({ success: false, error: "Code administrateur incorrect" }, 403);
+  const loc = String(body.location || '').trim(), zone = String(body.zone || '').trim();
+  if (!loc || !zone) return jsonResponse({ success: false, error: "Zone manquante" }, 400);
+  const m = /^data:image\/(jpeg|png);base64,(.+)$/.exec(String(body.dataUrl || ''));
+  if (!m) return jsonResponse({ success: false, error: "Photo illisible" }, 400);
+  const it = DriveApp.getFoldersByName(ZONE_IMAGES_FOLDER);
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(ZONE_IMAGES_FOLDER);
+  const at = new Date();
+  const stamp = Utilities.formatDate(at, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm');
+  const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], loc + ' ' + zone + ' ' + stamp + '.' + (m[1] === 'png' ? 'png' : 'jpg'));
+  const file = folder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (eShare) {}
+  const by = String(body.adminName || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    s1981Tab_(ZONE_IMAGES_SHEET, ZONE_IMAGES_HEADERS).appendRow([loc, zone, file.getId(), Number(body.width) || 0, Number(body.height) || 0, by, at]);
+    // boxes drawn on the old photo no longer fit
+    const zp = zonePhotosSheet_(), last = zp.getLastRow();
+    if (last >= 2) {
+      const vals = zp.getRange(2, 1, last - 1, 2).getValues();
+      for (let i = vals.length - 1; i >= 0; i--) {
+        if (String(vals[i][0]).trim() === loc && String(vals[i][1]).trim() === zone) zp.deleteRow(i + 2);
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ success: true, image: { id: file.getId(), w: Number(body.width) || 0, h: Number(body.height) || 0, by: by, at: at.toISOString() } });
+}
+function readSpotEmpty_() {
+  const ws = s1981Tab_(SPOT_EMPTY_SHEET, SPOT_EMPTY_HEADERS);
+  const last = ws.getLastRow();
+  if (last < 2) return [];
+  return ws.getRange(2, 1, last - 1, SPOT_EMPTY_HEADERS.length).getValues()
+    .filter(r => r[0] && r[2])
+    .map(r => [String(r[0]), String(r[1] || ''), String(r[2]), r[4] instanceof Date ? r[4].toISOString() : String(r[4] || ''), String(r[3] || '')]);
+}
+function clearSpotEmptyUnlocked_(loc, spot) {
+  const ws = s1981Tab_(SPOT_EMPTY_SHEET, SPOT_EMPTY_HEADERS);
+  const last = ws.getLastRow();
+  if (last < 2) return;
+  const vals = ws.getRange(2, 1, last - 1, 3).getValues();
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]) === loc && String(vals[i][2]) === spot) ws.deleteRow(i + 2);
+  }
+}
+function handleSetSpotEmpty(body) {
+  if (!counterAdminOk_(body)) return jsonResponse({ success: false, error: "Code administrateur incorrect" }, 403);
+  const loc = String(body.location || '').trim(), zone = String(body.zone || '').trim();
+  const spots = (Array.isArray(body.spots) ? body.spots : []).map(x => String(x || '').trim()).filter(Boolean);
+  if (!loc || !zone || !spots.length) return jsonResponse({ success: false, error: "Zone ou étagère manquante" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    spots.forEach(sp => clearSpotEmptyUnlocked_(loc, sp));
+    if (body.empty !== false) {
+      const ws = s1981Tab_(SPOT_EMPTY_SHEET, SPOT_EMPTY_HEADERS), at = new Date(), by = String(body.adminName || '');
+      ws.getRange(ws.getLastRow() + 1, 1, spots.length, SPOT_EMPTY_HEADERS.length).setValues(spots.map(sp => [loc, zone, sp, by, at]));
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ success: true, empty: readSpotEmpty_() });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PRIX PAR LOT + PACKS (5 Nov 2026)
+//  « Prix par lot » tab: Code-barres | Produit | Quantité | Prix du lot | Actif | Note
+//    e.g. Dole: 3 for 14 000 F. Sent with getPriceList (lots): the till and
+//    the Caisse de secours take the difference off by themselves as soon as
+//    the Nth unit is in the bag. setLotPrice (POST, key): add / change / remove.
+//  « Packs » tab: Code du pack | Pack | Code article | Article | Quantité par pack
+//    e.g. a Vaseline pack = 2 × lotion A + 1 × lotion B. Sent with
+//    getStock1981 (packs). Stock1981 « 📦 Ouvrir un pack »: pack −1, its
+//    bottles +2 / +1 (reason « Pack ouvert », through stock1981Adjust).
+//    setPack (POST, Admin code): replaces one pack's contents.
+// ══════════════════════════════════════════════════════════════════
+const LOTS_SHEET = "Prix par lot";
+const LOTS_HEADERS = ['Code-barres', 'Produit', 'Quantité', 'Prix du lot', 'Actif', 'Note'];
+const PACKS_SHEET = "Packs";
+const PACKS_HEADERS = ['Code du pack', 'Pack', 'Code article', 'Article', 'Quantité par pack'];
+function lotsSheet_() {
+  const ws = s1981Tab_(LOTS_SHEET, LOTS_HEADERS);
+  try { ws.getRange('A:A').setNumberFormat('@'); } catch (e) {}
+  return ws;
+}
+function readLots_() {
+  const ws = lotsSheet_(), last = ws.getLastRow();
+  if (last < 2) return [];
+  return ws.getRange(2, 1, last - 1, LOTS_HEADERS.length).getValues()
+    .filter(r => r[0] && Number(r[2]) >= 2 && Number(r[3]) > 0 && r[4] !== false && String(r[4]).toUpperCase() !== 'NON' && String(r[4]).toUpperCase() !== 'FALSE')
+    .map(r => ({ barcode: normalizeBarcode(r[0]), name: String(r[1] || ''), n: Math.round(Number(r[2])), price: Math.round(Number(r[3])) }));
+}
+// body: { barcode, name, n, price, remove }
+function handleSetLotPrice(body) {
+  const bc = normalizeBarcode(body.barcode || '');
+  if (!bc) return jsonResponse({ success: false, error: "Code-barres manquant" }, 400);
+  const n = Math.round(Number(body.n) || 0), price = Math.round(Number(body.price) || 0);
+  if (!body.remove && (n < 2 || price <= 0)) return jsonResponse({ success: false, error: "Quantité (2 ou plus) et prix du lot requis" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = lotsSheet_(), last = ws.getLastRow();
+    if (last >= 2) {
+      const vals = ws.getRange(2, 1, last - 1, 1).getValues();
+      for (let i = vals.length - 1; i >= 0; i--) if (barcodeKey(vals[i][0]) === barcodeKey(bc)) ws.deleteRow(i + 2);
+    }
+    if (!body.remove) ws.appendRow([bc, String(body.name || ''), n, price, true, String(body.note || '')]);
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ success: true, lots: readLots_() });
+}
+// ════════════════════════════════════════════════════════════════
+//  PROMOS (6 Nov 2026) — tab « Promos ». One row per promo:
+//   Cible = « liste » (a Catalogue list, e.g. Thaïlande) or « produit »
+//   Remise = « pourcent » (−50 %) or « prix » (fixed promo price)
+//   Magasin = Tous / Store 1 / Store 2 · Début / Fin (Fin empty = until the
+//   stock is gone) · Style = Déstockage (red) / Promo (yellow).
+//  The normal price is never touched: the tills take the promo off as a
+//  Remise, and stop by themselves after the end date. getPriceList returns
+//  the promos (with the list's barcodes expanded) as « promos ».
+// ════════════════════════════════════════════════════════════════
+const PROMOS_SHEET = "Promos";
+const PROMOS_HEADERS = ['ID', 'Nom', 'Cible', 'Liste ou code-barres', 'Remise', 'Valeur', 'Magasin', 'Début', 'Fin', 'Actif', 'Style', 'Créée par', 'Créée le'];
+function promoDay_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Africa/Ouagadougou', 'yyyy-MM-dd');
+  const sv = String(v).trim(), m = sv.match(/^(\d{4})-(\d{2})-(\d{2})/), f = sv.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? m[1] + '-' + m[2] + '-' + m[3] : f ? f[3] + '-' + f[2] + '-' + f[1] : '';
+}
+function readPromos_() {
+  const ws = s1981Tab_(PROMOS_SHEET, PROMOS_HEADERS), last = ws.getLastRow();
+  if (last < 2) return [];
+  const cat = readCatalogue_(), today = Utilities.formatDate(new Date(), 'Africa/Ouagadougou', 'yyyy-MM-dd');
+  const old = Utilities.formatDate(new Date(Date.now() - 14 * 86400000), 'Africa/Ouagadougou', 'yyyy-MM-dd');
+  const out = [];
+  ws.getRange(2, 1, last - 1, PROMOS_HEADERS.length).getValues().forEach(r => {
+    const id = String(r[0] || '').trim(); if (!id) return;
+    const kind = /liste|list/i.test(String(r[2])) ? 'list' : 'product', target = String(r[3] || '').trim();
+    const type = /prix|price/i.test(String(r[4])) ? 'price' : 'percent', value = Number(r[5]) || 0;
+    const on = !(r[9] === false || /^(non|false|0)$/i.test(String(r[9]).trim()));
+    const start = promoDay_(r[7]), end = promoDay_(r[8]);
+    if (!target || value <= 0) return;
+    if (end && end < old) return;                       // ended more than 14 days ago: forget it
+    const barcodes = kind === 'list'
+      ? (cat[target] || []).map(it => normalizeBarcode(it.barcode)).filter(Boolean)
+      : [normalizeBarcode(target)];
+    out.push({ id: id, name: String(r[1] || target), kind: kind, target: target, type: type, value: value,
+      store: /store 1|balkuy/i.test(String(r[6])) ? 'Store 1' : /store 2|ouaga/i.test(String(r[6])) ? 'Store 2' : 'all',
+      start: start, end: end, on: on, style: /promo/i.test(String(r[10])) && !/d[ée]stock/i.test(String(r[10])) ? 'promo' : 'destock',
+      by: String(r[11] || ''), barcodes: barcodes,
+      state: !on ? 'off' : (end && end < today) ? 'ended' : (start && start > today) ? 'soon' : 'active' });
+  });
+  return out;
+}
+// body: { id?, name, kind 'list'|'product', target, type 'percent'|'price', value, store, start, end, style, by, remove, off }
+function handleSetPromo(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = s1981Tab_(PROMOS_SHEET, PROMOS_HEADERS);
+    try { ws.getRange('D:D').setNumberFormat('@'); ws.getRange('H:I').setNumberFormat('@'); } catch (eF) {}
+    const last = ws.getLastRow(), id = String(body.id || '').trim();
+    let row = 0;
+    if (id && last >= 2) { const ids = ws.getRange(2, 1, last - 1, 1).getValues(); for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { row = i + 2; break; } }
+    if (body.remove) { if (row) ws.deleteRow(row); }
+    else if (body.off != null && row) {
+      ws.getRange(row, 10).setValue(body.off ? 'NON' : 'OUI');
+      if (body.off) ws.getRange(row, 9).setValue(Utilities.formatDate(new Date(Date.now() - 86400000), 'Africa/Ouagadougou', 'yyyy-MM-dd'));
+    } else {
+      const target = String(body.target || '').trim(), value = Number(body.value) || 0;
+      if (!target || value <= 0) return jsonResponse({ success: false, error: "Cible et remise requises" }, 400);
+      if (body.type !== 'price' && value >= 100) return jsonResponse({ success: false, error: "Pourcentage entre 1 et 99" }, 400);
+      const vals = [id || ('P' + Utilities.formatDate(new Date(), 'Africa/Ouagadougou', 'yyMMddHHmmss')), String(body.name || target),
+        body.kind === 'list' ? 'liste' : 'produit', body.kind === 'list' ? target : normalizeBarcode(target),
+        body.type === 'price' ? 'prix' : 'pourcent', value,
+        body.store === 'Store 1' ? 'Store 1' : body.store === 'Store 2' ? 'Store 2' : 'Tous',
+        promoDay_(body.start) || Utilities.formatDate(new Date(), 'Africa/Ouagadougou', 'yyyy-MM-dd'), promoDay_(body.end),
+        'OUI', body.style === 'promo' ? 'Promo' : 'Déstockage', String(body.by || ''), new Date()];
+      if (row) ws.getRange(row, 1, 1, vals.length).setValues([vals]);
+      else ws.getRange(ws.getLastRow() + 1, 1, 1, vals.length).setValues([vals]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ success: true, promos: readPromos_() });
+}
+function readPacks_() {
+  const ws = s1981Tab_(PACKS_SHEET, PACKS_HEADERS), last = ws.getLastRow(), out = {};
+  if (last < 2) return out;
+  ws.getRange(2, 1, last - 1, PACKS_HEADERS.length).getValues().forEach(r => {
+    const pk = normalizeBarcode(r[0]), it = normalizeBarcode(r[2]), q = Math.round(Number(r[4]) || 0);
+    if (!pk || !it || q <= 0) return;
+    const k = barcodeKey(pk);
+    out[k] = out[k] || { barcode: pk, name: String(r[1] || ''), items: [] };
+    out[k].items.push({ barcode: it, name: String(r[3] || ''), qty: q });
+  });
+  return out;
+}
+// body: { barcode, name, items:[{barcode, name, qty}], adminName, adminHash } (items empty = remove)
+function handleSetPack(body) {
+  if (!counterAdminOk_(body)) return jsonResponse({ success: false, error: "Code administrateur incorrect" }, 403);
+  const pk = normalizeBarcode(body.barcode || '');
+  if (!pk) return jsonResponse({ success: false, error: "Code du pack manquant" }, 400);
+  const items = (Array.isArray(body.items) ? body.items : []).map(it => ({ bc: normalizeBarcode(it.barcode || ''), name: String(it.name || ''), qty: Math.round(Number(it.qty) || 0) })).filter(it => it.bc && it.qty > 0);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = s1981Tab_(PACKS_SHEET, PACKS_HEADERS);
+    try { ws.getRange('A:A').setNumberFormat('@'); ws.getRange('C:C').setNumberFormat('@'); } catch (e) {}
+    const last = ws.getLastRow();
+    if (last >= 2) {
+      const vals = ws.getRange(2, 1, last - 1, 1).getValues();
+      for (let i = vals.length - 1; i >= 0; i--) if (barcodeKey(vals[i][0]) === barcodeKey(pk)) ws.deleteRow(i + 2);
+    }
+    if (items.length) ws.getRange(ws.getLastRow() + 1, 1, items.length, PACKS_HEADERS.length).setValues(items.map(it => [pk, String(body.name || ''), it.bc, it.name, it.qty]));
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonResponse({ success: true, packs: readPacks_() });
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SALES SUMMARY (10 Nov 2026) — for Stock1981 « 💰 Valeur & dormants »
+//  and the February shipment list. Reads « Lignes de vente » (all sales
+//  since July, one line per item) + the day tabs Sales_yyyy-MM-dd newer than
+//  its last date. Per store and per barcode: [last sale day, qty 30 d,
+//  qty 60 d, qty 90 d, qty since the first day kept, first sale day].
+//  Returns subtract; voided lines are ignored. Lines without a barcode are
+//  skipped (they cannot be matched to the stock).
+// ════════════════════════════════════════════════════════════════
+function handleGetSalesSummary(p) {
+  const days = Math.max(30, Math.min(200, Number(p.days) || 150));
+  const tz = CONTROL_TZ, now = new Date(), today = ctlDay_(now);
+  const dOff = n => Utilities.formatDate(new Date(now.getTime() - n * 86400000), tz, 'yyyy-MM-dd');
+  const d30 = dOff(30), d60 = dOff(60), d90 = dOff(90), since = dOff(days);
+  const out = { 'Store 1': {}, 'Store 2': {} }, first = { 'Store 1': '', 'Store 2': '' };
+  const storeOf = v => { const t = String(v || ''); return /ouaga|2000/i.test(t) ? 'Store 2' : t ? 'Store 1' : ''; };
+  const add = (day, type, bc, qty, store) => {
+    if (!day || day < since || !bc) return;
+    const ty = String(type || '').toLowerCase();
+    let q = Number(qty) || 0;
+    if (ty === 'voided' || ty === 'remise' || !q) return;
+    if (ty === 'return' || ty === 'retour') q = -Math.abs(q);
+    else if (ty !== 'sale') return;
+    const st = storeOf(store); if (!st) return;
+    const k = barcodeKey(bc); if (!k) return;
+    const e = out[st][k] || (out[st][k] = ['', 0, 0, 0, 0, '']);
+    if (q > 0 && day > e[0]) e[0] = day;
+    if (q > 0 && (!e[5] || day < e[5])) e[5] = day;
+    if (day >= d30) e[1] += q;
+    if (day >= d60) e[2] += q;
+    if (day >= d90) e[3] += q;
+    e[4] += q;
+    if (!first[st] || day < first[st]) first[st] = day;
+  };
+  const ss = SpreadsheetApp.openById(SALES_SHEET_ID);
+  let maxDay = '';
+  const lv = ss.getSheetByName('Lignes de vente');
+  if (lv && lv.getLastRow() > 1) {
+    lv.getRange(2, 1, lv.getLastRow() - 1, 12).getValues().forEach(r => {
+      const day = ctlDayStr_(r[0]).slice(0, 10);
+      if (day > maxDay) maxDay = day;
+      add(day, r[2], String(r[3] || '').trim(), r[6], r[11]);
+    });
+  }
+  // newer day tabs (Lignes de vente is filled later)
+  for (let i = 0; i <= 10; i++) {
+    const day = dOff(i);
+    if (maxDay && day <= maxDay) break;
+    const sh = ss.getSheetByName('Sales_' + day);
+    if (!sh || sh.getLastRow() < 2) continue;
+    sh.getRange(2, 1, sh.getLastRow() - 1, 13).getValues().forEach(r => add(day, r[2], String(r[3] || '').trim(), r[6], r[12]));
+  }
+  return jsonResponse({ success: true, today: today, days: days, first: first, stores: out, generatedAt: now.toISOString() });
+}
+
+// ════════════════════════════════════════════════════════════════
+//  « OÙ EST-IL ? » for staff (Scanner, 10 Nov 2026)
+//  · reportMissing: the product is not where the app says → tab
+//    « Introuvables » (open until 1981 marks it réglé in Stock1981).
+//  · customerRequest: a customer asks for something we don't have → the
+//    February shipment list (Google Sheet), as « Idée », with a counter of
+//    how many times it was asked for (column AE « Demandes clients »).
+// ════════════════════════════════════════════════════════════════
+const FLAGS_SHEET = "Introuvables";
+const FLAGS_HEADERS = ['ID', 'Date', 'Magasin', 'Zone', 'Étagère', 'Code-barres', 'Produit', 'Par', 'Statut', 'Réglé le'];
+const SHIP_SHEET_ID = '1aFau6c7s_UkVoY6GtYb4qSbCpMOpzouhxAqiAdURSB4';
+function readFlags_() {
+  const ws = s1981Tab_(FLAGS_SHEET, FLAGS_HEADERS), last = ws.getLastRow();
+  if (last < 2) return [];
+  return ws.getRange(2, 1, last - 1, FLAGS_HEADERS.length).getValues()
+    .filter(r => r[0] && String(r[8]) !== 'Réglé')
+    .map(r => ({ id: String(r[0]), at: r[1] instanceof Date ? r[1].toISOString() : String(r[1]), loc: String(r[2]), zone: String(r[3]), spot: String(r[4]), barcode: String(r[5]), name: String(r[6]), by: String(r[7]) }));
+}
+function handleReportMissing(body) {
+  const loc = String(body.location || ''), bc = normalizeBarcode(body.barcode);
+  if (VALID_LOCATIONS.indexOf(loc) === -1 || !bc) return jsonResponse({ success: false, error: 'Magasin ou produit manquant' }, 400);
+  const ws = s1981Tab_(FLAGS_SHEET, FLAGS_HEADERS);
+  const id = 'F' + Utilities.formatDate(new Date(), CONTROL_TZ, 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10);
+  const r0 = ws.getLastRow() + 1;
+  ws.getRange(r0, 6).setNumberFormat('@');
+  ws.getRange(r0, 1, 1, FLAGS_HEADERS.length).setValues([[id, Utilities.formatDate(new Date(), CONTROL_TZ, 'yyyy-MM-dd HH:mm'), loc, String(body.zone || ''), String(body.spot || ''), bc, String(body.name || ''), String(body.by || ''), 'Ouvert', '']]);
+  return jsonResponse({ success: true, id: id });
+}
+function handleResolveMissing(body) {
+  const ws = s1981Tab_(FLAGS_SHEET, FLAGS_HEADERS), last = ws.getLastRow(), id = String(body.id || '');
+  if (last >= 2 && id) {
+    const ids = ws.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { ws.getRange(i + 2, 9, 1, 2).setValues([['Réglé', Utilities.formatDate(new Date(), CONTROL_TZ, 'yyyy-MM-dd HH:mm')]]); break; }
+  }
+  return jsonResponse({ success: true, flags: readFlags_() });
+}
+function handleCustomerRequest(body) {
+  const name = String(body.name || '').trim(), bc = body.barcode ? normalizeBarcode(body.barcode) : '';
+  if (!name && !bc) return jsonResponse({ success: false, error: 'Produit manquant' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = SpreadsheetApp.openById(SHIP_SHEET_ID).getSheetByName('Liste');
+    if (!ws) return jsonResponse({ success: false, error: 'Onglet « Liste » introuvable' });
+    if (String(ws.getRange('AE1').getValue()) !== 'Demandes clients') ws.getRange('AE1').setValue('Demandes clients');
+    const n = Math.max(ws.getMaxRows() - 1, 1);
+    const vals = ws.getRange(2, 1, n, 31).getValues();
+    const k = bc ? barcodeKey(bc) : '', lname = name.toLowerCase();
+    let row = 0, lastData = 1;
+    vals.forEach((r, i) => {
+      if (String(r[3]).trim()) lastData = i + 2;
+      if (row) return;
+      if ((k && r[5] && barcodeKey(String(r[5])) === k) || (lname && String(r[3]).trim().toLowerCase() === lname)) row = i + 2;
+    });
+    const who = [String(body.store || ''), String(body.by || ''), Utilities.formatDate(new Date(), CONTROL_TZ, 'dd/MM')].filter(Boolean).join(' · ');
+    let count;
+    if (row) {
+      count = (Number(vals[row - 2][30]) || 0) + 1;
+      ws.getRange(row, 31).setValue(count);
+    } else {
+      row = lastData + 1; count = 1;
+      if (row > ws.getMaxRows()) ws.insertRowsAfter(ws.getMaxRows(), 20);
+      ws.getRange(row, 1).setValue('Idée');
+      ws.getRange(row, 4).setValue(name || bc);
+      if (bc) { ws.getRange(row, 6).setNumberFormat('@'); ws.getRange(row, 6).setValue(bc); }
+      ws.getRange(row, 29).setValue('Demandé par un client (' + who + ')');
+      ws.getRange(row, 30).setValue('Demande client');
+      ws.getRange(row, 31).setValue(1);
+    }
+    return jsonResponse({ success: true, count: count });
+  } finally { lock.releaseLock(); }
+}
+
 function counterAdminOk_(body) {
   const users = readCounterUsers_();
   const admin = users.find(u => u.active && u.role === 'Admin' && u.name.toLowerCase() === String(body.adminName || '').toLowerCase());
@@ -2122,7 +2584,7 @@ function handleSetMapLayout(body) {
 //  (Admin → Catalogue); saving a list replaces all of its rows.
 // ══════════════════════════════════════════
 const CATALOGUE_SHEET = 'Catalogue';
-const CATALOGUE_HEADERS = ['List', 'Order', 'Barcode', 'Name', 'Photo', 'Updated At'];
+const CATALOGUE_HEADERS = ['List', 'Order', 'Barcode', 'Name', 'Photo', 'Updated At', 'Keyword', 'Pack Barcode', 'Units Per Pack'];
 function catalogueSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let ws = ss.getSheetByName(CATALOGUE_SHEET);
@@ -2133,22 +2595,59 @@ function catalogueSheet_() {
     ws.getRange(1, 1, 1, CATALOGUE_HEADERS.length).setFontWeight('bold');
     ws.getRange('C:C').setNumberFormat('@'); // barcodes stay text (leading zeros)
   }
+  // 21 Nov 2026 — columns G:I (mot-clé de la page, paquet, unités par paquet)
+  if (ws.getLastColumn() < CATALOGUE_HEADERS.length) {
+    ws.getRange(1, 1, 1, CATALOGUE_HEADERS.length).setValues([CATALOGUE_HEADERS]).setFontWeight('bold');
+    ws.getRange('H:H').setNumberFormat('@');
+  }
   return ws;
+}
+// Per-list settings: { list: { kw: 'bar soap' } } — read from column G.
+function readCatalogueMeta_() {
+  const ws = catalogueSheet_();
+  const last = ws.getLastRow(), meta = {};
+  if (last < 2) return meta;
+  ws.getRange(2, 1, last - 1, 7).getValues().forEach(r => {
+    const list = String(r[0]).trim();
+    if (!list) return;
+    meta[list] = meta[list] || { kw: '' };
+    if (!meta[list].kw && String(r[6] || '').trim()) meta[list].kw = String(r[6]).trim();
+  });
+  return meta;
 }
 function readCatalogue_() {
   const ws = catalogueSheet_();
   const last = ws.getLastRow();
   const lists = {};
   if (last < 2) return lists;
-  ws.getRange(2, 1, last - 1, 5).getValues().forEach(r => {
+  ws.getRange(2, 1, last - 1, CATALOGUE_HEADERS.length).getValues().forEach(r => {
     const list = String(r[0]).trim();
     if (!list) return;
-    (lists[list] = lists[list] || []).push({ order: Number(r[1]) || 0, barcode: String(r[2]).trim(), name: String(r[3]).trim(), photo: String(r[4]).trim() });
+    lists[list] = lists[list] || [];
+    if (!String(r[2]).trim() && !String(r[3]).trim()) return; // empty page (keyword only)
+    lists[list].push({ order: Number(r[1]) || 0, barcode: String(r[2]).trim(), name: String(r[3]).trim(), photo: String(r[4]).trim(),
+      pack: String(r[7] || '').trim(), per: Math.max(0, Math.round(Number(r[8]) || 0)) });
   });
   Object.keys(lists).forEach(k => lists[k].sort((a, b) => a.order - b.order));
   return lists;
 }
-// body: { list, items: [{barcode, name, photo}], remove: true to delete the list }
+// ── 21 Nov 2026 — photo d'un produit du Catalogue, prise à la caisse (Admin →
+// 📚 Catalogue). Saved in Drive (folder below, link-shared for viewing); the
+// Catalogue keeps "drive:<fileId>" in its Photo column.
+const CATALOGUE_PHOTOS_FOLDER = "Caisse — Photos du catalogue";
+function handleSetCataloguePhoto(body) {
+  const m = /^data:image\/(jpeg|png);base64,(.+)$/.exec(String(body.dataUrl || ''));
+  if (!m) return jsonResponse({ success: false, error: "Photo illisible" }, 400);
+  const it = DriveApp.getFoldersByName(CATALOGUE_PHOTOS_FOLDER);
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(CATALOGUE_PHOTOS_FOLDER);
+  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm-ss');
+  const label = String(body.name || body.barcode || 'produit').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
+  const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], label + ' ' + stamp + '.' + (m[1] === 'png' ? 'png' : 'jpg'));
+  const file = folder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (eShare) {}
+  return jsonResponse({ success: true, id: file.getId() });
+}
+// body: { list, items: [{barcode, name, photo, pack, per}], keyword, remove: true to delete the list }
 function handleSetCatalogueList(body) {
   const list = String(body.list || '').trim();
   if (!list) return jsonResponse({ success: false, error: 'Nom de liste manquant' }, 400);
@@ -2163,15 +2662,19 @@ function handleSetCatalogueList(body) {
     }
     if (!body.remove) {
       const now = new Date();
+      const kw = String(body.keyword || '').trim();
       const rows = (Array.isArray(body.items) ? body.items : []).filter(it => it && (it.barcode || it.name))
-        .map((it, i) => [list, i + 1, String(it.barcode || ''), String(it.name || ''), String(it.photo || ''), now]);
+        .map((it, i) => [list, i + 1, String(it.barcode || ''), String(it.name || ''), String(it.photo || ''), now,
+          kw, String(it.pack || ''), Math.max(0, Math.round(Number(it.per) || 0)) || '']);
+      if (!rows.length && kw) rows.push([list, 0, '', '', '', now, kw, '', '']); // page still empty: keep its keyword
       if (rows.length) {
         const start = ws.getLastRow() + 1;
         ws.getRange(start, 3, rows.length, 1).setNumberFormat('@');
+        ws.getRange(start, 8, rows.length, 1).setNumberFormat('@');
         ws.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
       }
     }
-    return jsonResponse({ success: true, lists: readCatalogue_() });
+    return jsonResponse({ success: true, lists: readCatalogue_(), meta: readCatalogueMeta_() });
   } finally {
     lock.releaseLock();
   }
@@ -2531,7 +3034,7 @@ function handleGetZoneStock(location) {
 // Sales Sheet ("Tableau de bords": SalesLog, Sales_yyyy-MM-dd, ShiftReconciliation…).
 // If this ID is wrong or empty, the check falls back to the Stock Ledger
 // (sales synced every 15 min — slightly less precise, no cashier names).
-const SALES_SHEET_ID = 'PUT-THE-SALES-SHEET-ID-HERE';
+const SALES_SHEET_ID = '1q_N6h89tkAVmO5-lUwfdsGAtwoeF_Tpjr5Q5I_Xn-lA';
 const CONTROL_TZ = 'Africa/Ouagadougou';
 const CONTROL_REPORT_EMAIL = '1981estvideo@gmail.com';
 const CONTROL_DRAWS_PER_DAY = 4;
@@ -2595,6 +3098,16 @@ function ctlSalesSS_() {
   }
   return SALES_SS_CACHE_;
 }
+// The sales Sheet names stores by their sign (« Empire Supermarket », « Beauty
+// Empire Ouaga 2000 »); stock uses Store 1 / Store 2 / Warehouse. (3 Nov 2026:
+// before this, the comparison never matched, so controls saw no sales.)
+function ctlSaleLoc_(name) {
+  const n = String(name || '').trim();
+  if (VALID_LOCATIONS.indexOf(n) >= 0) return n;
+  if (/ouaga/i.test(n)) return 'Store 2';
+  if (/entrep|warehouse/i.test(n)) return 'Warehouse';
+  return n ? 'Store 1' : '';
+}
 function ctlSalesBetween_(location, from, to) {
   const ss = ctlSalesSS_();
   const out = { ok: !!ss, rows: [], voids: {} };
@@ -2604,7 +3117,7 @@ function ctlSalesBetween_(location, from, to) {
     const sh = ss.getSheetByName('Sales_' + ctlDay_(d));
     if (!sh || sh.getLastRow() < 2) continue;
     sh.getRange(2, 1, sh.getLastRow() - 1, 13).getValues().forEach(r => {
-      if (String(r[12]) !== location) return;
+      if (ctlSaleLoc_(r[12]) !== location) return;
       const t = ctlParseDT_(r[0], r[1], CONTROL_TZ);
       if (!t || t.getTime() <= from.getTime() || t.getTime() > to.getTime()) return;
       const type = String(r[2]), emp = String(r[11] || '').trim();
@@ -2972,7 +3485,7 @@ function buildControlReport_(dateStr) {
         if (rec && rec.getLastRow() >= 2) {
           rec.getRange(2, 1, rec.getLastRow() - 1, 14).getValues().forEach(r => {
             const d = r[0] instanceof Date ? Utilities.formatDate(r[0], CONTROL_TZ, 'dd/MM/yyyy') : String(r[0]);
-            if (d !== frDate || String(r[3]) !== loc) return;
+            if (d !== frDate || ctlSaleLoc_(r[3]) !== loc) return;
             const cash = Number(r[9]) || 0, om = Number(r[13]) || 0;
             L.push('💵 Fin de service ' + r[2] + ' : espèces ' + (cash ? (cash > 0 ? '+' : '') + ctlFmt_(cash) : 'OK') + ' · Orange Money ' + (om ? (om > 0 ? '+' : '') + ctlFmt_(om) : 'OK'));
           });
@@ -2981,7 +3494,7 @@ function buildControlReport_(dateStr) {
         if (cc && cc.getLastRow() >= 2) {
           cc.getRange(2, 1, cc.getLastRow() - 1, 14).getValues().forEach(r => {
             const d = r[1] instanceof Date ? Utilities.formatDate(r[1], CONTROL_TZ, 'dd/MM/yyyy') : String(r[1]);
-            if (d !== frDate || String(r[2]) !== loc) return;
+            if (d !== frDate || ctlSaleLoc_(r[2]) !== loc) return;
             const diff = Number(r[8]) || 0, miss = Number(r[11]) || 0;
             L.push('🧾 Vérif caisse (' + (r[3] || '?') + ') : espèces ' + (diff ? (diff > 0 ? '+' : '') + ctlFmt_(diff) : 'OK') + (miss ? ' · paiements non confirmés ' + ctlFmt_(miss) : ''));
           });
@@ -3025,6 +3538,158 @@ function installControlReport() {
 }
 // Run from the editor to see today's report in the log without emailing.
 function testControlReport() { Logger.log(buildControlReport_(ctlDay_()).text); }
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  📊 BILAN DU JOUR (rebuilt 3 Nov 2026) — Stock1981 « Bilan du jour » (POST
+//  getBilan {date}) and an email every evening at 21:00 (run installBilan()
+//  ONCE from the editor). Per store: sales (total, tickets, payment methods,
+//  discounts, top products, lines typed without a code, cancelled lines),
+//  register checks; then stock below zero, unknown codes, labels waiting to
+//  be printed, transfers on the way, and the evening control report.
+// ══════════════════════════════════════════════════════════════════════════
+const BILAN_EMAIL = CONTROL_REPORT_EMAIL;
+function buildBilan_(dateStr) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || '')) ? String(dateStr) : ctlDay_();
+  const dayStart = Utilities.parseDate(date + ' 00:00:00', CONTROL_TZ, 'yyyy-MM-dd HH:mm:ss');
+  const frDate = Utilities.formatDate(dayStart, CONTROL_TZ, 'dd/MM/yyyy');
+  const L = [];
+  const head = { total: 0 };
+  L.push('📊 Bilan du jour — ' + frDate);
+  const ss = ctlSalesSS_();
+  const sh = ss ? ss.getSheetByName('Sales_' + date) : null;
+  const rows = (sh && sh.getLastRow() >= 2) ? sh.getRange(2, 1, sh.getLastRow() - 1, 14).getValues().filter(r => r[2]) : [];
+  const master = {};
+  try { const mm = _masterMap(); Object.keys(mm).forEach(k => { master[k] = 1; }); } catch (e) {}
+  const payName = { cash: '💵 Espèces', orange: '🟠 Orange Money', wave: '🌊 Wave', bank: '🏦 Virement', split: '🔀 Partagé', installment: '🗓 Mensualité', mensualite: '🗓 Mensualité' };
+  ['Store 2', 'Store 1'].forEach(loc => {
+    const name = CONTROL_LOC_NAMES[loc] || loc;
+    const R = rows.filter(r => ctlSaleLoc_(r[12]) === loc);
+    L.push('');
+    L.push('━━ ' + name + ' ━━');
+    if (!R.length) { L.push('Aucune vente enregistrée.'); }
+    else {
+      let total = 0, units = 0, disc = 0, ret = 0;
+      const tickets = {}, pay = {}, prod = {}, voids = {}, emps = {}, noCode = [], unknown = [];
+      R.forEach(r => {
+        const type = String(r[2]), q = Number(r[6]) || 0, lt = Number(r[8]) || 0, emp = String(r[11] || '').trim();
+        if (type === 'Voided') { if (emp) voids[emp] = (voids[emp] || 0) + 1; return; }
+        if (type === 'Remise') { disc += lt; total += lt; const pm = String(r[9] || 'Non précisé'); pay[pm] = (pay[pm] || 0) + lt; return; }
+        if (type !== 'Sale' && type !== 'Return') return;
+        const sign = type === 'Return' ? -1 : 1;
+        const amount = sign * Math.abs(lt);
+        if (type === 'Return') ret += Math.abs(lt);
+        total += amount; units += sign * q;
+        if (r[13]) tickets[String(r[13])] = 1;
+        if (emp) emps[emp] = 1;
+        const pm = String(r[9] || 'Non précisé'); pay[pm] = (pay[pm] || 0) + amount;
+        const unitP = Number(r[7]) || 0;
+        if (type === 'Sale' && unitP * q > Math.abs(lt)) disc -= (unitP * q - Math.abs(lt));
+        const bk = r[3] ? barcodeKey(r[3]) : '';
+        const pn = String(r[4] || '');
+        if (!bk || bk === '0' || bk.length < 4) noCode.push(pn + (q > 1 ? ' ×' + q : ''));
+        else if (/code inconnu/i.test(pn) || (Object.keys(master).length && !master[bk])) unknown.push(normalizeBarcode(r[3]) + (pn && !/code inconnu/i.test(pn) ? ' ' + pn : ''));
+        const k = bk || 'N:' + pn.toLowerCase();
+        if (!prod[k]) prod[k] = { n: pn, q: 0, v: 0 };
+        prod[k].q += sign * q; prod[k].v += amount;
+      });
+      head.total += total;
+      L.push('💰 Ventes : ' + ctlFmt_(total) + ' · ' + Object.keys(tickets).length + ' ticket(s) · ' + units + ' article(s)');
+      if (Object.keys(emps).length) L.push('👤 En caisse : ' + Object.keys(emps).join(', '));
+      const pk = Object.keys(pay).filter(k => pay[k]).sort((a, b) => pay[b] - pay[a]);
+      if (pk.length) L.push('Paiements : ' + pk.map(k => (payName[k] || k) + ' ' + ctlFmt_(pay[k])).join(' · '));
+      if (disc) L.push('🏷 Remises : ' + ctlFmt_(-disc));
+      if (ret) L.push('↩️ Retours : ' + ctlFmt_(ret));
+      const top = Object.keys(prod).sort((a, b) => prod[b].v - prod[a].v).slice(0, 5);
+      if (top.length) { L.push('Top ventes :'); top.forEach(k => L.push('   • ' + prod[k].n + ' — ' + prod[k].q + ' · ' + ctlFmt_(prod[k].v))); }
+      if (noCode.length) L.push('⌨️ Tapés sans code (' + noCode.length + ') : ' + noCode.slice(0, 8).join(', ') + (noCode.length > 8 ? '…' : ''));
+      if (unknown.length) L.push('❓ Codes inconnus vendus (' + unknown.length + ') : ' + unknown.slice(0, 6).join(', ') + (unknown.length > 6 ? '…' : ''));
+      const vk = Object.keys(voids);
+      if (vk.length) L.push('✂️ Lignes annulées : ' + vk.map(k => k + ' ' + voids[k]).join(', '));
+    }
+    // register checks
+    if (ss) {
+      try {
+        const rec = ss.getSheetByName('ShiftReconciliation');
+        if (rec && rec.getLastRow() >= 2) rec.getRange(2, 1, rec.getLastRow() - 1, 14).getValues().forEach(r => {
+          const d = r[0] instanceof Date ? Utilities.formatDate(r[0], CONTROL_TZ, 'dd/MM/yyyy') : String(r[0]);
+          if (d !== frDate || ctlSaleLoc_(r[3]) !== loc) return;
+          const cash = Number(r[9]) || 0, om = Number(r[13]) || 0;
+          L.push('💵 Fin de service ' + r[2] + ' : espèces ' + (cash ? (cash > 0 ? '+' : '') + ctlFmt_(cash) : 'OK') + ' · Orange Money ' + (om ? (om > 0 ? '+' : '') + ctlFmt_(om) : 'OK'));
+        });
+        const cc = ss.getSheetByName('Cash Checks');
+        if (cc && cc.getLastRow() >= 2) cc.getRange(2, 1, cc.getLastRow() - 1, 14).getValues().forEach(r => {
+          const d = r[1] instanceof Date ? Utilities.formatDate(r[1], CONTROL_TZ, 'dd/MM/yyyy') : String(r[1]);
+          if (d !== frDate || ctlSaleLoc_(r[2]) !== loc) return;
+          const diff = Number(r[8]) || 0, miss = Number(r[11]) || 0;
+          L.push('🧾 Vérif caisse (' + (r[3] || '?') + ') : espèces ' + (diff ? (diff > 0 ? '+' : '') + ctlFmt_(diff) : 'OK') + (miss ? ' · paiements non confirmés ' + ctlFmt_(miss) : ''));
+        });
+      } catch (e) { L.push('(caisse illisible : ' + e + ')'); }
+    }
+  });
+  L.push('');
+  L.push('💰 Total des deux magasins : ' + ctlFmt_(head.total));
+  // stock below zero
+  try {
+    const zs = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Zone Stock');
+    if (zs && zs.getLastRow() >= 2) {
+      const neg = zs.getRange(2, 1, zs.getLastRow() - 1, 6).getValues().filter(r => (Number(r[5]) || 0) < 0);
+      if (neg.length) {
+        L.push('');
+        L.push('⚠️ Stock négatif : ' + neg.length + ' ligne(s) (vendu plus que compté)');
+        neg.sort((a, b) => Number(a[5]) - Number(b[5])).slice(0, 8).forEach(r => L.push('   • ' + (CONTROL_LOC_NAMES[r[0]] || r[0]) + ' ' + r[1] + ' — ' + r[3] + ' : ' + r[5]));
+      }
+    }
+  } catch (e) {}
+  // unknown codes waiting for a name
+  try {
+    const nc = ss && ss.getSheetByName('Nouveaux codes');
+    if (nc && nc.getLastRow() >= 2) {
+      const vals = nc.getDataRange().getValues(), hd = vals[0].map(String);
+      const si = hd.findIndex(h => /statut|status/i.test(h));
+      if (si >= 0) {
+        const todo = vals.slice(1).filter(r => ['Suggestions', 'Introuvable', 'À nommer'].indexOf(String(r[si])) >= 0).length;
+        if (todo) L.push('❓ Nouveaux codes à valider : ' + todo + ' (Scanner → Admin → 🆕 Nouveaux produits scannés)');
+      }
+    }
+  } catch (e) {}
+  // labels waiting
+  try {
+    const lw = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Étiquettes à imprimer');
+    if (lw && lw.getLastRow() >= 2) {
+      const todo = lw.getRange(2, 1, lw.getLastRow() - 1, 9).getValues().filter(r => String(r[8]) === 'À imprimer');
+      if (todo.length) L.push('🏷 Étiquettes à imprimer : ' + todo.reduce((a, r) => a + (Number(r[4]) || 0), 0) + ' (' + todo.length + ' produit(s))');
+    }
+  } catch (e) {}
+  // transfers
+  try {
+    const tr = ss && ss.getSheetByName('Transfers');
+    if (tr && tr.getLastRow() >= 2) {
+      const v = tr.getRange(2, 1, tr.getLastRow() - 1, 9).getValues();
+      const req = {}, tra = {};
+      v.forEach(r => { const st = String(r[3]); if (st === 'requested') req[String(r[2])] = 1; if (st === 'transit') tra[String(r[2])] = 1; });
+      if (Object.keys(req).length || Object.keys(tra).length) L.push('🚚 Transferts : ' + Object.keys(tra).length + ' sur la route · ' + Object.keys(req).length + ' demande(s) à préparer');
+    }
+  } catch (e) {}
+  // controls
+  try {
+    const c = buildControlReport_(date);
+    L.push('');
+    L.push(c.text);
+  } catch (e) {}
+  return { text: L.join('\n'), total: head.total, date: date };
+}
+function sendBilan() {
+  const b = buildBilan_(ctlDay_());
+  MailApp.sendEmail(BILAN_EMAIL, '📊 Bilan ' + Utilities.formatDate(new Date(), CONTROL_TZ, 'dd/MM') + ' — ' + ctlFmt_(b.total), b.text);
+}
+// Run ONCE from the editor: emails the Bilan every evening at 21:00.
+function installBilan() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'sendBilan') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sendBilan').timeBased().everyDays(1).atHour(21).nearMinute(0).inTimezone(CONTROL_TZ).create();
+}
+// Run from the editor to see today's Bilan in the log without emailing.
+function testBilan() { Logger.log(buildBilan_(ctlDay_()).text); }
 
 // ══════════════════════════════════════════
 //  WEEKLY BACKUP — every Sunday night (installWeeklyJobs)
@@ -3409,7 +4074,7 @@ const S1981_REASONS = ['Vendu (hors caisse)', 'Abîmé', 'Périmé', 'Offert / u
 const S1981_LOSS_REASONS = ['Abîmé', 'Périmé', 'Offert / usage boutique', 'Vol / inexpliqué'];
 // Accepted from the app but not offered as a manual reason: one move = a
 // "Transfert" out of one zone + a "Transfert" into another (25 Oct 2026).
-const S1981_INTERNAL_REASONS = ['Transfert'];
+const S1981_INTERNAL_REASONS = ['Transfert', 'Pack ouvert'];
 
 function s1981LogSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -3450,7 +4115,7 @@ function handleGetStock1981() {
       });
     }
   } catch (e) { Logger.log('names skipped: ' + e); }
-  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, aliases: loadAliasMap_(), images: s1981Images_(), reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
+  return jsonResponse({ success: true, zones: zones, spots: spots, prices: prices, names: names, aliases: loadAliasMap_(), images: s1981Images_(), empty: readSpotEmpty_(), packs: readPacks_(), flags: readFlags_(), reasons: S1981_REASONS, generatedAt: new Date().toISOString() });
 }
 
 function s1981UserOk_(body) {
@@ -3460,7 +4125,14 @@ function s1981UserOk_(body) {
 }
 
 function handleStock1981Adjust(body) {
-  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  // 21 Nov 2026 — the till (Scanner, write key already checked in doPost) may
+  // open packs / set the counter stock of Catalogue items: body.till = true,
+  // body.by = cashier name. Only these two reasons are allowed from the till.
+  // 21 Nov: also the till's 🗑 Pertes tile (a loss reason, stock going down only).
+  const fromTill = body.till === true && (Array.isArray(body.ops) ? body.ops : []).every(op => op && (op.reason === 'Pack ouvert' || op.reason === 'Recomptage' ||
+    (S1981_LOSS_REASONS.indexOf(op.reason) !== -1 && op.mode !== 'set' && Number(op.qty) < 0)));
+  if (fromTill) body.by = 'Caisse — ' + String(body.by || '?');
+  if (!fromTill && !s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
   const ops = Array.isArray(body.ops) ? body.ops : [];
   if (!ops.length) return jsonResponse({ success: false, error: "Aucun changement" }, 400);
   const lock = LockService.getScriptLock();
@@ -3620,6 +4292,7 @@ function handleStock1981Count(body) {
     payload[spot] = { zone: zone, at: isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString(), by: String(body.by || ''),
       items: items.map(it => ({ barcode: it.bc, name: it.name, count: it.count })) };
     applySpotCountsUnlocked_(loc, payload, 'Stock1981', String(body.by || ''));
+    if (items.length) { try { clearSpotEmptyUnlocked_(loc, spot); } catch (eEmpty) {} }   // counted with items → no longer empty (4 Nov 2026)
 
     // 3. Sum of latest counts on every shelf of this zone, for the touched products
     const after = ss.getRange(2, 1, Math.max(1, ss.getLastRow() - 1), SPOT_STOCK_HEADERS.length).getValues();
@@ -3989,45 +4662,86 @@ function _moveZoneRows_(oldK, realBc, realName) {
 
 
 // ══════════════════════════════════════════════════════════════════════════
-//  COST PRICE (USD) — added 26 Oct 2026
-//  Product Master column I « Cost (USD) ». Read with getPriceList when the
-//  write key is given (the Scanner's Admin list); written with POST
-//  {action:"updateCost", barcode, cost, by}. Logged in "Cost Edits".
+//  COST PRICE — added 26 Oct 2026, CFA + supplier added 22 Nov 2026
+//  Product Master: I « Cost (USD) », L « Coût (CFA) », M « Fournisseur »,
+//  N « Devise d'achat » (USD = bought in the US, CFA = local supplier).
+//  The cost is kept in both currencies: the one typed is stored as is and the
+//  other is worked out at USD_CFA_RATE. Read with getPriceList when the write
+//  key is given; written with POST {action:"updateCost", barcode, cost,
+//  currency?: "USD"|"CFA" (default USD), supplier?, by}. Logged in "Cost Edits".
 // ══════════════════════════════════════════════════════════════════════════
-const COST_COL = 9; // I
+const COST_COL = 9;       // I  Cost (USD)
+const COST_CFA_COL = 12;  // L  Coût (CFA)
+const SUPPLIER_COL = 13;  // M  Fournisseur
+const COST_CUR_COL = 14;  // N  Devise d'achat
+const USD_CFA_RATE = 600; // 1 $ = 600 F (same rate as the US price formula)
+function _costNum_(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(/\s/g, '').replace(',', '.'));
+  return isFinite(n) ? n : null;
+}
+function _costHeaders_(pm) {
+  const h = pm.getRange(FIRST_DATA_ROW - 1, COST_CFA_COL, 1, 3).getValues()[0];
+  if (h[0] !== 'Coût (CFA)' || h[1] !== 'Fournisseur' || h[2] !== "Devise d'achat")
+    pm.getRange(FIRST_DATA_ROW - 1, COST_CFA_COL, 1, 3).setValues([['Coût (CFA)', 'Fournisseur', "Devise d'achat"]]);
+}
+// barcode key → { usd, cfa, sup, cur }
 function _costMap_() {
   const pm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
   const out = {};
   if (!pm || pm.getLastRow() < FIRST_DATA_ROW) return out;
-  pm.getRange(FIRST_DATA_ROW, 8, pm.getLastRow() - FIRST_DATA_ROW + 1, 2).getValues().forEach(r => {
+  const width = Math.max(2, Math.min(COST_CUR_COL, pm.getLastColumn()) - 8 + 1);
+  pm.getRange(FIRST_DATA_ROW, 8, pm.getLastRow() - FIRST_DATA_ROW + 1, width).getValues().forEach(r => {
     if (!r[0]) return;
     const k = barcodeKey(r[0]);
-    const v = Number(String(r[1]).replace(',', '.'));
-    if (r[1] !== '' && r[1] !== null && isFinite(v) && out[k] == null) out[k] = v;
+    if (out[k]) return;
+    const usd = _costNum_(r[COST_COL - 8]), cfa = _costNum_(r[COST_CFA_COL - 8]);
+    const sup = String(r[SUPPLIER_COL - 8] || '').trim(), cur = String(r[COST_CUR_COL - 8] || '').trim().toUpperCase();
+    if (usd == null && cfa == null && !sup) return;
+    out[k] = {
+      usd: usd != null ? usd : (cfa != null ? Math.round(cfa / USD_CFA_RATE * 100) / 100 : null),
+      cfa: cfa != null ? cfa : (usd != null ? Math.round(usd * USD_CFA_RATE) : null),
+      sup: sup,
+      cur: cur === 'CFA' ? 'CFA' : (usd != null || cfa != null ? 'USD' : '')
+    };
+    if (cfa != null && usd == null && cur !== 'USD') out[k].cur = 'CFA';
   });
   return out;
 }
 function handleUpdateCost(body) {
   const k = barcodeKey(resolveAlias_(body.barcode));
-  const cost = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(String(body.cost).replace(',', '.'));
-  if (!k || (cost !== '' && (!isFinite(cost) || cost < 0 || cost > 100000))) return jsonResponse({ success: false, error: "Code ou coût invalide" }, 400);
+  const cur = String(body.currency || 'USD').toUpperCase() === 'CFA' ? 'CFA' : 'USD';
+  const raw = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(String(body.cost).replace(/\s/g, '').replace(',', '.'));
+  const max = cur === 'CFA' ? 100000000 : 100000;
+  if (!k || (raw !== '' && (!isFinite(raw) || raw < 0 || raw > max))) return jsonResponse({ success: false, error: "Code ou coût invalide" }, 400);
+  const usd = raw === '' ? '' : (cur === 'USD' ? raw : Math.round(raw / USD_CFA_RATE * 100) / 100);
+  const cfa = raw === '' ? '' : (cur === 'CFA' ? Math.round(raw) : Math.round(raw * USD_CFA_RATE));
+  const hasSup = body.supplier !== undefined && body.supplier !== null;
+  const sup = hasSup ? String(body.supplier).trim().slice(0, 80) : '';
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const pm = ss.getSheetByName(SHEET_NAME);
+  _costHeaders_(pm);
   const n = pm.getLastRow() - FIRST_DATA_ROW + 1;
-  const vals = pm.getRange(FIRST_DATA_ROW, 1, n, 9).getValues();
-  let hit = 0, name = '', old = '';
+  const vals = pm.getRange(FIRST_DATA_ROW, 1, n, COST_CUR_COL).getValues();
+  let hit = 0, name = '', old = '', oldCfa = '';
   vals.forEach((r, i) => {
     if (r[7] && barcodeKey(r[7]) === k) {
-      if (!hit) { name = String(r[1] || ''); old = r[8]; }
-      pm.getRange(FIRST_DATA_ROW + i, COST_COL).setValue(cost);
+      if (!hit) { name = String(r[1] || ''); old = r[COST_COL - 1]; oldCfa = r[COST_CFA_COL - 1]; }
+      const row = FIRST_DATA_ROW + i;
+      pm.getRange(row, COST_COL).setValue(usd);
+      pm.getRange(row, COST_CFA_COL).setValue(cfa);
+      pm.getRange(row, COST_CUR_COL).setValue(raw === '' ? '' : cur);
+      if (hasSup) pm.getRange(row, SUPPLIER_COL).setValue(sup);
       hit++;
     }
   });
   if (!hit) return jsonResponse({ success: false, error: "Produit introuvable dans Product Master" }, 404);
   let log = ss.getSheetByName('Cost Edits');
   if (!log) { log = ss.insertSheet('Cost Edits'); log.appendRow(['Timestamp', 'Barcode', 'Product', 'Old Cost (USD)', 'New Cost (USD)', 'By']); log.setFrozenRows(1); log.getRange('B:B').setNumberFormat('@'); }
-  log.appendRow([Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), normalizeBarcode(body.barcode), name, old, cost, String(body.by || '')]);
-  return jsonResponse({ success: true, cost: cost, rows: hit });
+  const lh = log.getRange(1, 7, 1, 4).getValues()[0];
+  if (lh[0] !== 'Devise') log.getRange(1, 7, 1, 4).setValues([['Devise', 'Old Coût (CFA)', 'New Coût (CFA)', 'Fournisseur']]);
+  log.appendRow([Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), normalizeBarcode(body.barcode), name, old, usd, String(body.by || ''), cur, oldCfa, cfa, hasSup ? sup : '']);
+  return jsonResponse({ success: true, cost: usd, costCfa: cfa, costCur: raw === '' ? '' : cur, supplier: hasSup ? sup : undefined, rows: hit });
 }
 
 
@@ -4516,6 +5230,75 @@ function handleGetTransit() {
 
 
 // ══════════════════════════════════════════════════════════════════════════
+//  SORTIES (3 Nov 2026) — what left a store, for Stock1981 « 📤 Sorties ».
+//  GET getSorties&location=Store 1&days=14 → every sale line (with time) of
+//  that store for the last N days (max 31), read from the sales Sheet day
+//  tabs. Lines typed without a barcode come back apart (noCode). Transfers
+//  out of a zone come from getMovements. Nothing is written.
+//  POST stock1981RequestTransfer → after 1981 confirms the « À remonter »
+//  list, writes a transfer request (status « requested ») into the sales
+//  Sheet « Transfers » tab, exactly like the Scanner's 🔄 Demande, so it shows
+//  in 🚚 En route and on the Scanner of the store that prepares it.
+// ══════════════════════════════════════════════════════════════════════════
+function handleGetSorties(p) {
+  const location = String(p.location || 'Store 1');
+  if (VALID_LOCATIONS.indexOf(location) === -1) return jsonResponse({ success: false, error: 'Emplacement inconnu' }, 400);
+  const days = Math.max(1, Math.min(31, Number(p.days) || 14));
+  const ss = ctlSalesSS_();
+  if (!ss) return jsonResponse({ success: false, error: 'Sheet des ventes inaccessible' });
+  const sales = [], noCode = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400000);
+    const sh = ss.getSheetByName('Sales_' + ctlDay_(d));
+    if (!sh || sh.getLastRow() < 2) continue;
+    sh.getRange(2, 1, sh.getLastRow() - 1, 13).getValues().forEach(r => {
+      const type = String(r[2] || '');
+      if (type !== 'Sale' && type !== 'Return') return;
+      if (ctlSaleLoc_(r[12]) !== location) return;
+      const t = ctlParseDT_(r[0], r[1], CONTROL_TZ);
+      if (!t) return;
+      let qty = Number(r[6]) || 0;
+      if (type === 'Return') qty = -Math.abs(qty);
+      if (!qty) return;
+      const bk = r[3] ? barcodeKey(r[3]) : '';
+      if (!bk || bk === '0' || bk.length < 4) noCode.push([String(r[4] || ''), qty, t.getTime(), String(r[11] || '')]);
+      else sales.push([bk, normalizeBarcode(r[3]), qty, t.getTime(), String(r[4] || ''), String(r[11] || '')]);
+    });
+  }
+  return jsonResponse({ success: true, location: location, days: days, sales: sales, noCode: noCode, generatedAt: now.toISOString() });
+}
+
+function handleStock1981RequestTransfer(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: 'Utilisateur ou code non reconnu — reconnectez-vous.' }, 403);
+  const from = String(body.from || 'Warehouse'), to = String(body.to || '');
+  if (VALID_LOCATIONS.indexOf(from) === -1 || VALID_LOCATIONS.indexOf(to) === -1 || from === to) return jsonResponse({ success: false, error: 'Magasins invalides' }, 400);
+  const lines = (Array.isArray(body.lines) ? body.lines : []).filter(l => l && l.barcode && Number(l.qty) > 0);
+  if (!lines.length) return jsonResponse({ success: false, error: 'Aucun produit' }, 400);
+  const ss = ctlSalesSS_();
+  const sh = ss && ss.getSheetByName('Transfers');
+  if (!sh) return jsonResponse({ success: false, error: 'Onglet « Transfers » introuvable dans le Sheet des ventes' });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const now = new Date(), ms = now.getTime();
+    const grp = 'G' + ms.toString(36) + 'S81';
+    const gid = 'TR-S' + Utilities.formatDate(now, CONTROL_TZ, 'MMddHHmm');
+    const date = Utilities.formatDate(now, CONTROL_TZ, 'dd/MM/yyyy'), time = Utilities.formatDate(now, CONTROL_TZ, 'HH:mm');
+    const note = String(body.note || 'Réassort depuis Stock1981 (Sorties)');
+    const rows = lines.map((l, i) => {
+      const rec = { uid: grp + '-' + i, grp: grp, gid: gid, id: gid, ts: now.toISOString(), reqTs: now.toISOString(), date: date, time: time,
+        from: from, to: to, fulfiller: from, barcode: String(l.barcode), name: String(l.name || ''), qty: Number(l.qty), reqQty: Number(l.qty),
+        notes: note, note: note, by: String(body.by || ''), status: 'requested', qtyReceived: null, zoneIn: 'Non placé', upd: ms };
+      return [rec.uid, ms, gid, 'requested', from, to, rec.barcode, rec.name, rec.qty, '', rec.by, '', date, JSON.stringify(rec)];
+    });
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, 14).setValues(rows);
+    return jsonResponse({ success: true, id: gid, lines: rows.length });
+  } finally { lock.releaseLock(); }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
 //  FORMATION — staff cosmetics training (formation.html, 30 Oct 2026)
 //  Content lives in two tabs you edit yourself:
 //    « Formation Contenu »   one row per ingredient (level, effect, notes,
@@ -4962,6 +5745,9 @@ function fmWeek_(d) {
   return t.getUTCFullYear() + '-S' + (w < 10 ? '0' : '') + w;
 }
 function fmUser_(body) {
+  // opened from the till (Scanner 🎓 Formation, 10 Nov 2026): the write key was
+  // already checked by doPost, the employee is the one signed in at the till
+  if (body.viaTill && String(body.by || '').trim()) return { name: String(body.by).trim(), role: 'Formation', active: true };
   const u = readCounterUsers_(true).find(x => x.active && x.name.toLowerCase() === String(body.by || '').toLowerCase());
   return (u && u.hash && u.hash === String(body.userHash || '')) ? u : null;
 }
@@ -5083,4 +5869,526 @@ function handleFormationSuivi(body) {
   const users = readCounterUsers_(true).filter(x => x.active).map(x => ({ name: x.name, role: x.role }));
   return jsonResponse({ success: true, users: users, results: results, topics: topics, weeks: weeks,
     progress: fmProgress_(), passMark: FORMATION_PASS, generatedAt: new Date().toISOString() });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  🔄 RÉORGANISATION (31 Oct 2026) — first shelf count done by the staff.
+//  • The admin walks first (Stock1981 → 🔄 Réorganisation): for each shelf,
+//    2–3 « fingerprint » barcodes + the total he counted, in walk order
+//    → tab « Réorg Repérages » (action reorgMark / reorgStatus).
+//  • The cashier scans every item at the till (Scanner → 🔄 Réorganisation),
+//    tapping ▶ Nouvelle zone between shelves → tab « Réorg Scans »
+//    (action reorgScans, write key only, retried scans counted once).
+//  • Stock1981 matches both (order + fingerprints + totals); ✓ Valider then
+//    sends an ordinary stock1981Count for that shelf. Nothing here changes stock.
+//  GET getReorg { location, days } → { marks, scans }.
+// ══════════════════════════════════════════════════════════════════════════
+const REORG_MARK_SHEET = 'Réorg Repérages';
+const REORG_MARK_HEADERS = ['Id', 'Jour', 'Magasin', 'Ordre', 'Zone', 'Étagère', 'Total compté', 'Empreintes', 'Par', 'Noté le', 'Statut', 'Validé le', 'Note'];
+const REORG_SCAN_SHEET = 'Réorg Scans';
+const REORG_SCAN_HEADERS = ['Heure', 'Jour', 'Magasin', 'Session', 'Zone n°', 'Barcode', 'Par', 'Clé'];
+function reorgSheet_(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function reorgDay_(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+// The « Jour » cell may have been turned into a date by the Sheet (its time zone is not the script's):
+// read it back as yyyy-MM-dd in the Sheet's own time zone.
+function reorgDayCell_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  return String(v || '').slice(0, 10);
+}
+function reorgMarkObj_(r) {
+  let prints = [];
+  try { prints = JSON.parse(String(r[7] || '[]')); } catch (e) { prints = []; }
+  return { id: String(r[0]), day: reorgDayCell_(r[1]), location: String(r[2]), order: Number(r[3]) || 0, zone: String(r[4]), spot: String(r[5]),
+    total: Number(r[6]) || 0, prints: prints, by: String(r[8] || ''), at: r[9] instanceof Date ? r[9].toISOString() : String(r[9] || ''),
+    status: String(r[10] || ''), validatedAt: r[11] instanceof Date ? r[11].toISOString() : String(r[11] || ''), note: String(r[12] || '') };
+}
+
+// body: { by, userHash, id, location, order, zone, spot, total, prints:[barcodes], at, delete }
+function handleReorgMark(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const id = String(body.id || '').slice(0, 40);
+  const loc = String(body.location || '');
+  if (!id || VALID_LOCATIONS.indexOf(loc) === -1) return jsonResponse({ success: false, error: 'Repérage incomplet' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sh = reorgSheet_(REORG_MARK_SHEET, REORG_MARK_HEADERS);
+    const last = sh.getLastRow();
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0])) : [];
+    const i = ids.indexOf(id);
+    if (body.delete) { if (i >= 0) sh.deleteRow(i + 2); return jsonResponse({ success: true, deleted: i >= 0 }); }
+    const when = body.at ? new Date(body.at) : new Date();
+    const at = isNaN(when.getTime()) ? new Date() : when;
+    const prints = (Array.isArray(body.prints) ? body.prints : []).map(x => normalizeBarcode(x)).filter(Boolean).slice(0, 6);
+    const old = i >= 0 ? sh.getRange(i + 2, 1, 1, REORG_MARK_HEADERS.length).getValues()[0] : null;
+    const row = [id, old ? old[1] : reorgDay_(at), loc, Number(body.order) || 0, String(body.zone || ''), String(body.spot || ''),
+      Math.max(0, Math.round(Number(body.total) || 0)), JSON.stringify(prints), String(body.by || ''), old ? old[9] : at,
+      old ? old[10] : '', old ? old[11] : '', String(body.note || (old ? old[12] : '') || '')];
+    const rn = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+    row[1] = reorgDayCell_(row[1]);
+    sh.getRange(rn, 2).setNumberFormat('@');
+    sh.getRange(rn, 1, 1, REORG_MARK_HEADERS.length).setValues([row]);
+    return jsonResponse({ success: true, mark: reorgMarkObj_(sh.getRange(rn, 1, 1, REORG_MARK_HEADERS.length).getValues()[0]) });
+  } finally { lock.releaseLock(); }
+}
+
+// body: { by, userHash, id, status: 'Validé' | 'À recompter' | '', note }
+function handleReorgStatus(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const st = String(body.status || '');
+  if (['Validé', 'À recompter', ''].indexOf(st) < 0) return jsonResponse({ success: false, error: 'Statut inconnu' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sh = reorgSheet_(REORG_MARK_SHEET, REORG_MARK_HEADERS);
+    const last = sh.getLastRow();
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0])) : [];
+    const i = ids.indexOf(String(body.id || ''));
+    if (i < 0) return jsonResponse({ success: false, error: 'Repérage introuvable' });
+    sh.getRange(i + 2, 11, 1, 3).setValues([[st, st === 'Validé' ? new Date() : '', String(body.note || '')]]);
+    return jsonResponse({ success: true });
+  } finally { lock.releaseLock(); }
+}
+
+// From the Scanner (write key only): { scans:[{b, t, s, z}], sessions:{ id:{by, loc} } }
+function handleReorgScans(body) {
+  const scans = Array.isArray(body.scans) ? body.scans.slice(0, 1500) : [];
+  if (!scans.length) return jsonResponse({ success: true, added: 0 });
+  const sessions = body.sessions || {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sh = reorgSheet_(REORG_SCAN_SHEET, REORG_SCAN_HEADERS);
+    const last = sh.getLastRow();
+    const seen = {};
+    if (last >= 2) sh.getRange(Math.max(2, last - 20000), 8, Math.min(last - 1, 20000), 1).getValues().forEach(r => { seen[String(r[0])] = true; });
+    const rows = [];
+    scans.forEach(x => {
+      const bc = normalizeBarcode(x.b), t = Number(x.t) || 0;
+      if (!bc || !t) return;
+      const k = String(x.s || '') + '|' + t + '|' + bc;
+      if (seen[k]) return; seen[k] = true;
+      const s = sessions[x.s] || {};
+      const loc = VALID_LOCATIONS.indexOf(s.loc) >= 0 ? s.loc : 'Store 1';
+      const d = new Date(t);
+      rows.push([d, reorgDay_(d), loc, String(x.s || ''), Number(x.z) || 1, bc, String(s.by || ''), k]);
+    });
+    if (rows.length) {
+      const r0 = sh.getLastRow() + 1;
+      sh.getRange(r0, 6, rows.length, 1).setNumberFormat('@');
+      sh.getRange(r0, 2, rows.length, 1).setNumberFormat('@');
+      sh.getRange(r0, 1, rows.length, REORG_SCAN_HEADERS.length).setValues(rows);
+    }
+    return jsonResponse({ success: true, added: rows.length });
+  } finally { lock.releaseLock(); }
+}
+
+function handleGetReorg(p) {
+  const loc = String(p.location || 'Store 1');
+  const days = Math.min(Math.max(Number(p.days) || 7, 1), 60);
+  const from = reorgDay_(new Date(Date.now() - (days - 1) * 864e5));
+  const ms = reorgSheet_(REORG_MARK_SHEET, REORG_MARK_HEADERS), ss = reorgSheet_(REORG_SCAN_SHEET, REORG_SCAN_HEADERS);
+  const marks = ms.getLastRow() >= 2 ? ms.getRange(2, 1, ms.getLastRow() - 1, REORG_MARK_HEADERS.length).getValues()
+    .filter(r => String(r[2]) === loc && reorgDayCell_(r[1]) >= from).map(reorgMarkObj_) : [];
+  const scans = ss.getLastRow() >= 2 ? ss.getRange(2, 1, ss.getLastRow() - 1, REORG_SCAN_HEADERS.length).getValues()
+    .filter(r => String(r[2]) === loc && reorgDayCell_(r[1]) >= from)
+    // exact time = the one in « Clé » (session|time|barcode); the Heure cell can be shifted by the Sheet's time zone
+    .map(r => { const kt = Number(String(r[7] || '').split('|')[1]); return [kt || (r[0] instanceof Date ? r[0].getTime() : new Date(r[0]).getTime()), String(r[3]), Number(r[4]) || 1, normalizeBarcode(r[5]), String(r[6] || '')]; }) : [];
+  return jsonResponse({ success: true, marks: marks, scans: scans, from: from });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  21 Nov 2026 — 🔒 PRODUITS SENSIBLES + 📅 TOURNÉE DES DATES
+//  Sensibles: products 1981 marks (Stock1981). Each has a rhythm: 'jour'
+//  (counted every day) or 'semaine' (every 7 days). The till (cashier, at
+//  closing) gets the list due today for its store and counts it BLIND; the
+//  sheet compares with Zone Stock (all zones of that store) minus the till's
+//  sales not yet synced. Gaps go to « Comptages sensibles »; stock is never
+//  changed here. 1981 marks each gap Retrouvé / Perte connue / Non expliqué.
+//  Tournée des dates: the store's zones in order, 2 a day; the cashier dates
+//  every product of the zone (month + year, or « pas de date »). Saved like
+//  saveExpiryCheck (Expiry Batches). When every zone is done, a new round starts.
+// ══════════════════════════════════════════════════════════════════════════
+const SENS_SHEET = 'Sensibles';
+const SENS_HEADERS = ['Barcode', 'Product', 'Rythme', 'Added By', 'Added At'];
+const SENS_COUNT_SHEET = 'Comptages sensibles';
+const SENS_COUNT_HEADERS = ['Timestamp', 'Day', 'Location', 'Barcode', 'Product', 'Attendu', 'Compté', 'Écart', 'Prix', 'Valeur écart', 'Par', 'Statut', 'Résolution', 'Résolu par', 'OpId'];
+const DROUND_SHEET = 'Tournée dates';
+const DROUND_HEADERS = ['Location', 'Zone', 'Tour', 'Fait le', 'Day', 'Par', 'Produits', 'Datés', 'Sans date', 'Pas trouvés'];
+const DROUND_PER_DAY = 2;
+const SENS_MIN_PRICE = 10000;
+
+function sensRead_() {
+  const ws = s1981Tab_(SENS_SHEET, SENS_HEADERS), last = ws.getLastRow(), out = [];
+  if (last < 2) return out;
+  ws.getRange(2, 1, last - 1, SENS_HEADERS.length).getValues().forEach((r, i) => {
+    const bc = normalizeBarcode(r[0]);
+    if (bc) out.push({ row: i + 2, barcode: bc, name: String(r[1] || ''), freq: String(r[2] || 'semaine') === 'jour' ? 'jour' : 'semaine' });
+  });
+  return out;
+}
+// Zone Stock totals per location: { loc: { bkey: { qty, name, zones:{z:q} } } }
+function sensZoneTotals_() {
+  const zs = ensureZoneStockTab(), zl = zs.getLastRow(), out = {};
+  if (zl < 2) return out;
+  zs.getRange(2, 1, zl - 1, ZONE_STOCK_HEADERS.length).getValues().forEach(r => {
+    const loc = String(r[ZS_COL_LOCATION - 1] || ''), k = barcodeKey(r[ZS_COL_BARCODE - 1]);
+    if (!loc || !k) return;
+    const q = Number(r[ZS_COL_ONHAND - 1]) || 0, z = String(r[ZS_COL_ZONE - 1] || '');
+    const L = out[loc] = out[loc] || {};
+    const e = L[k] = L[k] || { qty: 0, name: String(r[ZS_COL_PRODUCT - 1] || ''), zones: {} };
+    e.qty += q; e.zones[z] = (e.zones[z] || 0) + q;
+  });
+  return out;
+}
+// Today's sales of a store that the 15-min sync has not applied to the stock yet.
+function sensUnsynced_(location) {
+  const out = {};
+  const ss = ctlSalesSS_();
+  if (!ss) return out;
+  const sh = ss.getSheetByName('Sales_' + ctlDay_(new Date()));
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 16).getValues().forEach(r => {
+    if (!r[3] || String(r[15] || '').trim()) return;          // no barcode, or already processed
+    if (ctlSaleLoc_(r[12]) !== location) return;
+    const type = String(r[2] || '');
+    if (type !== 'Sale' && type !== 'Return') return;
+    const k = barcodeKey(r[3]);
+    out[k] = (out[k] || 0) + (type === 'Return' ? -Math.abs(Number(r[6]) || 0) : (Number(r[6]) || 0));
+  });
+  return out;
+}
+function sensCounts_() {
+  const ws = s1981Tab_(SENS_COUNT_SHEET, SENS_COUNT_HEADERS), last = ws.getLastRow();
+  return last < 2 ? [] : ws.getRange(2, 1, last - 1, SENS_COUNT_HEADERS.length).getValues();
+}
+function sensIsPerfume_(name) { return /parfum|perfume|cologne|eau de|\bedp\b|\bedt\b|mist|brume|fragrance/i.test(String(name || '')); }
+function sensDue_(location, list, totals, counts) {
+  const today = ctlDay_(new Date());
+  const lastDay = {};
+  counts.forEach(r => { if (String(r[2]) !== location) return; const k = barcodeKey(r[3]), d = String(r[1] || ''); if (!lastDay[k] || d > lastDay[k]) lastDay[k] = d; });
+  const T = totals[location] || {};
+  return list.filter(s => {
+    const k = barcodeKey(s.barcode);
+    if (!T[k] || (T[k].qty || 0) <= 0) return false;
+    const ld = lastDay[k];
+    if (!ld) return true;
+    if (ld === today) return false;
+    if (s.freq === 'jour') return true;
+    return (Date.parse(today) - Date.parse(ld)) / 86400000 >= 7;
+  });
+}
+// GET getSensitive&location=Store 1            → the till: what to count today (no expected numbers)
+// GET getSensitive&admin=1                      → Stock1981: list, suggestions, gaps, date-round progress
+function handleGetSensitive(p) {
+  const list = sensRead_(), totals = sensZoneTotals_(), counts = sensCounts_();
+  if (!p.admin) {
+    const loc = String(p.location || '');
+    if (['Store 1', 'Store 2'].indexOf(loc) === -1) return jsonResponse({ success: false, error: 'Magasin inconnu' }, 400);
+    const due = sensDue_(loc, list, totals, counts).map(s => ({ barcode: s.barcode, name: s.name || (totals[loc][barcodeKey(s.barcode)] || {}).name || s.barcode }));
+    const done = counts.filter(r => String(r[2]) === loc && String(r[1]) === ctlDay_(new Date())).length;
+    return jsonResponse({ success: true, location: loc, due: due, doneToday: done });
+  }
+  const prices = _exPriceMap();
+  const inList = {}; list.forEach(s => inList[barcodeKey(s.barcode)] = true);
+  const theft = {};
+  try {
+    const lw = _lossSheet(), ll = lw.getLastRow();
+    if (ll >= 2) lw.getRange(2, 1, ll - 1, LOSS_HEADERS.length).getValues().forEach(r => { if (/vol|inexpliqu/i.test(String(r[9]))) theft[barcodeKey(r[4])] = true; });
+  } catch (e) {}
+  const sug = {};
+  Object.keys(totals).forEach(loc => Object.keys(totals[loc]).forEach(k => {
+    const e = totals[loc][k];
+    if (inList[k] || e.qty <= 0) return;
+    const price = prices[k];
+    const office = Object.keys(e.zones).some(z => /bureau/i.test(z) && e.zones[z] > 0);
+    if (!((price != null && price >= SENS_MIN_PRICE) || theft[k] || office)) return;
+    const s = sug[k] = sug[k] || { barcode: k, name: e.name, price: price == null ? null : price, qty: 0, theft: !!theft[k], office: office };
+    s.qty += e.qty; if (office) s.office = true;
+  }));
+  const suggestions = Object.keys(sug).map(k => Object.assign(sug[k], { freq: (sug[k].office || sensIsPerfume_(sug[k].name)) ? 'jour' : 'semaine' }))
+    .sort((a, b) => (b.office - a.office) || (b.theft - a.theft) || ((b.price || 0) * b.qty - (a.price || 0) * a.qty)).slice(0, 300);
+  const gaps = [];
+  counts.forEach((r, i) => { if (String(r[11]) === 'ouvert') gaps.push({ row: i + 2, at: _exStr(r[0]), day: String(r[1]), location: String(r[2]), barcode: String(r[3]), name: String(r[4]), expected: Number(r[5]) || 0, counted: Number(r[6]) || 0, diff: Number(r[7]) || 0, value: r[9] === '' ? null : Number(r[9]), by: String(r[10] || '') }); });
+  gaps.reverse();
+  const lists = list.map(s => {
+    const k = barcodeKey(s.barcode);
+    return Object.assign({}, s, { price: prices[k] == null ? null : prices[k], s1: ((totals['Store 1'] || {})[k] || {}).qty || 0, s2: ((totals['Store 2'] || {})[k] || {}).qty || 0 });
+  });
+  const due = { 'Store 1': sensDue_('Store 1', list, totals, counts).length, 'Store 2': sensDue_('Store 2', list, totals, counts).length };
+  const rounds = {};
+  ['Store 1', 'Store 2'].forEach(loc => { const st = droundState_(loc); rounds[loc] = { cycle: st.cycle, total: st.order.length, done: st.done.length, lastDay: st.lastDay }; });
+  return jsonResponse({ success: true, list: lists, suggestions: suggestions, gaps: gaps, due: due, rounds: rounds, minPrice: SENS_MIN_PRICE });
+}
+// POST setSensitive { by, userHash, items:[{barcode, name, freq}], remove:[barcode] } — Stock1981 users only.
+function handleSetSensitive(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = s1981Tab_(SENS_SHEET, SENS_HEADERS);
+    try { ws.getRange('A:A').setNumberFormat('@'); } catch (e) {}
+    const cur = sensRead_(), byKey = {};
+    cur.forEach(s => byKey[barcodeKey(s.barcode)] = s);
+    const rm = {}; (Array.isArray(body.remove) ? body.remove : []).forEach(b => { const k = barcodeKey(b); if (k) rm[k] = true; });
+    const rows = [];
+    for (let i = cur.length - 1; i >= 0; i--) if (rm[barcodeKey(cur[i].barcode)]) ws.deleteRow(cur[i].row);
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    const fresh = sensRead_(), fk = {}; fresh.forEach(s => fk[barcodeKey(s.barcode)] = s);
+    (Array.isArray(body.items) ? body.items : []).forEach(it => {
+      const bc = normalizeBarcode(it.barcode || ''), k = barcodeKey(bc);
+      if (!bc || rm[k]) return;
+      const freq = it.freq === 'jour' ? 'jour' : 'semaine';
+      if (fk[k]) ws.getRange(fk[k].row, 3).setValue(freq);
+      else rows.push([bc, String(it.name || ''), freq, String(body.by || ''), stamp]);
+    });
+    if (rows.length) ws.getRange(ws.getLastRow() + 1, 1, rows.length, SENS_HEADERS.length).setValues(rows);
+  } finally { lock.releaseLock(); }
+  return handleGetSensitive({ admin: 1 });
+}
+// POST sensitiveCount { location, by, opId, items:[{barcode, name, counted}] } — from the till (write key).
+function handleSensitiveCount(body) {
+  const loc = String(body.location || '');
+  if (['Store 1', 'Store 2'].indexOf(loc) === -1) return jsonResponse({ success: false, error: 'Magasin inconnu' }, 400);
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!items.length) return jsonResponse({ success: false, error: 'Rien à envoyer' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const ws = s1981Tab_(SENS_COUNT_SHEET, SENS_COUNT_HEADERS);
+    const opId = String(body.opId || '');
+    const counts = sensCounts_();
+    if (opId && counts.some(r => String(r[14]) === opId)) return jsonResponse({ success: true, duplicate: true });
+    const totals = sensZoneTotals_(), T = totals[loc] || {}, unsynced = sensUnsynced_(loc), prices = _exPriceMap();
+    const now = new Date(), stamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), day = ctlDay_(now);
+    let gaps = 0;
+    const rows = items.map(it => {
+      const bc = normalizeBarcode(resolveAlias_(it.barcode || '')), k = barcodeKey(bc);
+      const expected = ((T[k] || {}).qty || 0) - (unsynced[k] || 0);
+      const counted = Math.max(0, Math.round(Number(it.counted) || 0));
+      const diff = counted - expected, price = prices[k];
+      if (diff) gaps++;
+      return [stamp, day, loc, bc, String(it.name || (T[k] || {}).name || bc), expected, counted, diff, price == null ? '' : price, price == null ? '' : diff * price, String(body.by || ''), diff ? 'ouvert' : 'ok', '', '', opId];
+    }).filter(r => r[3]);
+    if (rows.length) {
+      const start = ws.getLastRow() + 1;
+      ws.getRange(start, 2, rows.length, 1).setNumberFormat('@');
+      ws.getRange(start, 4, rows.length, 1).setNumberFormat('@');
+      ws.getRange(start, 1, rows.length, SENS_COUNT_HEADERS.length).setValues(rows);
+    }
+    return jsonResponse({ success: true, saved: rows.length, gaps: gaps });
+  } finally { lock.releaseLock(); }
+}
+// POST resolveSensitive { by, userHash, row, resolution }
+function handleResolveSensitive(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const row = Number(body.row), res = String(body.resolution || '');
+  if (['Retrouvé', 'Perte connue', 'Non expliqué'].indexOf(res) === -1) return jsonResponse({ success: false, error: 'Résolution inconnue' }, 400);
+  const ws = s1981Tab_(SENS_COUNT_SHEET, SENS_COUNT_HEADERS);
+  if (!row || row < 2 || row > ws.getLastRow()) return jsonResponse({ success: false, error: 'Ligne introuvable' }, 400);
+  ws.getRange(row, 12, 1, 3).setValues([['résolu', res, String(body.by || '')]]);
+  return jsonResponse({ success: true });
+}
+
+// ── Tournée des dates ──
+function droundOrder_(location) {
+  const totals = sensZoneTotals_()[location] || {}, zones = {};
+  Object.keys(totals).forEach(k => Object.keys(totals[k].zones).forEach(z => {
+    if (!z || /non plac|box|bo[iî]te|entrep/i.test(z) || totals[k].zones[z] <= 0) return;
+    zones[z] = true;
+  }));
+  return Object.keys(zones).sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+}
+function droundState_(location) {
+  const ws = s1981Tab_(DROUND_SHEET, DROUND_HEADERS), last = ws.getLastRow();
+  const rows = last < 2 ? [] : ws.getRange(2, 1, last - 1, DROUND_HEADERS.length).getValues().filter(r => String(r[0]) === location);
+  let cycle = 1; rows.forEach(r => { cycle = Math.max(cycle, Number(r[2]) || 1); });
+  const order = droundOrder_(location);
+  let done = rows.filter(r => (Number(r[2]) || 1) === cycle).map(r => String(r[1]));
+  const today = ctlDay_(new Date());
+  const doneToday = rows.filter(r => String(r[4]) === today).map(r => String(r[1]));
+  let lastDay = ''; rows.forEach(r => { if (String(r[4]) > lastDay) lastDay = String(r[4]); });
+  if (order.length && order.every(z => done.indexOf(z) >= 0)) { cycle++; done = []; }
+  return { cycle: cycle, order: order, done: done, doneToday: doneToday, lastDay: lastDay };
+}
+// GET getDateRound&location=Store 1[&extra=1] → today's zones with their products.
+function handleGetDateRound(p) {
+  const loc = String(p.location || '');
+  if (['Store 1', 'Store 2'].indexOf(loc) === -1) return jsonResponse({ success: false, error: 'Magasin inconnu' }, 400);
+  const st = droundState_(loc);
+  const want = Math.max(0, DROUND_PER_DAY - st.doneToday.length) + (p.extra ? 1 : 0);
+  const next = st.order.filter(z => st.done.indexOf(z) < 0 && st.doneToday.indexOf(z) < 0).slice(0, want);
+  const totals = sensZoneTotals_()[loc] || {};
+  const ex = ensureExpiryTab(); _exEnsureCols(ex);
+  const el = ex.getLastRow(), dates = {};
+  if (el >= 2) ex.getRange(2, 1, el - 1, EX_ALL_HEADERS.length).getValues().forEach(r => {
+    if (r[EX_COL_LOCATION - 1] !== loc || !_exIsDated(r[EX_COL_STATUS - 1])) return;
+    const key = String(r[EX_COL_ZONE - 1] || '') + '|' + barcodeKey(r[EX_COL_BARCODE - 1]);
+    const d = dates[key] = dates[key] || { dates: [], none: false };
+    if (r[EX_COL_STATUS - 1] === 'noexpiry') d.none = true; else { const s = _exStr(r[EX_COL_EXPIRY - 1]); if (s) d.dates.push(s); }
+  });
+  const zones = next.map(z => ({ zone: z, items: Object.keys(totals).filter(k => (totals[k].zones[z] || 0) > 0).map(k => {
+    const d = dates[z + '|' + k] || { dates: [], none: false };
+    return { barcode: k, name: totals[k].name, qty: totals[k].zones[z], dates: d.dates, none: d.none };
+  }).sort((a, b) => a.name.localeCompare(b.name)) }));
+  return jsonResponse({ success: true, location: loc, cycle: st.cycle, total: st.order.length, done: st.done.length, doneToday: st.doneToday, zones: zones });
+}
+// POST dateRoundZone { location, zone, by, opId, items:[{barcode, name, qty, none, notFound, dates:["MM/YYYY"|"DD/MM/YYYY"]}] }
+function handleDateRoundZone(body) {
+  const loc = String(body.location || ''), zone = String(body.zone || '');
+  if (['Store 1', 'Store 2'].indexOf(loc) === -1 || !zone) return jsonResponse({ success: false, error: 'Magasin ou zone manquant' }, 400);
+  const items = Array.isArray(body.items) ? body.items : [];
+  const toFr = s => { const t = String(s || '').trim(); let m = t.match(/^(\d{1,2})\/(\d{4})$/); if (m) return '01/' + ('0' + m[1]).slice(-2) + '/' + m[2]; m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[3] : ''; };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const rws = s1981Tab_(DROUND_SHEET, DROUND_HEADERS);
+    const opId = String(body.opId || '');
+    const st = droundState_(loc);
+    if (st.doneToday.indexOf(zone) >= 0) return jsonResponse({ success: true, duplicate: true });
+    const ws = ensureExpiryTab(); _exEnsureCols(ws);
+    const tz = Session.getScriptTimeZone(), now = new Date();
+    const stamp = Utilities.formatDate(now, tz, 'dd/MM/yyyy HH:mm'), dayFr = Utilities.formatDate(now, tz, 'dd/MM/yyyy');
+    const touched = {}, rows = [];
+    let dated = 0, none = 0, notFound = 0;
+    items.forEach(it => {
+      const bc = normalizeBarcode(it.barcode || ''); if (!bc) return;
+      if (it.notFound) { notFound++; return; }
+      const ds = (Array.isArray(it.dates) ? it.dates : []).map(toFr).filter(Boolean);
+      if (!it.none && !ds.length) return;
+      touched[barcodeKey(bc)] = true;
+      if (it.none) { none++; rows.push([stamp, loc, zone, bc, String(it.name || bc), 0, '', '', 'noexpiry', String(body.by || ''), dayFr]); return; }
+      dated++;
+      ds.forEach((d, i) => rows.push([stamp, loc, zone, bc, String(it.name || bc), i === 0 && ds.length === 1 ? (Number(it.qty) || 0) : 0, d, '', 'watch', String(body.by || ''), dayFr]));
+    });
+    const last = ws.getLastRow();
+    if (last >= 2 && Object.keys(touched).length) {
+      const data = ws.getRange(2, 1, last - 1, EX_ALL_HEADERS.length).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const r = data[i];
+        if (r[EX_COL_LOCATION - 1] !== loc || String(r[EX_COL_ZONE - 1] || '') !== zone) continue;
+        if (!touched[barcodeKey(r[EX_COL_BARCODE - 1])] || !_exIsDated(r[EX_COL_STATUS - 1])) continue;
+        ws.getRange(i + 2, EX_COL_STATUS).setValue('replaced');
+      }
+    }
+    if (rows.length) {
+      const rng = ws.getRange(ws.getLastRow() + 1, 1, rows.length, EX_ALL_HEADERS.length);
+      rng.setNumberFormat('@');
+      rng.setValues(rows);
+    }
+    const cyc = st.order.length && st.order.every(z => st.done.indexOf(z) >= 0) ? st.cycle : st.cycle;
+    rws.appendRow([loc, zone, cyc, stamp, ctlDay_(now), String(body.by || ''), items.length, dated, none, notFound]);
+    return jsonResponse({ success: true, dated: dated, none: none, notFound: notFound });
+  } finally { lock.releaseLock(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  21 Nov 2026 — 📉 RAPPORT DES PERTES + 🛒 STOCK MINIMUM
+//  getLossReport&days=90 → one row per loss, from three places:
+//   - « Pertes » (périmé, abîmé, vol, offert… — the till's 🗑 Pertes tile,
+//     Stock1981 corrections, expiry write-offs),
+//   - « Stock1981 Log » counts (Comptage / Recomptage): what was missing (or
+//     found) when a shelf was counted again,
+//   - « Comptages sensibles » marked Perte connue / Non expliqué.
+//  Each row carries the selling price and the cost (Product Master col. I,
+//  USD × 600; none → price ÷ 2, flagged as estimated).
+//  Stock minimum: overrides typed by 1981 (« Stock minimum » tab); the rest is
+//  worked out in Stock1981 from the sales rhythm.
+// ══════════════════════════════════════════════════════════════════════════
+const MIN_SHEET = 'Stock minimum';
+const MIN_HEADERS = ['Barcode', 'Location', 'Min', 'By', 'At'];
+const COST_USD_TO_CFA = 600;
+function lossCostMap_() {
+  const out = {};
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    const last = sh ? sh.getLastRow() : 0;
+    if (last < FIRST_DATA_ROW) return out;
+    sh.getRange(FIRST_DATA_ROW, 1, last - FIRST_DATA_ROW + 1, 10).getValues().forEach(r => {
+      if (!r[7]) return;
+      const c = Number(String(r[8] == null ? '' : r[8]).replace(/\s/g, '').replace(',', '.'));
+      if (c > 0) out[barcodeKey(r[7])] = Math.round(c * COST_USD_TO_CFA);
+    });
+  } catch (e) { Logger.log('cost map skipped: ' + e); }
+  return out;
+}
+function lossDayOf_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, CONTROL_TZ, 'yyyy-MM-dd');
+  const s = String(v || ''), m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m2 ? m2[0] : '';
+}
+function handleGetLossReport(p) {
+  const days = Math.max(7, Math.min(200, Number(p.days) || 90));
+  const since = Utilities.formatDate(new Date(Date.now() - days * 86400000), CONTROL_TZ, 'yyyy-MM-dd');
+  const prices = _exPriceMap(), costs = lossCostMap_();
+  const rows = [];
+  const add = (day, loc, zone, bc, name, qty, reason, source, by) => {
+    if (!day || day < since || !qty) return;
+    const k = barcodeKey(bc), price = prices[k] == null ? null : prices[k];
+    const cost = costs[k] != null ? costs[k] : (price != null ? Math.round(price / 2) : null);
+    rows.push([day, String(loc || ''), String(zone || ''), String(bc || ''), String(name || bc || ''), qty, price, cost, costs[k] == null ? 1 : 0, String(reason || ''), source, String(by || '')]);
+  };
+  try {
+    const lw = _lossSheet(), ll = lw.getLastRow();
+    if (ll >= 2) lw.getRange(2, 1, ll - 1, LOSS_HEADERS.length).getValues().forEach(r =>
+      add(lossDayOf_(r[1]) || lossDayOf_(r[0]), r[2], r[3], r[4], r[5], Number(r[6]) || 0, r[9], 'perte', r[11]));
+  } catch (e) {}
+  try {
+    const sw = s1981LogSheet_(), sl = sw.getLastRow();
+    if (sl >= 2) {
+      const n = Math.min(sl - 1, 20000);
+      sw.getRange(sl - n + 1, 1, n, S1981_LOG_HEADERS.length).getValues().forEach(r => {
+        if (!/^(Comptage|Recomptage)$/.test(String(r[8]))) return;
+        const delta = Number(r[6]) || 0;
+        if (delta) add(lossDayOf_(r[0]), r[1], r[2], r[3], r[4], -delta, 'Écart de comptage', 'ecart', r[9]);
+      });
+    }
+  } catch (e) {}
+  try {
+    sensCounts_().forEach(r => {
+      if (!/Perte connue|Non expliqu/.test(String(r[12])) || !(Number(r[7]) < 0)) return;
+      add(String(r[1]), r[2], '', r[3], r[4], -Number(r[7]), 'Sensible · ' + r[12], 'sensible', r[10]);
+    });
+  } catch (e) {}
+  return jsonResponse({ success: true, since: since, rows: rows, costRate: COST_USD_TO_CFA, generatedAt: new Date().toISOString() });
+}
+function minRead_() {
+  const ws = s1981Tab_(MIN_SHEET, MIN_HEADERS), last = ws.getLastRow(), out = {};
+  if (last < 2) return out;
+  ws.getRange(2, 1, last - 1, 3).getValues().forEach(r => { const k = barcodeKey(r[0]); if (k && r[1] !== '' && r[2] !== '') out[String(r[1]) + '|' + k] = Number(r[2]) || 0; });
+  return out;
+}
+function handleGetMinStock() { return jsonResponse({ success: true, mins: minRead_() }); }
+// POST setMinStock { by, userHash, barcode, location, min (null/'' = back to automatic) }
+function handleSetMinStock(body) {
+  if (!s1981UserOk_(body)) return jsonResponse({ success: false, error: "Utilisateur ou code non reconnu — reconnectez-vous." }, 403);
+  const bc = normalizeBarcode(body.barcode || ''), loc = String(body.location || '');
+  if (!bc || VALID_LOCATIONS.indexOf(loc) === -1) return jsonResponse({ success: false, error: 'Produit ou lieu manquant' }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = s1981Tab_(MIN_SHEET, MIN_HEADERS);
+    try { ws.getRange('A:A').setNumberFormat('@'); } catch (e) {}
+    const last = ws.getLastRow(), k = barcodeKey(bc);
+    if (last >= 2) {
+      const v = ws.getRange(2, 1, last - 1, 2).getValues();
+      for (let i = v.length - 1; i >= 0; i--) if (barcodeKey(v[i][0]) === k && String(v[i][1]) === loc) ws.deleteRow(i + 2);
+    }
+    if (body.min !== null && body.min !== '' && body.min !== undefined) {
+      ws.appendRow([bc, loc, Math.max(0, Math.round(Number(body.min) || 0)), String(body.by || ''), Utilities.formatDate(new Date(), CONTROL_TZ, 'dd/MM/yyyy HH:mm')]);
+    }
+  } finally { lock.releaseLock(); }
+  return jsonResponse({ success: true, mins: minRead_() });
 }

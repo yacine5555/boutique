@@ -565,7 +565,7 @@ async function flushQueue(tried){
       }
       else if(d && d.error){ toast(d.error); if(/Utilisateur|code|introuvable/i.test(d.error)){ QUEUE.shift(); progress = true; } }
     } else if(first.kind === 'cost'){
-      const d = await post({ action:'updateCost', barcode: first.body.barcode, cost: first.body.cost, by: first.by });
+      const d = await post(Object.assign({ action:'updateCost', barcode: first.body.barcode, cost: first.body.cost, by: first.by }, first.body.currency ? { currency: first.body.currency } : {}, first.body.supplier ? { supplier: first.body.supplier } : {}));
       if(d && d.success){ QUEUE.shift(); progress = true; online = true; }
       else if(d && d.error){ if(/invalide/i.test(d.error)){ toast('Coût refusé : ' + d.error); QUEUE.shift(); progress = true; } }
     } else if(first.kind === 'count'){
@@ -999,7 +999,7 @@ function countHTML(){
     <div class="hint">${C.adding ? '🔁 Remplissage' + (C.src ? ' depuis ' + esc(REFILL_SRC[C.src]) : '') + ' : ce qui est déjà sur l’étagère est déjà compté. Scannez seulement ce que vous ajoutez. <b>Ajouté : ' + fmt(refillAdded().reduce((a, x) => a + x.n, 0)) + '</b>' : 'Chaque scan ajoute 1. Comptez tout ce qui est sur cette étagère, rien d\'autre.'}</div></div>
     ${C.items.length ? lastCard(C.items[0].barcode, C.items[0].name, C.items[0].count) : ''}
     <div class="sect" style="margin-top:6px">${C.items.length} produit(s) · ${fmt(n)} article(s)</div>
-    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}</div><div class="pwrow">${(() => { const c = it.cost || USDC[bkey(it.barcode)]; return `<button type="button" class="pwbtn usd${c ? ' set' : ''}" data-usdw="${i}">${c ? '🏷 ' + usdFmt(c) + ' $' : '🏷 Prix US'}</button>`; })()}${isNewProd(it) ? `<button type="button" class="pwbtn${it.price ? ' set' : ''}" data-pricew="${i}">${it.price ? '💰 ' + fmt(it.price) + ' F' : '💰 Prix F'}</button>` : ''}</div>
+    <div class="list">${C.items.length ? C.items.map((it, i) => `<div class="citem ${i === 0 && C.flash ? 'flash' : ''}" data-i="${i}">${thumb(it.barcode, it.name)}<div class="nm"><strong>${esc(it.name || 'Produit inconnu')}</strong><small class="num">${esc(it.barcode)}</small>${it.name ? '' : `<input data-name="${i}" placeholder="Nom du produit (obligatoire)" value="">`}${nsHTML(it)}</div><div class="pwrow">${(() => { const k = bkey(it.barcode), cfa = it.cost ? (it.costCur === 'CFA' ? it.cost : null) : CFAC[k], c = it.cost ? (it.costCur === 'CFA' ? null : it.cost) : (cfa ? null : USDC[k]); return `<button type="button" class="pwbtn usd${c || cfa ? ' set' : ''}" data-usdw="${i}">${cfa ? '🏷 ' + fmt(cfa) + ' F' : c ? '🏷 ' + usdFmt(c) + ' $' : '🏷 Prix d’achat'}</button>`; })()}${isNewProd(it) ? `<button type="button" class="pwbtn${it.price ? ' set' : ''}" data-pricew="${i}">${it.price ? '💰 ' + fmt(it.price) + ' F' : '💰 Prix F'}</button>` : ''}</div>
       <button data-dec="${i}" aria-label="Moins">−</button><span class="c num">${it.count}</span><button data-inc="${i}" aria-label="Plus">+</button></div>`).join('') : '<p class="empty">Scannez le premier produit de l\'étagère.</p>'}</div>
     <div class="cfoot"><button class="ghost" id="cquit">Annuler</button><button class="go" id="csend">${C.adding ? 'Terminer le remplissage' : C.items.length ? 'Terminer l\'étagère' : 'Étagère vide'}</button></div>`;
 }
@@ -1063,18 +1063,56 @@ function priceWheel(i){
 // Les coûts partent APRÈS le comptage de l'étagère (un nouveau produit doit
 // d'abord exister dans Product Master).
 let USDC = lsj('s1981_usdc', {});
+let CFAC = lsj('s1981_cfac', {}); // coûts en F CFA (fournisseurs locaux), 22 nov.
 function usdFmt(c){ return (Math.round(Number(c) * 100) / 100).toFixed(2).replace('.', ','); }
 function queueCosts(items){
   if(!user) return;
-  (items || []).forEach(it => { if(it.cost > 0){ QUEUE.push({ kind:'cost', body:{ barcode: it.barcode, cost: it.cost }, by: user.name, hash: user.hash }); USDC[bkey(it.barcode)] = it.cost; } });
-  ls('s1981_usdc', JSON.stringify(USDC));
+  (items || []).forEach(it => {
+    if(!(it.cost > 0)) return;
+    const k = bkey(it.barcode), cfa = it.costCur === 'CFA';
+    const body = { barcode: it.barcode, cost: it.cost, currency: cfa ? 'CFA' : 'USD' };
+    if(cfa && it.sup) body.supplier = it.sup;
+    QUEUE.push({ kind:'cost', body, by: user.name, hash: user.hash });
+    if(cfa){ CFAC[k] = it.cost; delete USDC[k]; } else { USDC[k] = it.cost; delete CFAC[k]; }
+  });
+  ls('s1981_usdc', JSON.stringify(USDC)); ls('s1981_cfac', JSON.stringify(CFAC));
 }
-function usdWheel(i){
+// Coût d'un fournisseur local, en F CFA (22 nov.) : montant + fournisseur.
+function cfaCost(i){
   const it = C && C.items[i]; if(!it) return;
+  const cur0 = it.costCur === 'CFA' ? it.cost : (CFAC[bkey(it.barcode)] || '');
+  const sup0 = it.sup || ls('s1981_lastsup') || '';
+  openSheet(`<h3>🏷 Prix d’achat · ${esc(it.name || it.barcode)}</h3><div class="sub num">${esc(it.barcode)}</div>
+    <div class="seg" style="display:flex;gap:6px;margin:8px 0"><button type="button" class="ghost" id="cusd" style="flex:1">$ US</button><button type="button" class="go" style="flex:1;margin:0">F CFA (local)</button></div>
+    <label style="display:block;font:600 14px var(--body);margin-top:6px">Prix d’achat par unité (F CFA)</label>
+    <input id="cval" type="text" inputmode="numeric" autocomplete="off" value="${cur0 ? esc(String(cur0)) : ''}" placeholder="ex. 5375" style="width:100%;font:800 26px var(--body);text-align:center;padding:10px;border-radius:12px;border:1px solid var(--line, #ccc)">
+    <label style="display:block;font:600 14px var(--body);margin-top:10px">Fournisseur</label>
+    <input id="csup" type="text" autocomplete="off" value="${esc(sup0)}" placeholder="ex. Chera" style="width:100%;font:600 18px var(--body);padding:10px;border-radius:12px;border:1px solid var(--line, #ccc)">
+    <div class="where" id="csum"></div>
+    <button class="go" id="cok">Valider</button>${it.cost ? '<button class="ghost" id="cdel" style="color:var(--bad)">Effacer le coût</button>' : ''}<button class="ghost" id="cno">Annuler</button>`);
+  const val = () => Math.round(Number(String($('#cval').value).replace(/[^0-9]/g, '')) || 0);
+  const show = () => { const v = val(), p = priceOf(it.barcode) || it.price || 0;
+    $('#csum').innerHTML = `<div><span>Coût</span><b class="num">${v ? fmt(v) + ' F' : '—'}</b></div><div><span>≈ en dollars</span><b class="num">${v ? usdFmt(v / 600) + ' $' : '—'}</b></div><div class="here"><span>Prix actuel</span><b class="num">${p ? fmt(p) + ' F' : '—'}</b></div>${v && p ? `<div><span>Prix ÷ coût</span><b class="num">×${(p / v).toFixed(2).replace('.', ',')}</b></div>` : ''}`; };
+  $('#cval').oninput = show; show(); setTimeout(() => $('#cval').focus(), 60);
+  $('#cusd').onclick = () => { closeSheet(); usdWheel(i, true); };
+  $('#cno').onclick = closeSheet;
+  const del = $('#cdel'); if(del) del.onclick = () => { const cur = C && C.items[i]; if(cur){ delete cur.cost; delete cur.tag; delete cur.costCur; delete cur.sup; saveDraft(); } closeSheet(); render(); };
+  $('#cok').onclick = () => {
+    const cur = C && C.items[i]; if(!cur || cur.barcode !== it.barcode){ closeSheet(); return; }
+    const v = val(); if(!v){ toast('Entrez le prix d’achat en F CFA.'); return; }
+    const sup = String($('#csup').value || '').trim();
+    cur.cost = v; cur.costCur = 'CFA'; delete cur.tag; if(sup){ cur.sup = sup; ls('s1981_lastsup', sup); } else delete cur.sup;
+    saveDraft(); closeSheet(); render(); beep(true);
+  };
+}
+function usdWheel(i, forceUsd){
+  const it = C && C.items[i]; if(!it) return;
+  if(!forceUsd && (it.costCur === 'CFA' || (!it.cost && CFAC[bkey(it.barcode)]))) return cfaCost(i);
   const RW = 48, D = 200;
   let tax = ls('s1981_tax') !== '0';
   let dol = it.tag ? Math.floor(it.tag) : 0, cen = it.tag ? Math.round((it.tag - Math.floor(it.tag)) * 100) : 98;
-  openSheet(`<h3>🏷 Prix US · ${esc(it.name || it.barcode)}</h3><div class="sub num">${esc(it.barcode)}</div>
+  openSheet(`<h3>🏷 Prix d’achat · ${esc(it.name || it.barcode)}</h3><div class="sub num">${esc(it.barcode)}</div>
+    <div class="seg" style="display:flex;gap:6px;margin:8px 0"><button type="button" class="go" style="flex:1;margin:0">$ US</button><button type="button" class="ghost" id="ucfa" style="flex:1">F CFA (local)</button></div>
     <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
       <div style="font:800 26px var(--body)">$</div>
       <div class="rwheel" id="uwd" style="flex:1" aria-label="Dollars"><div class="rw-pad"></div>${Array.from({ length: D + 1 }, (_, k) => `<div class="rw-i">${k}</div>`).join('')}<div class="rw-pad"></div></div>
@@ -1097,11 +1135,12 @@ function usdWheel(i){
   wc.onscroll = () => { clearTimeout(t2); t2 = setTimeout(() => { cen = Math.max(0, Math.min(99, Math.round(wc.scrollTop / RW))); show(); }, 90); };
   $('#utax').onchange = e => { tax = e.target.checked; ls('s1981_tax', tax ? '1' : '0'); show(); };
   $('#uno').onclick = closeSheet;
-  const del = $('#udel'); if(del) del.onclick = () => { const cur = C && C.items[i]; if(cur){ delete cur.cost; delete cur.tag; saveDraft(); } closeSheet(); render(); };
+  $('#ucfa').onclick = () => { closeSheet(); cfaCost(i); };
+  const del = $('#udel'); if(del) del.onclick = () => { const cur = C && C.items[i]; if(cur){ delete cur.cost; delete cur.tag; delete cur.costCur; delete cur.sup; saveDraft(); } closeSheet(); render(); };
   $('#uok').onclick = () => {
     const cur = C && C.items[i]; if(!cur || cur.barcode !== it.barcode){ closeSheet(); return; }
     if(!tag()){ toast('Choisissez le prix de l’étiquette.'); return; }
-    cur.tag = tag(); cur.cost = cost(); saveDraft(); closeSheet(); render(); beep(true);
+    cur.tag = tag(); cur.cost = cost(); delete cur.costCur; delete cur.sup; saveDraft(); closeSheet(); render(); beep(true);
   };
 }
 function nameItem(i, v){ const it = C.items[i]; if(!it || !v.trim()) return; it.name = v.trim(); delete it.pendingName; saveDraft(); render(); const p = document.querySelector('[data-price="' + i + '"]'); if(p) p.focus(); }

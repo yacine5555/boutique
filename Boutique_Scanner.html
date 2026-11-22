@@ -1707,7 +1707,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v21-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v22-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -9640,7 +9640,7 @@ function renderPriceAdmin(){
   h += '<div class="pl-scroll">' + rows.slice(0, 60).map(p => {
     const diff = p.s1 != null && p.s2 != null && p.s1 !== p.s2;
     return '<div class="ex-row" style="cursor:pointer" onclick="openPlEdit(\'' + _psEsc(p.barcode) + '\')"><div style="flex:1"><b>' + _psEsc(p.name) + '</b><div class="dlv-dim">' + _psEsc(p.barcode) + (diff ? ' · ⚠ prix différents' : '') + '</div></div>' +
-      '<div style="width:64px;text-align:right;font-size:12px">' + _plFmt(p.m) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s1 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s1) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s2 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s2) + '</div><div style="width:58px;text-align:right;font-size:12px;color:' + (p.cost == null ? '#94a3b8' : '#0f172a') + '">' + (p.cost == null ? '—' : '$' + Number(p.cost).toLocaleString('fr-FR', { maximumFractionDigits: 2 })) + '</div></div>';
+      '<div style="width:64px;text-align:right;font-size:12px">' + _plFmt(p.m) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s1 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s1) + '</div><div style="width:64px;text-align:right;font-size:12px' + (p.s2 == null ? ';color:#b45309' : '') + '">' + _plFmt(p.s2) + '</div><div style="width:58px;text-align:right;font-size:12px;color:' + (p.cost == null ? '#94a3b8' : '#0f172a') + '">' + (p.cost == null ? '—' : (p.costCur === 'CFA' && p.costCfa != null ? Number(p.costCfa).toLocaleString('fr-FR') + ' F' : '$' + Number(p.cost).toLocaleString('fr-FR', { maximumFractionDigits: 2 }))) + '</div></div>';
   }).join('');
   h += '</div>';
   if(rows.length > 60) h += '<div class="dlv-dim" style="padding:6px">… ' + (rows.length - 60) + ' autre(s) : affinez la recherche.</div>';
@@ -9782,6 +9782,7 @@ function _cgBox(p){
 function cgUse(i){
   const el = document.getElementById('pl-e-guess'); const x = el && el._g && el._g[i]; if(!x) return;
   document.getElementById('pl-e-price').value = _cgFormula(x.c);
+  { const _cs = document.getElementById('pl-e-cur'); if(_cs && _cs.value !== 'USD'){ _cs.value = 'USD'; plCurChange(true); } }
   document.getElementById('pl-e-cost').value = x.c;
   _plCostFromGuess = true; plCostInfo();
   document.getElementById('pl-e-price').focus();
@@ -9983,7 +9984,11 @@ function openPlEdit(bc){
   document.getElementById('pl-e-name').textContent = p.name;
   document.getElementById('pl-e-sub').innerHTML = _psEsc(p.barcode) + ' · Principal : <b>' + _plFmt(p.m) + '</b> · Balkuy : <b>' + _plFmt(p.s1) + '</b> · Ouaga 2000 : <b>' + _plFmt(p.s2) + '</b>';
   document.getElementById('pl-e-price').value = '';
-  document.getElementById('pl-e-cost').value = p.cost != null ? p.cost : '';
+  const _cur = p.costCur === 'CFA' ? 'CFA' : 'USD';
+  document.getElementById('pl-e-cur').value = _cur;
+  document.getElementById('pl-e-cost').value = _cur === 'CFA' ? (p.costCfa != null ? p.costCfa : '') : (p.cost != null ? p.cost : '');
+  document.getElementById('pl-e-sup').value = p.supplier || '';
+  plCurChange(true);
   _plCostFromGuess = false;
   const _gb = document.getElementById('pl-e-guess'); if(_gb){ _gb.innerHTML = ''; if(p.cost == null) _cgBox(p); }
   plCostInfo();
@@ -9995,10 +10000,35 @@ function openPlEdit(bc){
 // Cost price (USD, Product Master col. I). Rule of thumb from 1981:
 // selling price = (US price × 600) × 2.
 const PL_USD_CFA = 600;
+// Local suppliers (22 Nov): the cost can be typed in F CFA. Both currencies are
+// kept in Product Master (I « Cost (USD) », L « Coût (CFA) ») at PL_USD_CFA, with
+// M « Fournisseur » and N « Devise d'achat ». No price formula for local items yet.
+function plCurChange(keep){
+  const cur = document.getElementById('pl-e-cur').value, inp = document.getElementById('pl-e-cost');
+  inp.step = cur === 'CFA' ? '1' : '0.01'; inp.inputMode = cur === 'CFA' ? 'numeric' : 'decimal';
+  document.getElementById('pl-e-sup-row').style.display = cur === 'CFA' ? '' : 'none';
+  if(cur === 'CFA'){
+    const dl = document.getElementById('pl-sup-list');
+    if(dl) dl.innerHTML = Array.from(new Set((_plAll || []).map(x => x.supplier).filter(Boolean))).sort().map(x => '<option value="' + _psEsc(x) + '">').join('');
+  }
+  if(!keep){
+    const p = _plMap[_bcKeyClient(_plEditBc)] || {};
+    inp.value = cur === 'CFA' ? (p.costCfa != null ? p.costCfa : '') : (p.cost != null ? p.cost : '');
+  }
+  plCostInfo();
+}
 function plCostInfo(){
   const el = document.getElementById('pl-e-cost-info'); if(!el) return;
   const p = _plMap[_bcKeyClient(_plEditBc)] || {};
   const c = Number(document.getElementById('pl-e-cost').value);
+  const curSel = document.getElementById('pl-e-cur');
+  if(curSel && curSel.value === 'CFA'){
+    if(!(c > 0)){ el.textContent = 'Prix payé au fournisseur local, en F CFA, par unité.'; return; }
+    const sellL = p.s1 != null ? p.s1 : (p.m != null ? p.m : null);
+    el.innerHTML = '≈ <b>' + (Math.round(c / PL_USD_CFA * 100) / 100).toLocaleString('fr-FR') + ' $</b> (à ' + PL_USD_CFA + ' F) · pas de formule de prix pour le local' +
+      (sellL ? ' · prix actuel ' + formatCFA(sellL) + ' = <b>×' + (sellL / c).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + '</b> le coût' : '');
+    return;
+  }
   if(!(c > 0)){ el.textContent = 'Prix payé aux États-Unis, en dollars, par unité.'; return; }
   const buy = Math.round(c * PL_USD_CFA), sugg = Math.round(buy * 2 / 500) * 500;
   const sell = p.s1 != null ? p.s1 : (p.m != null ? p.m : null);
@@ -10012,11 +10042,22 @@ async function savePlCost(){
   const v = raw === '' ? '' : Number(raw);
   if(v !== '' && (!isFinite(v) || v < 0)){ err.textContent = 'Coût invalide.'; return; }
   if(!productSyncUrl || !writeKey){ err.textContent = 'Lien produits ou clé manquant.'; return; }
+  const curEl = document.getElementById('pl-e-cur'), cur = curEl && curEl.value === 'CFA' ? 'CFA' : 'USD';
+  const sup = cur === 'CFA' ? String(document.getElementById('pl-e-sup').value || '').trim() : null;
+  const body = { key: writeKey, action: 'updateCost', barcode: p.barcode, cost: v, currency: cur, by: currentEmployee || 'Admin' };
+  if(sup !== null) body.supplier = sup;
   try {
-    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ key: writeKey, action: 'updateCost', barcode: p.barcode, cost: v, by: currentEmployee || 'Admin' }) });
+    const r = await fetch(productSyncUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
     const d = await r.json();
-    if(d && d.success){ p.cost = v === '' ? null : v; showToast('💲 Prix d\'achat enregistré', 2500); renderPriceAdmin(); plCostInfo(); }
+    if(d && d.success && cur === 'CFA' && d.costCfa === undefined){ err.textContent = 'Collez « LATEST - Code GS » et déployez une nouvelle version : le coût en F CFA a été pris pour des dollars.'; return; }
+    if(d && d.success){
+      if(v === ''){ p.cost = null; p.costCfa = null; p.costCur = ''; }
+      else { p.cost = d.cost !== undefined && d.cost !== '' ? Number(d.cost) : (cur === 'USD' ? v : Math.round(v / PL_USD_CFA * 100) / 100);
+             p.costCfa = d.costCfa !== undefined && d.costCfa !== '' ? Number(d.costCfa) : (cur === 'CFA' ? v : Math.round(v * PL_USD_CFA));
+             p.costCur = cur; }
+      if(sup !== null) p.supplier = sup;
+      showToast('💲 Prix d\'achat enregistré', 2500); renderPriceAdmin(); plCostInfo();
+    }
     else err.textContent = (d && d.error) || 'Le script d\'inventaire n\'est pas à jour.';
   } catch(e){ err.textContent = 'Pas de connexion.'; }
 }
@@ -15593,8 +15634,9 @@ closeSale = function(){
     <div class="dlv-lbl">Nouveau prix (CFA)</div>
     <input class="dlv-field" id="pl-e-price" type="number" min="0" inputmode="numeric" style="font-size:22px;text-align:center" onkeydown="if(event.key==='Enter')savePlEdit()"/>
     <div style="margin-top:8px;font-size:14px"><label><input type="checkbox" id="pl-e-s1" checked/> Balkuy</label> &nbsp; <label><input type="checkbox" id="pl-e-s2" checked/> Ouaga 2000</label></div>
-    <div class="dlv-lbl" style="margin-top:12px">Prix d'achat (USD, par unité)</div>
-    <div style="display:flex;gap:6px;align-items:center"><input class="dlv-field" id="pl-e-cost" type="number" min="0" step="0.01" inputmode="decimal" style="margin:0;flex:1" oninput="plCostInfo()" onkeydown="if(event.key==='Enter')savePlCost()"/><button class="btn-sm btn-outline" onclick="savePlCost()">💲 Enregistrer le coût</button></div>
+    <div class="dlv-lbl" style="margin-top:12px">Prix d'achat (par unité)</div>
+    <div style="display:flex;gap:6px;align-items:center"><select class="dlv-field" id="pl-e-cur" style="margin:0;width:auto" onchange="plCurChange()"><option value="USD">$ US</option><option value="CFA">F CFA (local)</option></select><input class="dlv-field" id="pl-e-cost" type="number" min="0" step="0.01" inputmode="decimal" style="margin:0;flex:1" oninput="plCostInfo()" onkeydown="if(event.key==='Enter')savePlCost()"/><button class="btn-sm btn-outline" onclick="savePlCost()">💲 Enregistrer le coût</button></div>
+    <div id="pl-e-sup-row" style="display:none;margin-top:6px"><input class="dlv-field" id="pl-e-sup" list="pl-sup-list" autocomplete="off" placeholder="Fournisseur (ex. Chera)" style="margin:0" onkeydown="if(event.key==='Enter')savePlCost()"/><datalist id="pl-sup-list"></datalist></div>
     <div class="dlv-dim" id="pl-e-cost-info" style="margin-top:4px"></div>
     <div class="dlv-dim" style="margin-top:6px">Une tâche « changer l'étiquette » est envoyée aux magasins dont le prix change.</div>
     <div class="pin-err" id="pl-e-err" style="margin-top:8px"></div>
