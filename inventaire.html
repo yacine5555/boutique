@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#0b5394"/>
+<title>Inventaire — Beauty Empire</title>
+<script src="device-setup.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+:root{--blue:#0b5394;--ink:#111;--mut:#666;--ok:#1f8a4c;--warn:#d97706;--bad:#b91c1c;--bg:#f4f4f1}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:18px}
+header{background:var(--blue);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+header b{font-size:19px;flex:1}
+header small{opacity:.85;font-size:14px}
+header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;padding:8px 10px;font-size:14px}
+main{padding:12px;max-width:640px;margin:0 auto}
+.card{background:#fff;border-radius:16px;padding:16px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.zone{display:flex;align-items:center;gap:12px}
+.zone .z{font-size:30px;font-weight:900;background:var(--blue);color:#fff;border-radius:14px;padding:6px 16px;min-width:90px;text-align:center}
+.zone .z.none{background:#bbb}
+.zone .n{font-size:15px;color:var(--mut)}
+.zone .n b{font-size:26px;color:var(--ink);display:block}
+.big{font-size:22px;font-weight:800;line-height:1.25;margin:4px 0}
+.last{min-height:96px;display:flex;flex-direction:column;justify-content:center;text-align:center;border:3px solid #ddd}
+.last.ok{border-color:var(--ok);background:#eef8f1}
+.last.warn{border-color:var(--warn);background:#fff6e5}
+.last.bad{border-color:var(--bad);background:#fdecec}
+.last .price{font-size:20px;color:var(--ok);font-weight:800}
+input.scan{position:absolute;left:-9999px;top:0;width:10px;opacity:0}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:16px;font-size:19px;font-weight:800;margin:8px 0;cursor:pointer}
+.b-blue{background:var(--blue);color:#fff}.b-green{background:var(--ok);color:#fff}.b-orange{background:var(--warn);color:#fff}.b-grey{background:#e6e6e6;color:#111}.b-red{background:#fff;color:var(--bad);border:2px solid #f3b8b8}
+.row2{display:flex;gap:8px}.row2 .btn{flex:1}
+label.f{display:block;font-size:15px;color:var(--mut);margin:10px 0 4px;font-weight:700}
+input.t,select.t{width:100%;font-size:20px;padding:12px;border:2px solid #ccc;border-radius:12px}
+input.t:focus{border-color:var(--blue);outline:0}
+.todo{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #eee}
+.todo div{flex:1}.todo small{color:var(--mut);display:block}
+.todo button{background:var(--warn);color:#fff;border:0;border-radius:10px;padding:10px 12px;font-weight:800;font-size:15px}
+.list .it{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:16px}
+.list .it b{min-width:36px;text-align:right}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}
+.sheet.open{display:flex}
+.sheet .box{background:#fff;width:100%;max-width:640px;border-radius:20px 20px 0 0;padding:18px;max-height:92vh;overflow:auto}
+.sheet h3{margin:0 0 4px;font-size:22px}
+.mut{color:var(--mut);font-size:15px}
+.sync{font-size:13px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.2)}
+#cam{position:fixed;inset:0;background:#000;z-index:30;display:none;flex-direction:column}
+#cam.open{display:flex}
+#cam video{flex:1;width:100%;object-fit:cover}
+#cam .bar{padding:12px;background:#111;color:#fff;text-align:center;font-size:18px}
+.center{text-align:center}
+.pill{display:inline-block;background:#fff6e5;color:#9a3412;border-radius:99px;padding:2px 10px;font-size:14px;font-weight:700}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input id="scan" class="scan" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="none"/>
+<div id="sheet" class="sheet"><div class="box" id="sheetbox"></div></div>
+<div id="cam"><video id="camv" playsinline muted></video><div class="bar" id="cammsg">Visez le code-barres</div><button class="btn b-grey" style="margin:0;border-radius:0" onclick="camClose()">Fermer la caméra</button></div>
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════════════
+//  📱 INVENTAIRE (25 Nov 2026) — staff phones, no access to Stock1981.
+//  Scan the zone label (S1-1A-2), then EVERY item one by one (1 scan = 1
+//  article, no + / −). Scans go to the Sheet like the till's Réorganisation
+//  (action reorgScans) — 1981 checks each zone in Stock1981 → Réorg.
+//  No price / unknown product / no barcode → « 💰 Prix ? » : price (given by
+//  1981 on the spot), saved in Product Master + label queued for printing
+//  (action inventaireItem, Code GS).
+//  Settings come from 📲 Ajouter un appareil (same localStorage as the Caisse).
+// ════════════════════════════════════════════════════════════════
+const LS = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } },
+  raw(k){ try { return localStorage.getItem(k) || ''; } catch(e){ return ''; } }
+};
+const CFG = { psync: LS.raw('bc_psync_url'), sync: LS.raw('bc_sync_url'), key: LS.raw('bc_write_key') };
+let ST = LS.get('inv_state', null) || { store: 'Store 1', user: '', sess: '', day: '', zone: 0, label: '' };
+let SCANS = LS.get('inv_scans', []);          // {b,t,s,z,u?}
+let FIXES = LS.get('inv_fixes', []);          // price requests waiting to be sent
+let PROD = LS.get('inv_products', {});        // key -> {n, p}
+let PROD_AT = LS.get('inv_products_at', 0);
+let EMPS = LS.get('inv_emps', []);
+let LAST = null, sending = false, sendErr = '', FLUSH = false;
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' ');
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function save(){ LS.set('inv_state', ST); LS.set('inv_scans', SCANS); LS.set('inv_fixes', FIXES); }
+// barcode key: digits without leading zeros (same idea as the Sheet's barcodeKey)
+function bkey(c){ const s = String(c || '').trim(); return /^\d+$/.test(s) ? (s.replace(/^0+/, '') || '0') : s.toUpperCase(); }
+function prod(code){ return PROD[bkey(code)] || null; }
+
+// ── zone labels: S1-1A-2 (shelf) or B1-BOX3 (box); fixes an AZERTY scanner ──
+function parseLabel(raw){
+  let t = String(raw || '').trim();
+  if(/^[SBsb][&é"'(§è!çà]/.test(t)) t = t.replace(/[&é"'(§è!çà)]/g, c => ({'&':'1','é':'2','"':'3',"'":'4','(':'5','§':'6','è':'7','!':'8','ç':'9','à':'0',')':'-'}[c]));
+  const m = /^([SB])([12])-(.+)$/i.exec(t); if(!m) return null;
+  return { store: 'Store ' + m[2], text: m[1].toUpperCase() + m[2] + '-' + m[3], code: m[3] };
+}
+function zoneScans(){ return SCANS.filter(x => x.s === ST.sess && x.z === ST.zone && !/^[SB][12]-/i.test(x.b)); }
+
+// ── sound ──
+let AC = null;
+function beep(ok){
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = AC.currentTime;
+    (ok === 'ok' ? [[1200, 0, .07]] : ok === 'warn' ? [[700, 0, .12], [900, .15, .12]] : [[220, 0, .15], [220, .2, .15], [220, .4, .15]]).forEach(([f, dt, len]) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.frequency.value = f; o.type = ok === 'bad' ? 'square' : 'sine';
+      g.gain.setValueAtTime(.25, t0 + dt); g.gain.exponentialRampToValueAtTime(.001, t0 + dt + len);
+      o.connect(g); g.connect(AC.destination); o.start(t0 + dt); o.stop(t0 + dt + len + .02);
+    });
+  } catch(e){}
+  try { if(navigator.vibrate) navigator.vibrate(ok === 'ok' ? 40 : [80, 60, 80]); } catch(e){}
+}
+
+// ── data from the Sheet ──
+async function loadProducts(force){
+  if(!CFG.psync) return;
+  if(!force && PROD_AT && Date.now() - PROD_AT < 6 * 3600e3 && Object.keys(PROD).length) return;
+  try {
+    const r = await fetch(CFG.psync + '?action=getPriceList&location=' + encodeURIComponent(ST.store), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && Array.isArray(d.products)){
+      const m = {};
+      d.products.forEach(p => { m[bkey(p.barcode)] = { n: p.name, p: Number(p.price) || 0 }; });
+      try { if(d.aliases) Object.keys(d.aliases).forEach(a => { const real = d.aliases[a]; const t = m[bkey(real && (real.barcode || real.real) || real)]; if(t && !m[bkey(a)]) m[bkey(a)] = t; }); } catch(e){}
+      PROD = m; PROD_AT = Date.now(); LS.set('inv_products', PROD); LS.set('inv_products_at', PROD_AT);
+      toast('✅ Liste des produits à jour (' + fmt(Object.keys(m).length) + ')');
+    }
+  } catch(e){ toast('⚠ Liste des produits non chargée (connexion)'); }
+  render();
+}
+async function loadEmployees(){
+  if(!CFG.sync || !CFG.key) return;
+  try {
+    const r = await fetch(CFG.sync + '?action=getEmployees&key=' + encodeURIComponent(CFG.key), { cache: 'no-store' });
+    const d = await r.json();
+    if(d && Array.isArray(d.employees) && d.employees.length){ EMPS = d.employees.map(e => ({ name: e.name, pin: String(e.pin || '') })); LS.set('inv_emps', EMPS); render(); }
+  } catch(e){}
+}
+async function post(payload){
+  const r = await fetch(CFG.psync, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: CFG.key }, payload)) });
+  return r.json();
+}
+let sendT = null;
+function sendSoon(ms){ clearTimeout(sendT); sendT = setTimeout(sendAll, ms || 3000); }
+async function sendAll(){
+  if(sending || !CFG.psync || !CFG.key) return;
+  sending = true; sendErr = '';
+  try {
+    // 1) prices / new products first, so the names exist when 1981 checks the zone
+    for(const f of FIXES.filter(x => !x.u)){
+      const d = await post({ action: 'inventaireItem', barcode: f.newCode ? '' : f.b, name: f.name || '', price: f.price, store: ST.store, by: f.by, labels: f.labels || 0, newCode: !!f.newCode });
+      if(d && d.success){
+        f.u = 1; f.code = d.barcode;
+        PROD[bkey(d.barcode)] = { n: d.name, p: d.price }; LS.set('inv_products', PROD);
+        if(f.newCode && f.qty > 0){ // the « sans code » items are counted in their zone now that they have a code
+          for(let i = 0; i < f.qty; i++) SCANS.push({ b: d.barcode, t: f.t + i, s: f.s, z: f.z });
+        }
+      } else { sendErr = (d && (d.error || d.message)) || 'refusé'; if(/action|Unknown|inconnu/i.test(sendErr) && !/Produit inconnu/.test(sendErr)) sendErr += ' — collez « LATEST - Code GS »'; break; }
+    }
+    // 2) scans, by packets
+    const cut = Date.now() - (FLUSH ? 0 : 20000);
+    const todo = SCANS.filter(x => !x.u && (x.t <= cut || /^[SB][12]-/i.test(x.b))).slice(0, 400);
+    if(todo.length){
+      const sessions = {}; sessions[ST.sess] = { by: ST.user, loc: ST.store };
+      todo.forEach(x => { if(!sessions[x.s]) sessions[x.s] = { by: x.by || ST.user, loc: ST.store }; });
+      const d = await post({ action: 'reorgScans', scans: todo.map(x => ({ b: x.b, t: x.t, s: x.s, z: x.z })), sessions });
+      if(d && d.success) todo.forEach(x => x.u = 1); else sendErr = (d && (d.error || d.message)) || 'refusé';
+    }
+  } catch(e){ sendErr = 'pas de connexion'; }
+  sending = false; save(); render();
+  if(!sendErr && FIXES.some(x => !x.u)) sendSoon(800);
+  else if(!sendErr && SCANS.some(x => !x.u)) sendSoon(FLUSH ? 800 : 21000);
+}
+setInterval(() => { if(SCANS.some(x => !x.u) || FIXES.some(x => !x.u)) sendAll(); }, 30000);
+window.addEventListener('online', () => sendAll());
+
+// ── scanning ──
+function onScan(raw){
+  raw = String(raw || '').trim();
+  if(!raw || !ST.user) return;
+  if($('#sheet').classList.contains('open')) return;
+  const lab = parseLabel(raw);
+  if(lab){
+    if(lab.store !== ST.store){ beep('bad'); LAST = { cls: 'bad', t: '⚠ Étiquette d’un autre magasin', s: lab.text }; render(); return; }
+    if(lab.text === ST.label && !zoneScans().length){ beep('ok'); return; }
+    ST.zone = (ST.zone || 0) + 1; ST.label = lab.text;
+    SCANS.push({ b: lab.text, t: Date.now(), s: ST.sess, z: ST.zone, by: ST.user });
+    beep('ok'); LAST = { cls: 'ok', t: '▶ Zone ' + lab.code + ' commencée', s: 'Scannez chaque article, un par un' };
+    save(); sendSoon(); render(); return;
+  }
+  if(!/^[0-9A-Za-z\-]{4,20}$/.test(raw)){ beep('bad'); LAST = { cls: 'bad', t: '⚠ Code illisible', s: 'Rescannez l’article' }; render(); return; }
+  if(/^\d+$/.test(raw) && raw.length > 14){ beep('bad'); LAST = { cls: 'bad', t: '⚠ Lecture double', s: 'Rescannez l’article une seule fois' }; render(); return; }
+  if(!ST.label){ beep('bad'); LAST = { cls: 'bad', t: '⚠ Scannez d’abord l’étiquette de la zone', s: 'L’étiquette de l’étagère (S1-…)' }; render(); return; }
+  SCANS.push({ b: raw, t: Date.now(), s: ST.sess, z: ST.zone, by: ST.user });
+  const p = prod(raw), fix = FIXES.find(f => !f.newCode && bkey(f.b) === bkey(raw));
+  const n = zoneScans().filter(x => bkey(x.b) === bkey(raw)).length;
+  if(p && p.p > 0){ beep('ok'); LAST = { cls: 'ok', t: p.n, s: n > 1 ? '× ' + n + ' dans cette zone' : '', price: p.p }; }
+  else if(fix){ beep('ok'); LAST = { cls: 'ok', t: fix.name || (p && p.n) || raw, s: (n > 1 ? '× ' + n + ' · ' : '') + 'prix donné', price: fix.price }; }
+  else { beep('warn'); LAST = { cls: 'warn', t: p ? p.n : 'Produit inconnu', s: p ? '💰 Pas de prix' : '💰 Pas dans la liste : nom + prix', code: raw }; }
+  save(); sendSoon(); render();
+}
+function undo(){
+  const mine = SCANS.filter(x => x.s === ST.sess && x.z === ST.zone && !/^[SB][12]-/i.test(x.b));
+  const x = mine[mine.length - 1];
+  if(!x){ toast('Rien à annuler'); return; }
+  if(x.u){ toast('Déjà envoyé : dites au patron « 1 en trop » pour cette zone'); return; }
+  SCANS.splice(SCANS.lastIndexOf(x), 1);
+  LAST = { cls: 'bad', t: '↩ Retiré', s: (prod(x.b) || {}).n || x.b }; save(); render();
+}
+
+// ── what still needs a price in this session ──
+function needPrice(){
+  const out = {}, done = {};
+  FIXES.forEach(f => { if(!f.newCode) done[bkey(f.b)] = true; });
+  SCANS.filter(x => x.s === ST.sess && !/^[SBX][12]?-/i.test(x.b)).forEach(x => {
+    const k = bkey(x.b), p = PROD[k];
+    if(done[k] || (p && p.p > 0)) return;
+    out[k] = out[k] || { b: x.b, n: p ? p.n : '', q: 0 }; out[k].q++;
+  });
+  return Object.values(out);
+}
+
+// ── price sheet ──
+function priceSheet(code){
+  const p = prod(code);
+  openSheet(`<h3>💰 ${p ? esc(p.n) : 'Produit inconnu'}</h3><div class="mut">${esc(code)}</div>
+    ${p ? '' : `<label class="f" for="pn">Nom (copiez l’étiquette : Marque – Produit – Taille)</label><input class="t" id="pn" placeholder="ex. CeraVe – Crème hydratante – 454 g">`}
+    <label class="f" for="pp">Prix (demandez au patron)</label><input class="t" id="pp" inputmode="numeric" placeholder="ex. 12000">
+    <label class="f" for="pl">Étiquettes prix à imprimer</label><input class="t" id="pl" inputmode="numeric" value="0">
+    <button class="btn b-green" id="pok">Enregistrer</button><button class="btn b-grey" onclick="closeSheet()">Plus tard</button>`);
+  setTimeout(() => (p ? $('#pp') : $('#pn')).focus(), 150);
+  $('#pok').onclick = () => {
+    const name = p ? '' : ($('#pn').value || '').trim().replace(/\s+/g, ' ');
+    const price = parseInt(String($('#pp').value).replace(/\D/g, ''), 10);
+    const labels = Math.max(0, parseInt($('#pl').value, 10) || 0);
+    if(!p && name.length < 3){ toast('Écrivez le nom du produit'); return; }
+    if(!(price >= 100)){ toast('Écrivez le prix'); return; }
+    FIXES.push({ b: code, name, price, labels, by: ST.user, t: Date.now() });
+    PROD[bkey(code)] = { n: name || p.n, p: price }; LS.set('inv_products', PROD);
+    LAST = { cls: 'ok', t: name || p.n, s: 'Prix enregistré', price };
+    save(); closeSheet(); sendSoon(500); render();
+  };
+}
+function noCodeSheet(){
+  if(!ST.label){ toast('Scannez d’abord l’étiquette de la zone'); return; }
+  openSheet(`<h3>🏷 Article sans code-barres</h3><div class="mut">Un code est créé et ses étiquettes partent à l’imprimante.</div>
+    <label class="f" for="nn">Nom (Marque – Produit – Taille)</label><input class="t" id="nn" placeholder="ex. Glacière Igloo 48 L">
+    <label class="f" for="np">Prix (demandez au patron)</label><input class="t" id="np" inputmode="numeric" placeholder="ex. 35000">
+    <label class="f" for="nq">Combien dans cette zone ?</label><input class="t" id="nq" inputmode="numeric" value="1">
+    <div class="mut" style="margin-top:6px">Une étiquette par article est imprimée : collez-les dessus.</div>
+    <button class="btn b-green" id="nok">Créer et imprimer</button><button class="btn b-grey" onclick="closeSheet()">Annuler</button>`);
+  setTimeout(() => $('#nn').focus(), 150);
+  $('#nok').onclick = () => {
+    const name = ($('#nn').value || '').trim().replace(/\s+/g, ' ');
+    const price = parseInt(String($('#np').value).replace(/\D/g, ''), 10);
+    const qty = Math.max(1, Math.min(200, parseInt($('#nq').value, 10) || 1));
+    if(name.length < 3){ toast('Écrivez le nom'); return; }
+    if(!(price >= 100)){ toast('Écrivez le prix'); return; }
+    FIXES.push({ newCode: true, name, price, labels: qty, qty, by: ST.user, t: Date.now(), s: ST.sess, z: ST.zone });
+    LAST = { cls: 'ok', t: name, s: qty + ' article(s) · code en création · étiquettes à imprimer', price };
+    save(); closeSheet(); sendSoon(300); render();
+  };
+}
+function zoneList(){
+  const m = {};
+  zoneScans().forEach(x => { const k = bkey(x.b); m[k] = m[k] || { b: x.b, q: 0 }; m[k].q++; });
+  FIXES.filter(f => f.newCode && !f.u && f.s === ST.sess && f.z === ST.zone).forEach(f => { m['nc' + f.t] = { b: '', n: f.name + ' (code en création)', q: f.qty }; });
+  const rows = Object.values(m).map(r => `<div class="it"><span>${esc(r.n || (prod(r.b) || {}).n || ('Inconnu · ' + r.b))}</span><b>${r.q}</b></div>`).join('');
+  openSheet(`<h3>Zone ${esc((ST.label || '').replace(/^S\d-/, ''))}</h3><div class="mut">${zoneScans().length} article(s) scanné(s)</div><div class="list" style="margin:10px 0">${rows || '<p class="mut">Rien encore.</p>'}</div><button class="btn b-grey" onclick="closeSheet()">Fermer</button>`);
+}
+function openSheet(h){ $('#sheetbox').innerHTML = h; $('#sheet').classList.add('open'); }
+function closeSheet(){ $('#sheet').classList.remove('open'); focusScan(); }
+
+// ── camera (phones without a scanner) ──
+let camStream = null, camReader = null, camPause = 0, camLoop = null;
+async function camOpen(){
+  if(!ST.label){ /* label can be scanned by camera too */ }
+  $('#cam').classList.add('open'); $('#cammsg').textContent = 'Visez le code-barres';
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+    const v = $('#camv'); v.srcObject = camStream; await v.play();
+    const hit = txt => {
+      if(Date.now() < camPause) return;
+      camPause = Date.now() + 1300;
+      onScan(txt);
+      $('#cammsg').textContent = LAST ? (LAST.t + (LAST.price ? ' — ' + fmt(LAST.price) + ' F' : '')) : 'OK';
+      if(LAST && LAST.cls === 'warn'){ camClose(); }
+    };
+    if('BarcodeDetector' in window){
+      let det; try { det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'] }); } catch(e){ det = new BarcodeDetector(); }
+      const loop = async () => { if(!camStream) return; try { const c = await det.detect(v); if(c && c.length) hit(c[0].rawValue); } catch(e){} camLoop = requestAnimationFrame(loop); };
+      camLoop = requestAnimationFrame(loop);
+    } else if(window.ZXing){
+      camReader = new ZXing.BrowserMultiFormatReader();
+      camReader.decodeFromVideoElementContinuously ? camReader.decodeFromVideoElementContinuously(v, r => { if(r) hit(r.getText()); })
+        : camReader.decodeFromVideoDevice(null, v, r => { if(r) hit(r.getText()); });
+    } else { $('#cammsg').textContent = '❌ Lecteur indisponible sur ce téléphone'; }
+  } catch(e){ $('#cammsg').textContent = '❌ Caméra refusée — autorisez-la dans les réglages'; }
+}
+function camClose(){
+  try { cancelAnimationFrame(camLoop); } catch(e){}
+  try { if(camReader) camReader.reset(); } catch(e){}
+  camReader = null;
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $('#cam').classList.remove('open'); render();
+}
+
+// ── login ──
+function login(){
+  const name = $('#lname').value, pin = $('#lpin').value;
+  const e = EMPS.find(x => x.name === name);
+  if(!e){ toast('Choisissez votre nom'); return; }
+  if(e.pin && e.pin !== pin){ toast('Code incorrect'); $('#lpin').value = ''; return; }
+  ST.store = $('#lstore').value || 'Store 1';
+  ST.user = name; ST.day = today(); ST.sess = 'I' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); ST.zone = 0; ST.label = '';
+  LAST = { cls: '', t: 'Bonjour ' + name, s: 'Scannez l’étiquette de votre zone' };
+  save(); loadProducts(); render();
+}
+function logout(){
+  if(SCANS.some(x => !x.u) || FIXES.some(x => !x.u)){ FLUSH = true; sendAll(); toast('Envoi en cours… réessayez dans un instant'); return; }
+  ST.user = ''; ST.label = ''; ST.zone = 0; save(); render();
+}
+
+// ── screen ──
+let toastT = null;
+function toast(m){ let t = $('#toast'); if(!t){ t = document.createElement('div'); t.id = 'toast'; t.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;padding:12px 16px;border-radius:12px;font-size:16px;z-index:40;max-width:90%;text-align:center'; document.body.appendChild(t); } t.textContent = m; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 3200); }
+function focusScan(){ const s = $('#scan'); if(s && ST.user && !$('#sheet').classList.contains('open')) s.focus({ preventScroll: true }); }
+function render(){
+  const app = $('#app');
+  if(!CFG.psync || !CFG.key || !CFG.sync){
+    app.innerHTML = `<header><b>📱 Inventaire</b></header><main><div class="card center"><div class="big">Ce téléphone n’est pas encore configuré</div>
+      <p>Sur l’ordinateur de la caisse : <b>Admin › 📲 Ajouter un appareil</b>. Scannez le code avec ce téléphone, touchez « Oui », puis rouvrez cette page.</p></div></main>`;
+    return;
+  }
+  if(!ST.user){
+    const names = EMPS.map(e => `<option>${esc(e.name)}</option>`).join('');
+    app.innerHTML = `<header><b>📱 Inventaire</b><small>Beauty Empire</small></header><main><div class="card">
+      <div class="big">Qui fait l’inventaire ?</div>
+      <label class="f" for="lname">Votre nom</label><select class="t" id="lname"><option value="">—</option>${names}</select>
+      <label class="f" for="lpin">Votre code de caisse</label><input class="t" id="lpin" type="password" inputmode="numeric">
+      <label class="f" for="lstore">Magasin</label><select class="t" id="lstore"><option value="Store 1"${ST.store === 'Store 1' ? ' selected' : ''}>Balkuy</option><option value="Store 2"${ST.store === 'Store 2' ? ' selected' : ''}>Ouaga 2000</option></select>
+      <button class="btn b-blue" onclick="login()">Commencer</button>
+      ${EMPS.length ? '' : '<p class="mut">Chargement des noms… (connexion internet nécessaire)</p>'}
+    </div></main>`;
+    return;
+  }
+  const zs = zoneScans(), need = needPrice();
+  const unsent = SCANS.filter(x => !x.u).length + FIXES.filter(x => !x.u).length;
+  const syncTxt = sendErr ? '⚠ ' + sendErr : unsent ? '⏳ ' + unsent + ' à envoyer' : '✅ envoyé';
+  const L = LAST || { cls: '', t: 'Scannez l’étiquette de la zone', s: '' };
+  app.innerHTML = `<header><b>📱 ${esc(ST.user)} <small>${ST.store === 'Store 2' ? 'Ouaga 2000' : 'Balkuy'}</small></b><span class="sync">${esc(syncTxt)}</span><button onclick="logout()">Sortir</button></header><main>
+    <div class="card zone" onclick="zoneList()"><div class="z ${ST.label ? '' : 'none'}">${ST.label ? esc(ST.label.replace(/^[SB]\d-/, '')) : '—'}</div>
+      <div class="n">${ST.label ? 'Articles scannés dans cette zone' : 'Aucune zone : scannez l’étiquette de l’étagère'}<b>${ST.label ? zs.length : ''}</b></div></div>
+    <div class="card last ${L.cls}"><div class="big">${esc(L.t)}</div>${L.price ? `<div class="price">${fmt(L.price)} F</div>` : ''}<div class="mut">${esc(L.s || '')}</div>
+      ${L.cls === 'warn' && L.code ? `<button class="btn b-orange" onclick="priceSheet('${esc(L.code)}')">💰 Mettre le prix</button>` : ''}</div>
+    <button class="btn b-blue" onclick="camOpen()">📷 Scanner avec la caméra</button>
+    <div class="row2"><button class="btn b-grey" onclick="noCodeSheet()">🏷 Sans code</button><button class="btn b-red" onclick="undo()">↩ Annuler le dernier</button></div>
+    ${need.length ? `<div class="card"><div class="big">💰 Sans prix <span class="pill">${need.length}</span></div><div class="mut">Demandez le prix au patron, puis touchez le produit.</div>
+      ${need.map(r => `<div class="todo"><div>${esc(r.n || 'Produit inconnu')}<small>${esc(r.b)} · ${r.q} article(s)</small></div><button onclick="priceSheet('${esc(r.b)}')">Prix</button></div>`).join('')}</div>` : ''}
+    <div class="card mut" style="font-size:15px"><b>Rappel :</b> 1) scannez l’étiquette de la zone · 2) scannez <b>chaque</b> article, un par un (même s’ils sont pareils) · 3) zone finie ? scannez l’étiquette de la suivante.<br><br>
+      Produits : ${fmt(Object.keys(PROD).length)} · <a href="#" onclick="loadProducts(true);return false">mettre à jour</a></div>
+  </main>`;
+  focusScan();
+}
+// scanner (Bluetooth / USB) types the code then Enter into the hidden field
+const scanEl = $('#scan');
+scanEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); const v = scanEl.value; scanEl.value = ''; onScan(v); } });
+document.addEventListener('click', e => { if(!e.target.closest('input,select,button,a,.sheet')) focusScan(); });
+$('#sheet').addEventListener('click', e => { if(e.target.id === 'sheet') closeSheet(); });
+if(ST.user && ST.day !== today()){ ST.user = ''; ST.label = ''; ST.zone = 0; save(); }  // new day: sign in again
+render(); loadEmployees(); loadProducts(); sendSoon(1500);
+</script>
+</body>
+</html>

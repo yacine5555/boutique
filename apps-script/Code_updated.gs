@@ -450,6 +450,7 @@ function doPost(e) {
     if (body.action === "reorgMark") return handleReorgMark(body);
     if (body.action === "reorgStatus") return handleReorgStatus(body);
     if (body.action === "reorgScans") return handleReorgScans(body);
+    if (body.action === "inventaireItem") return handleInventaireItem(body);
     if (body.action === "stock1981RequestTransfer") return handleStock1981RequestTransfer(body);
     if (body.action === "getBilan") return jsonResponse(Object.assign({ success: true }, buildBilan_(body.date)));
     if (body.action === "stock1981Labels") {
@@ -6391,4 +6392,98 @@ function handleSetMinStock(body) {
     }
   } finally { lock.releaseLock(); }
   return jsonResponse({ success: true, mins: minRead_() });
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  📱 INVENTAIRE (25 Nov 2026) — page inventaire.html on the staff phones.
+//  The scans themselves go through « reorgScans » (same tab as the till's
+//  Réorganisation, checked by 1981 in Stock1981 → Réorg.). This action is
+//  only for a product that has no price, no name or no barcode at all:
+//   { key, action:'inventaireItem', barcode?, name?, price, store, by,
+//     labels (0–200), newCode (true = no barcode: a 0610000… code is made) }
+//  → Product Master: row added if missing, price (col J) set, Price Edits
+//    logged; labels queued in « Étiquettes à imprimer » for the Scanner.
+// ════════════════════════════════════════════════════════════════
+function invNextCode_(sheet) {
+  const last = sheet.getLastRow();
+  const used = {};
+  let max = 0;
+  if (last >= FIRST_DATA_ROW) {
+    sheet.getRange(FIRST_DATA_ROW, 8, last - FIRST_DATA_ROW + 1, 1).getValues().forEach(r => {
+      const k = normalizeBarcode(r[0]);
+      if (!k) return;
+      used[k] = true;
+      if (k.length === 13 && k.indexOf('0610000') === 0) { const q = parseInt(k.slice(7, 12), 10); if (!isNaN(q) && q > max) max = q; }
+    });
+  }
+  for (let q = max + 1; q < 99999; q++) {
+    const twelve = '0610000' + ('00000' + q).slice(-5);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += Number(twelve[i]) * (i % 2 ? 3 : 1);
+    const code = twelve + ((10 - sum % 10) % 10);
+    if (!used[code]) return code;
+  }
+  return '';
+}
+function handleInventaireItem(body) {
+  const price = Math.round(Number(body.price) || 0);
+  const name = String(body.name || '').trim().replace(/\s+/g, ' ');
+  const store = VALID_LOCATIONS.indexOf(body.store) >= 0 ? body.store : 'Store 1';
+  const by = String(body.by || '').slice(0, 60);
+  const labels = Math.max(0, Math.min(200, Math.round(Number(body.labels) || 0)));
+  if (!(price > 0) || price > 5000000) return jsonResponse({ success: false, error: "Prix manquant" }, 400);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    if (!sheet) return jsonResponse({ success: false, error: "Product Master introuvable" }, 500);
+    let bc = body.newCode ? '' : normalizeBarcode(body.barcode);
+    if (!body.newCode && !bc) return jsonResponse({ success: false, error: "Code-barres manquant" }, 400);
+    if (body.newCode) {
+      if (!name) return jsonResponse({ success: false, error: "Nom manquant" }, 400);
+      bc = invNextCode_(sheet);
+      if (!bc) return jsonResponse({ success: false, error: "Plus de code libre" }, 500);
+    }
+    // find the row
+    let row = 0;
+    const last = sheet.getLastRow();
+    if (last >= FIRST_DATA_ROW) {
+      const bk = barcodeKey(bc);
+      const codes = sheet.getRange(FIRST_DATA_ROW, 8, last - FIRST_DATA_ROW + 1, 1).getValues();
+      for (let i = 0; i < codes.length; i++) if (codes[i][0] !== '' && barcodeKey(codes[i][0]) === bk) { row = FIRST_DATA_ROW + i; break; }
+    }
+    let added = false;
+    if (!row) {
+      if (!name) return jsonResponse({ success: false, error: "Produit inconnu : donnez son nom" }, 400);
+      let maxNum = 0;
+      if (last >= FIRST_DATA_ROW) sheet.getRange(FIRST_DATA_ROW, 1, last - FIRST_DATA_ROW + 1, 1).getValues()
+        .forEach(r => { const n = parseInt(r[0], 10); if (!isNaN(n) && n > maxNum) maxNum = n; });
+      row = sheet.getLastRow() + 1;
+      sheet.getRange(row, 8).setNumberFormat('@');
+      sheet.getRange(row, 1, 1, 11).setValues([[maxNum + 1, name, '', '', '', '', '', bc, '', '',
+        'Ajouté par l\'inventaire le ' + Utilities.formatDate(new Date(), 'Africa/Ouagadougou', 'dd/MM/yyyy') + (by ? ' (' + by + ')' : '') + (body.newCode ? ' — sans code-barres, code créé' : '')]]);
+      added = true;
+    } else if (name && !String(sheet.getRange(row, 2).getValue() || '').trim()) {
+      sheet.getRange(row, 2).setValue(name);
+    }
+    const finalName = String(sheet.getRange(row, 2).getValue() || name || bc);
+    const priceCell = sheet.getRange(row, MASTER_PRICE_COL);
+    const oldPrice = Number(priceCell.getValue()) || 0;
+    priceCell.setValue(price);
+    ensurePriceEditsTab().appendRow([
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm"),
+      bc, finalName, oldPrice, price, store, by, 'Inventaire']);
+    if (labels > 0) {
+      const ws = s1981LabelSheet_();
+      const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+      const r0 = ws.getLastRow() + 1;
+      ws.getRange(r0, 3).setNumberFormat('@');
+      ws.getRange(r0, 1, 1, S1981_LABEL_HEADERS.length).setValues([['inv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        stamp, bc, finalName, labels, store, 'Unités', by, S1981_LABEL_TODO, '']]);
+    }
+    return jsonResponse({ success: true, barcode: bc, name: finalName, price: price, oldPrice: oldPrice, added: added, labels: labels });
+  } finally {
+    lock.releaseLock();
+  }
 }
