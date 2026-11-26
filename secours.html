@@ -193,6 +193,12 @@ function render(){
       <label style="display:block;font-weight:700;margin-top:8px">Magasin</label><select id="mc-l" style="width:100%;font-size:16px;padding:10px;border-radius:10px"><option value="Store 1">Balkuy</option><option value="Store 2">Ouaga 2000</option></select>
       <label style="display:block;font-weight:700;margin-top:8px">Votre nom</label><input id="mc-n" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid #ccc" placeholder="ex. 1981">
       <button class="big done" style="margin-top:12px" id="mc-ok">Installer</button></details>`;
+    try { // same site: reuse the links already saved on this phone by Stock1981 / Comptage / Inventaire
+      const g = k => localStorage.getItem(k) || '';
+      const sv = g('bc_sync_url') || g('s1981_ns_url'), pv = g('bc_psync_url') || g('inv_count_sync_url'), kv = g('bc_write_key') || g('inv_count_write_key') || g('s1981_ns_key');
+      if(sv) $('#mc-s').value = sv; if(pv) $('#mc-p').value = pv; if(kv) $('#mc-k').value = kv;
+      if(sv || pv) { const d = document.querySelector('#main details'); if(d) d.open = true; }
+    } catch(e){}
     $('#mc-ok').onclick = () => {
       const sv = $('#mc-s').value.trim(), pv = $('#mc-p').value.trim(), kv = $('#mc-k').value.trim(), lv = $('#mc-l').value, nv = $('#mc-n').value.trim();
       if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(sv) || !/^https:\/\/script\.google\.com\/.+\/exec/.test(pv)){ alert('Collez les deux liens complets (ils finissent par /exec).'); return; }
