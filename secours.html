@@ -185,6 +185,22 @@ function render(){
   const m = $('#main');
   if(!CFG){
     m.innerHTML = `<div class="empty"><p style="font-size:44px;margin:0">📱</p><p><b>Installation</b></p><p>Sur l’ordinateur de la caisse : <b>Admin → 📱 Caisse de secours</b>, puis scannez le QR code avec l’appareil photo de ce téléphone.</p></div>`;
+    m.innerHTML += `<details style="margin-top:14px"><summary style="font-weight:800;cursor:pointer;padding:10px 0">Pas d’ordinateur ? Installer à la main</summary>
+      <p style="color:var(--mut);font-size:14px">Copiez les liens depuis Apps Script : Déployer → Gérer les déploiements → « URL de l’application Web ».</p>
+      <label style="display:block;font-weight:700;margin-top:8px">Lien des ventes (POS RECEIVER)</label><input id="mc-s" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid #ccc" placeholder="https://script.google.com/macros/s/…/exec">
+      <label style="display:block;font-weight:700;margin-top:8px">Lien des produits (Code GS)</label><input id="mc-p" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid #ccc" placeholder="https://script.google.com/macros/s/…/exec">
+      <label style="display:block;font-weight:700;margin-top:8px">Clé d’écriture</label><input id="mc-k" type="password" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid #ccc">
+      <label style="display:block;font-weight:700;margin-top:8px">Magasin</label><select id="mc-l" style="width:100%;font-size:16px;padding:10px;border-radius:10px"><option value="Store 1">Balkuy</option><option value="Store 2">Ouaga 2000</option></select>
+      <label style="display:block;font-weight:700;margin-top:8px">Votre nom</label><input id="mc-n" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid #ccc" placeholder="ex. 1981">
+      <button class="big done" style="margin-top:12px" id="mc-ok">Installer</button></details>`;
+    $('#mc-ok').onclick = () => {
+      const sv = $('#mc-s').value.trim(), pv = $('#mc-p').value.trim(), kv = $('#mc-k').value.trim(), lv = $('#mc-l').value, nv = $('#mc-n').value.trim();
+      if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(sv) || !/^https:\/\/script\.google\.com\/.+\/exec/.test(pv)){ alert('Collez les deux liens complets (ils finissent par /exec).'); return; }
+      if(!kv || !nv){ alert('Écrivez la clé et votre nom.'); return; }
+      CFG = { s: sv, p: pv, k: kv, st: lv === 'Store 2' ? 'Beauty Empire Ouaga 2000' : 'Empire Supermarket', loc: lv, e: [{ name: nv, pin: '' }] };
+      ls('sec_cfg', JSON.stringify(CFG)); EMPS = CFG.e; ls('sec_emps', JSON.stringify(EMPS));
+      USER = nv; ls('sec_user', USER); VIEW = 'sale'; render(); refreshData();
+    };
     return;
   }
   if(!USER){ m.innerHTML = loginHTML(); bindLogin(); return; }
