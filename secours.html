@@ -267,7 +267,8 @@ function saleHTML(){
 function bindSale(){
   $('#scan').onclick = openCam;
   const code = $('#code');
-  const go = () => { const v = code.value.trim(); code.value = ''; if(v) addCode(v); };
+  const go = () => { const v = code.value.trim(); code.value = ''; if(v){ window._secRefocus = true; addCode(v); } };
+  if(window._secRefocus){ window._secRefocus = false; setTimeout(() => { const c = $('#code'); if(c) c.focus(); }, 60); }
   $('#add').onclick = go; code.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); go(); } };
   document.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { CART[+b.dataset.inc].qty++; saveCart(); render(); });
   document.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { const i = +b.dataset.dec; CART[i].qty--; if(CART[i].qty <= 0) CART.splice(i, 1); saveCart(); render(); });
