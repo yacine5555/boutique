@@ -1733,7 +1733,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v28-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v28-nov-b</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -15259,9 +15259,9 @@ async function phOpen(){
   if(!syncUrl || !writeKey || !productSyncUrl){ showToast('⚠ Liens ou clé manquants sur cet ordinateur', 4000); return; }
   document.getElementById('ph-ov').classList.add('open');
   const s = document.getElementById('scan-input'); if(s) s.disabled = true;
-  _phRender();
+  _ph.q = []; _ph.cur = ''; _ph.loading = false; _ph.wait = true; _phRender();
   try { await _phBuild(); } catch(e){ console.error('phBuild', e); _ph.loading = false; showToast('⚠ Liste des photos : ' + (e && e.message || e), 6000); }
-  _phRender();
+  _ph.wait = false; _phRender();
 }
 function phClose(){
   document.getElementById('ph-ov').classList.remove('open');
@@ -15269,7 +15269,7 @@ function phClose(){
   try { loadProductImages(true); } catch(e){}
 }
 async function _phBuild(){
-  if(_ph.loading) return; _ph.loading = true;
+  if(_ph.loading) return; _ph.loading = true; _ph.sales = null; _ph.stock = null;
   const loc = _defaultPriceLocation();
   const key = encodeURIComponent(writeKey), sep = u => u + (u.indexOf('?') >= 0 ? '&' : '?');
   try { await loadPhotoReview(true); } catch(e){}
@@ -15361,9 +15361,13 @@ function _phRender(){
   const ov = document.getElementById('ph-ov'); if(!ov || !ov.classList.contains('open')) return;
   const body = document.getElementById('ph-body'), sub = document.getElementById('ph-sub');
   const left = _ph.q.filter(r => !_phHasPhoto(r.bc)).length;
-  sub.textContent = _ph.loading && !_ph.q.length ? 'Chargement de la liste…' : '✅ ' + _phDone().n + ' faites aujourd’hui · ' + left + ' produits sans photo';
+  sub.textContent = (_ph.loading || _ph.wait) && !_ph.q.length ? 'Chargement de la liste…' : '✅ ' + _phDone().n + ' faites aujourd’hui · ' + left + ' produits sans photo';
   const r = _phItem();
-  if(!r){ body.innerHTML = '<div class="ph-card" style="grid-column:1/-1"><div class="ph-done">' + (_ph.loading ? '⏳' : '🎉 Tout est fait !') + '</div></div>'; return; }
+  if(!r){
+    if(_ph.loading || _ph.wait){ body.innerHTML = '<div class="ph-card" style="grid-column:1/-1"><div class="ph-done" style="color:#6d28d9">⏳ Préparation de la liste…</div><div class="ph-small" style="text-align:center;font-size:16px">Cela peut prendre jusqu’à une minute. Ne fermez pas.</div></div>'; return; }
+    body.innerHTML = '<div class="ph-card" style="grid-column:1/-1"><div class="ph-done">🎉 Tout est fait !</div>' + (!_ph.sales || !_ph.stock ? '<div class="ph-small" style="text-align:center;font-size:16px;color:#b91c1c">⚠ Une partie de la liste n’a pas pu être chargée (' + (!_ph.sales ? 'ventes' : '') + (!_ph.sales && !_ph.stock ? ' et ' : '') + (!_ph.stock ? 'stock du magasin' : '') + '). Vérifiez internet puis rouvrez.</div>' : '') + '</div>';
+    return;
+  }
   const it = _pimItem(r.bc), busy = !!_pim.busy[r.bc];
   if(_phHasPhoto(r.bc)){
     body.innerHTML = '<div class="ph-card" style="grid-column:1/-1"><div class="ph-name">' + _phEsc(r.name) + '</div><div class="ph-cur" style="height:320px"><img src="' + _phEsc(it.url) + '" alt=""></div><div class="ph-done">✅ Enregistrée</div></div>';
