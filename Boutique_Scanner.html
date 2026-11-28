@@ -1733,7 +1733,7 @@ input,select{font-family:inherit}
   <div class="pos-topbar">
     <div class="pos-topbar-left">
       <div class="pos-brand-dot">🔒</div>
-      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v25-nov-a</small></span>
+      <span class="pos-brand-text">Admin <small style="opacity:.6;font-weight:500;font-size:11px">v28-nov-a</small></span>
     </div>
     <div class="pos-topbar-right">
       <button class="btn-sm btn-outline" onclick="goBack()">← Back</button>
@@ -15259,7 +15259,9 @@ async function phOpen(){
   if(!syncUrl || !writeKey || !productSyncUrl){ showToast('⚠ Liens ou clé manquants sur cet ordinateur', 4000); return; }
   document.getElementById('ph-ov').classList.add('open');
   const s = document.getElementById('scan-input'); if(s) s.disabled = true;
-  _phRender(); await _phBuild(); _phRender();
+  _phRender();
+  try { await _phBuild(); } catch(e){ console.error('phBuild', e); _ph.loading = false; showToast('⚠ Liste des photos : ' + (e && e.message || e), 6000); }
+  _phRender();
 }
 function phClose(){
   document.getElementById('ph-ov').classList.remove('open');
@@ -15275,19 +15277,21 @@ async function _phBuild(){
   try { const r = await fetch(sep(productSyncUrl) + 'action=getSalesSummary&days=90&key=' + key, { cache: 'no-store' }); const d = await r.json(); if(d && d.success) _ph.sales = d.stores; } catch(e){}
   try { const r = await fetch(sep(productSyncUrl) + 'action=getZoneStock&location=' + encodeURIComponent(loc), { cache: 'no-store' }); const d = await r.json(); if(d && d.success) _ph.stock = d.zones; } catch(e){}
   const rows = {}, add = (bc, name, why, score) => {
-    const k = _bcKeyClient(String(bc || '').replace(/\D/g, '') || bc); if(!k) return;
+    const k = _bcKeyClient(String(bc || '').replace(/\D/g, '') || bc); if(!k) return null;
     if(!rows[k]) rows[k] = { bc: String(bc).trim(), name: name || '', why: why, score: score };
     else if(score > rows[k].score){ rows[k].score = score; rows[k].why = why; }
     if(!rows[k].name && name) rows[k].name = name;
+    return rows[k];
   };
   // 1) best sellers (both stores, 90 days)
   if(_ph.sales) ['Store 1', 'Store 2'].forEach(st => Object.keys(_ph.sales[st] || {}).forEach(k => {
-    const q = Number((_ph.sales[st][k] || [])[3]) || 0; if(q <= 0) return;
-    const ex = rows[k]; const tot = (ex && ex.sold || 0) + q;
-    add(k, '', '', 1e6 + tot); rows[k].sold = tot; rows[k].why = '🔥 Vendu ' + tot + ' fois en 3 mois'; rows[k].score = 1e6 + tot;
+    const q = Number((_ph.sales[st][k] || [])[3]) || 0; if(q <= 0 || !/^\d{6,14}$/.test(k)) return;
+    const row = add(k, '', '', 1e6 + q); if(!row) return;
+    row.sold = (row.sold || 0) + q; row.why = '🔥 Vendu ' + row.sold + ' fois en 3 mois'; row.score = 1e6 + row.sold;
   }));
   // 2) in stock in this store
   if(_ph.stock) Object.keys(_ph.stock).forEach(z => (_ph.stock[z].items || []).forEach(it => {
+    if(!it || !it.barcode) return;
     const k = _bcKeyClient(String(it.barcode || '').replace(/\D/g, '') || it.barcode);
     if(rows[k]){ if(!rows[k].name) rows[k].name = it.name; return; }
     add(it.barcode, it.name, '📦 En rayon ici (zone ' + z + ')', Number(it.qty) || 1);
